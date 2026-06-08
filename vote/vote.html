@@ -2,18 +2,53 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Vote — Rinaudo Capital</title>
+  <title>Live Poll — Rinaudo Capital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     html, body { margin: 0; height: 100%; }
-    body { background: #0A131F; color: #F4EFE3; font-family: system-ui, sans-serif; padding: 18px; box-sizing: border-box; }
-    .q { font-size: 15px; font-weight: 600; margin: 0 0 14px; line-height: 1.35; }
-    button.opt { display: block; width: 100%; margin: 7px 0; padding: 12px; border: 0; border-radius: 9px;
-      background: #1d2c44; color: #F4EFE3; cursor: pointer; font-size: 14px; text-align: left; }
-    button.opt:hover:not(:disabled) { background: #2a3d5c; }
-    button.opt:disabled { opacity: .55; cursor: default; }
-    button.opt.chosen { background: #244a33; color: #86D6A4; }
-    .voted { color: #7FB791; font-size: 13px; margin-top: 10px; }
-    .muted { color: #A9A697; font-size: 13px; }
+    body { background: radial-gradient(120% 80% at 50% -10%, #0E1B2C, #0A131F 60%); padding: 14px; box-sizing: border-box;
+      font-family: 'Geist', 'Helvetica Neue', system-ui, sans-serif; color: #E3DCCC; }
+    .muted { color: #9FA6B0; font-size: 13px; padding: 8px; }
+
+    .card { position: relative; background: linear-gradient(180deg, rgba(20,35,58,.55), rgba(10,19,31,.35));
+      border: 1px solid rgba(201,167,102,.18); border-radius: 10px; padding: 18px 18px 16px;
+      box-shadow: 0 40px 90px -52px rgba(0,0,0,.9), 0 1px 0 rgba(244,239,227,.05) inset; overflow: hidden; }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+      color: #C9A766; display: inline-flex; align-items: center; gap: 9px; }
+    .pulse { position: relative; width: 7px; height: 7px; border-radius: 50%; background: #6FBF8E; }
+    .pulse::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: rgba(111,191,142,.5);
+      animation: pulse 2.6s cubic-bezier(.22,1,.36,1) infinite; }
+    @keyframes pulse { 0% { transform: scale(1); opacity: .7; } 70%,100% { transform: scale(2.6); opacity: 0; } }
+    .pollTotal { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .06em; color: #9FA6B0; }
+    .q { font-family: 'Fraunces', serif; font-weight: 300; font-size: 1.3rem; color: #F4EFE3; letter-spacing: -.01em;
+      margin-bottom: 16px; line-height: 1.2; }
+
+    .pollOpts { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; scrollbar-width: none; }
+    .pollOpts::-webkit-scrollbar { width: 0; }
+    .pollOpt { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; padding: 13px 16px;
+      border: 1px solid rgba(244,239,227,.1); border-radius: 7px; background: rgba(255,255,255,.015); color: #F4EFE3;
+      cursor: pointer; overflow: hidden; text-align: left; font: inherit;
+      transition: border-color .2s, transform .2s cubic-bezier(.22,1,.36,1); }
+    .pollOpt:hover { border-color: rgba(201,167,102,.4); }
+    .pollFill { position: absolute; left: 0; top: 0; bottom: 0; z-index: 0;
+      background: linear-gradient(90deg, rgba(201,167,102,.20), rgba(201,167,102,.05));
+      transition: width .35s cubic-bezier(.22,1,.36,1); }
+    .pollMine { border-color: #C9A766; }
+    .pollMine .pollFill { background: linear-gradient(90deg, rgba(134,214,164,.26), rgba(134,214,164,.07)); }
+    .pollCheck { position: relative; z-index: 1; color: #86D6A4; font-size: 12px; font-weight: 700; flex: none; }
+    .pollLabel { position: relative; z-index: 1; flex: 1; min-width: 0; font-size: 14px; color: #F4EFE3;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pollPct { position: relative; z-index: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9FA6B0;
+      font-variant-numeric: tabular-nums; }
+    .pollWin .pollPct { color: #E2C685; }
+    .pollCount { position: relative; z-index: 1; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px;
+      color: #F4EFE3; min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+    .hint { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .08em; color: #6E6B60;
+      text-transform: uppercase; margin-top: 12px; text-align: center; }
+    @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } .pollFill, .pollOpt { transition: none; } }
   </style>
 </head>
 <body>

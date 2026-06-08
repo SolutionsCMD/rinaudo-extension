@@ -52,7 +52,7 @@ async function openVoteWindow() {
   if (voteWin != null) {
     try { await chrome.windows.update(voteWin, { focused: true, drawAttention: true }); return; } catch { /* gone */ }
   }
-  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 360, height: 380, focused: true });
+  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 384, height: 500, focused: true });
   await chrome.storage.local.set({ voteWin: w.id });
 }
 chrome.windows.onRemoved.addListener(async (id) => {

@@ -1,29 +1,60 @@
-// The pop-up vote module. Opened by the service worker when a poll opens and the
-// member isn't focused on the Kick stream. Talks to the SW (getActive/castVote)
-// — the SW does the network, so no cross-site/tracking-prevention issues. Builds
-// DOM with textContent only.
+// Pop-up vote module — matches the Live Desk poll card (DeskPoll). Talks to the
+// service worker (getActive/castVote); SW does the network. You can change your
+// vote any time by clicking another option (backend upserts), exactly like the
+// desk. Builds DOM with textContent only.
 const root = document.getElementById('root');
-let shownPollId = null, current = null;
+let shownPollId = null;
+let optimisticMine = null;   // option just clicked, before the server confirms
+let lastPoll = null, lastTally = {};
 
-function setMuted(text) { root.replaceChildren(); const p = document.createElement('p'); p.className = 'muted'; p.textContent = text; root.append(p); }
-
-function render(poll, mine) {
-  current = poll;
-  root.replaceChildren();
-  const q = document.createElement('p'); q.className = 'q'; q.textContent = poll.question || 'Vote'; root.append(q);
-  (poll.options || []).forEach((o) => {
-    const b = document.createElement('button'); b.className = 'opt'; b.textContent = o.label;
-    if (mine) { b.disabled = true; if (o.command === mine) b.classList.add('chosen'); }
-    else { b.addEventListener('click', () => submit(o.command)); }
-    root.append(b);
-  });
-  if (mine) { const v = document.createElement('div'); v.className = 'voted'; v.textContent = '✓ Voted'; root.append(v); }
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
 }
 
-async function submit(command) {
-  if (!current) return;
+function render(poll, tally, mine) {
+  const counts = Object.values(tally || {});
+  const total = counts.reduce((a, b) => a + b, 0);
+  const leader = Math.max(0, ...counts);
+
+  const card = el('div', 'card');
+  const head = el('div', 'head');
+  const label = el('span', 'label');
+  label.append(el('span', 'pulse'), document.createTextNode('Live Poll'));
+  head.append(label, el('span', 'pollTotal', `${total} ${total === 1 ? 'vote' : 'votes'}`));
+  card.append(head, el('div', 'q', poll.question || 'Vote'));
+
+  const opts = el('div', 'pollOpts');
+  (poll.options || []).forEach((o) => {
+    const c = tally[o.command] || 0;
+    const pct = total > 0 ? (c / total) * 100 : 0;
+    const isMine = mine === o.command;
+    const win = c > 0 && c === leader;
+    const b = el('button', 'pollOpt' + (isMine ? ' pollMine' : '') + (win ? ' pollWin' : ''));
+    b.type = 'button';
+    const fill = el('span', 'pollFill');
+    fill.style.width = pct + '%';
+    b.append(fill);
+    if (isMine) b.append(el('span', 'pollCheck', '✓'));
+    b.append(el('span', 'pollLabel', o.label));
+    b.append(el('span', 'pollPct', total > 0 ? `${Math.round(pct)}%` : ''));
+    b.append(el('span', 'pollCount', String(c)));
+    b.addEventListener('click', () => vote(o.command));
+    opts.append(b);
+  });
+  card.append(opts);
+  card.append(el('div', 'hint', mine ? 'Tap another option to change your vote' : 'Tap to vote'));
+
+  root.replaceChildren(card);
+}
+
+function vote(command) {
+  optimisticMine = command;                       // instant highlight
+  if (lastPoll) render(lastPoll, lastTally, command);
   chrome.runtime.sendMessage({ type: 'castVote', command }).catch(() => {});
-  render(current, command); // optimistic
+  tick();                                          // pull fresh tally right away
 }
 
 async function tick() {
@@ -31,14 +62,17 @@ async function tick() {
   try { data = await chrome.runtime.sendMessage({ type: 'getActive' }); } catch { return; }
   const poll = data && data.poll;
   if (!poll) {
-    // Poll closed → say so briefly, then close the window.
-    if (shownPollId) { setMuted('Poll closed.'); setTimeout(() => window.close(), 1200); shownPollId = null; }
-    else { setMuted('No poll open right now.'); }
+    if (shownPollId) { root.replaceChildren(el('p', 'muted', 'Poll closed.')); setTimeout(() => window.close(), 1200); shownPollId = null; }
+    else { root.replaceChildren(el('p', 'muted', 'No poll open right now.')); }
     return;
   }
-  const mine = data.myCommand || null;
-  if (poll.id !== shownPollId) { shownPollId = poll.id; render(poll, mine); }
-  else if (mine && !root.querySelector('.voted')) { render(poll, mine); }
+  shownPollId = poll.id;
+  lastPoll = poll;
+  lastTally = data.tally || {};
+  // Once the server reflects our optimistic choice, drop the override.
+  if (optimisticMine && data.myCommand === optimisticMine) optimisticMine = null;
+  const mine = optimisticMine || data.myCommand || null;
+  render(poll, lastTally, mine);
 }
 
 tick();
