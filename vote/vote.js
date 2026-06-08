@@ -1,78 +1,92 @@
-// Pop-up vote module — matches the Live Desk poll card (DeskPoll). Talks to the
-// service worker (getActive/castVote); SW does the network. You can change your
-// vote any time by clicking another option (backend upserts), exactly like the
-// desk. Builds DOM with textContent only.
+// Pop-up vote module — renders the Live Desk poll/vote card for whichever vote
+// is open: a trade BUY vote (Skip / Small / Medium / Large with $ tiers), a SELL
+// vote (Sell / Hold), or a custom poll. All changeable (the backend upserts).
+// Talks to the service worker (getActive → unified shape; castVote / castTradeVote).
 const root = document.getElementById('root');
-let shownPollId = null;
-let optimisticMine = null;   // option just clicked, before the server confirms
-let lastPoll = null, lastTally = {};
+let shownKey = null;       // current open-vote identity (detect new vote / closed)
+let optimisticKey = null;  // option just clicked, before the server confirms
 
-function el(tag, cls, text) {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
-  return n;
+function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
+const votesWord = (n) => `${n} ${n === 1 ? 'vote' : 'votes'}`;
+
+// Normalize the SW payload into one render model regardless of vote type.
+function buildModel(data) {
+  const tr = data && data.trade;
+  if (tr && tr.type === 'buy_vote') {
+    const t = tr.tally, total = t.total, leader = Math.max(t.small, t.medium, t.large, t.skip, 0);
+    const tiers = [['small', 'Small', tr.tierAmounts.small, t.small], ['medium', 'Medium', tr.tierAmounts.medium, t.medium], ['large', 'Large', tr.tierAmounts.large, t.large]];
+    const rows = tiers.map(([size, name, amt, c]) => ({
+      key: 'buy:' + size, label: `${name} · ${money(amt)}`, count: c, pct: total > 0 ? c / total * 100 : 0,
+      win: c > 0 && c === leader, payload: { tradeId: tr.trade.id, choice: 'buy', phase: 'buy_vote', size },
+    }));
+    rows.push({ key: 'skip', label: 'Skip', count: t.skip, pct: total > 0 ? t.skip / total * 100 : 0,
+      win: t.skip > 0 && t.skip === leader, payload: { tradeId: tr.trade.id, choice: 'skip', phase: 'buy_vote' } });
+    const serverMineKey = tr.myChoice === 'buy' ? 'buy:' + tr.mySize : (tr.myChoice === 'skip' ? 'skip' : null);
+    return { voteKey: 'bv:' + tr.trade.id, title: `Buy ${tr.trade.ticker}?`, total, rows, serverMineKey, endpoint: 'trade' };
+  }
+  if (tr && tr.type === 'sell_vote') {
+    const t = tr.tally, total = t.total;
+    const rows = [
+      { key: 'sell', label: 'Sell', count: t.sell, pct: total > 0 ? t.sell / total * 100 : 0, win: t.sell > 0 && t.sell >= t.hold, payload: { tradeId: tr.trade.id, choice: 'sell', phase: 'sell_vote', sellSessionId: tr.sellSession.id } },
+      { key: 'hold', label: 'Hold', count: t.hold, pct: total > 0 ? t.hold / total * 100 : 0, win: t.hold > 0 && t.hold > t.sell, payload: { tradeId: tr.trade.id, choice: 'hold', phase: 'sell_vote', sellSessionId: tr.sellSession.id } },
+    ];
+    return { voteKey: 'sv:' + tr.trade.id, title: `Sell ${tr.trade.ticker}?`, total, rows, serverMineKey: tr.myChoice || null, endpoint: 'trade' };
+  }
+  if (data && data.poll) {
+    const poll = data.poll, tally = data.tally || {}, vals = Object.values(tally);
+    const total = vals.reduce((a, b) => a + b, 0), leader = Math.max(0, ...vals);
+    const rows = (poll.options || []).map((o) => { const c = tally[o.command] || 0; return { key: o.command, label: o.label, count: c, pct: total > 0 ? c / total * 100 : 0, win: c > 0 && c === leader, payload: { command: o.command } }; });
+    return { voteKey: 'cp:' + poll.id, title: poll.question || 'Vote', total, rows, serverMineKey: data.myCommand || null, endpoint: 'poll' };
+  }
+  return null;
 }
 
-function render(poll, tally, mine) {
-  const counts = Object.values(tally || {});
-  const total = counts.reduce((a, b) => a + b, 0);
-  const leader = Math.max(0, ...counts);
-
+function draw(model) {
+  const effMine = optimisticKey || model.serverMineKey;
   const card = el('div', 'card');
   const head = el('div', 'head');
-  const label = el('span', 'label');
-  label.append(el('span', 'pulse'), document.createTextNode('Live Poll'));
-  head.append(label, el('span', 'pollTotal', `${total} ${total === 1 ? 'vote' : 'votes'}`));
-  card.append(head, el('div', 'q', poll.question || 'Vote'));
-
+  const label = el('span', 'label'); label.append(el('span', 'pulse'), document.createTextNode('Live Vote'));
+  head.append(label, el('span', 'pollTotal', votesWord(model.total)));
+  card.append(head, el('div', 'q', model.title));
   const opts = el('div', 'pollOpts');
-  (poll.options || []).forEach((o) => {
-    const c = tally[o.command] || 0;
-    const pct = total > 0 ? (c / total) * 100 : 0;
-    const isMine = mine === o.command;
-    const win = c > 0 && c === leader;
-    const b = el('button', 'pollOpt' + (isMine ? ' pollMine' : '') + (win ? ' pollWin' : ''));
+  model.rows.forEach((rw) => {
+    const mine = rw.key === effMine;
+    const b = el('button', 'pollOpt' + (mine ? ' pollMine' : '') + (rw.win ? ' pollWin' : ''));
     b.type = 'button';
-    const fill = el('span', 'pollFill');
-    fill.style.width = pct + '%';
-    b.append(fill);
-    if (isMine) b.append(el('span', 'pollCheck', '✓'));
-    b.append(el('span', 'pollLabel', o.label));
-    b.append(el('span', 'pollPct', total > 0 ? `${Math.round(pct)}%` : ''));
-    b.append(el('span', 'pollCount', String(c)));
-    b.addEventListener('click', () => vote(o.command));
+    const fill = el('span', 'pollFill'); fill.style.width = (rw.pct || 0) + '%'; b.append(fill);
+    if (mine) b.append(el('span', 'pollCheck', '✓'));
+    b.append(el('span', 'pollLabel', rw.label));
+    b.append(el('span', 'pollPct', model.total > 0 ? `${Math.round(rw.pct || 0)}%` : ''));
+    b.append(el('span', 'pollCount', String(rw.count)));
+    b.addEventListener('click', () => cast(model, rw));
     opts.append(b);
   });
   card.append(opts);
-  card.append(el('div', 'hint', mine ? 'Tap another option to change your vote' : 'Tap to vote'));
-
+  card.append(el('div', 'hint', effMine ? 'Tap another option to change your vote' : 'Tap to vote'));
   root.replaceChildren(card);
 }
 
-function vote(command) {
-  optimisticMine = command;                       // instant highlight
-  if (lastPoll) render(lastPoll, lastTally, command);
-  chrome.runtime.sendMessage({ type: 'castVote', command }).catch(() => {});
-  tick();                                          // pull fresh tally right away
+function cast(model, rw) {
+  optimisticKey = rw.key;
+  draw(model); // instant highlight; counts catch up next tick
+  if (model.endpoint === 'poll') chrome.runtime.sendMessage({ type: 'castVote', command: rw.payload.command }).catch(() => {});
+  else chrome.runtime.sendMessage({ type: 'castTradeVote', payload: rw.payload }).catch(() => {});
+  tick();
 }
 
 async function tick() {
   let data = null;
   try { data = await chrome.runtime.sendMessage({ type: 'getActive' }); } catch { return; }
-  const poll = data && data.poll;
-  if (!poll) {
-    if (shownPollId) { root.replaceChildren(el('p', 'muted', 'Poll closed.')); setTimeout(() => window.close(), 1200); shownPollId = null; }
-    else { root.replaceChildren(el('p', 'muted', 'No poll open right now.')); }
+  const model = buildModel(data);
+  if (!model) {
+    if (shownKey) { root.replaceChildren(el('p', 'muted', 'Vote closed.')); setTimeout(() => window.close(), 1200); shownKey = null; }
+    else root.replaceChildren(el('p', 'muted', 'No vote open right now.'));
     return;
   }
-  shownPollId = poll.id;
-  lastPoll = poll;
-  lastTally = data.tally || {};
-  // Once the server reflects our optimistic choice, drop the override.
-  if (optimisticMine && data.myCommand === optimisticMine) optimisticMine = null;
-  const mine = optimisticMine || data.myCommand || null;
-  render(poll, lastTally, mine);
+  if (model.voteKey !== shownKey) { shownKey = model.voteKey; optimisticKey = null; } // new vote
+  if (optimisticKey && model.serverMineKey === optimisticKey) optimisticKey = null;     // server caught up
+  draw(model);
 }
 
 tick();

@@ -7,6 +7,8 @@ self.RGC = {
   CHANNEL_TAB_MATCH: 'https://kick.com/mizkif*',
   ACTIVE: '/api/custom-polls/active',
   VOTE: '/api/custom-polls/vote',
+  TRADES_ACTIVE: '/api/trades/active',
+  VOTES: '/api/votes',
   CONNECT_PAGE: 'https://rinaudoglobal.com/extension/connect',
   EXCHANGE: '/api/extension/connect',
   DISCONNECT: '/api/extension/disconnect',

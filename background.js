@@ -26,14 +26,39 @@ async function disconnect() {
   if (token) {
     await fetch(C.API + C.DISCONNECT, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
   }
-  await chrome.storage.local.remove(['token', 'lastPollId']);
+  await chrome.storage.local.remove(['token', 'lastVoteKey']);
 }
 
-async function fetchActive() {
+// Fetch BOTH vote systems (custom polls + trade buy/sell votes) and return a
+// unified shape the vote window renders. trade takes priority when active.
+async function fetchActiveVote() {
   const token = await getToken();
   if (!token) return null;
-  const r = await fetch(C.API + C.ACTIVE, { headers: { Authorization: `Bearer ${token}` } });
-  return r.ok ? r.json() : null;
+  const auth = { Authorization: `Bearer ${token}` };
+  const [cp, tr] = await Promise.all([
+    fetch(C.API + C.ACTIVE, { headers: auth }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(C.API + C.TRADES_ACTIVE, { headers: auth }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const trade = tr && (tr.type === 'buy_vote' || tr.type === 'sell_vote') ? tr : null;
+  const poll = cp && cp.poll ? cp : null;
+  return {
+    poll: poll ? poll.poll : null,
+    tally: poll ? poll.tally : null,
+    myCommand: poll ? poll.myCommand : null,
+    trade,
+  };
+}
+
+// POST a trade vote (buy/skip/sell/hold) to /api/votes.
+async function castTradeVote(payload) {
+  const token = await getToken();
+  if (!token) return { ok: false };
+  const r = await fetch(C.API + C.VOTES, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  }).catch(() => null);
+  return r && r.ok ? r.json() : { ok: false };
 }
 
 // Is the member actively looking at the Kick stream right now? (host permission
@@ -61,12 +86,16 @@ chrome.windows.onRemoved.addListener(async (id) => {
 });
 
 async function checkPoll() {
-  const data = await fetchActive();
-  const poll = data && data.poll; // /api/custom-polls/active → { poll: {id, question, ...} | null, ... }
-  if (!poll) return;
-  const { lastPollId } = await chrome.storage.local.get('lastPollId');
-  if (poll.id === lastPollId) return; // already popped for this poll
-  await chrome.storage.local.set({ lastPollId: poll.id });
+  const av = await fetchActiveVote();
+  if (!av) return;
+  // Unique key per open vote (trade buy/sell or custom poll) for dedupe.
+  let key = null;
+  if (av.trade) key = av.trade.type + ':' + av.trade.trade.id;
+  else if (av.poll) key = 'cp:' + av.poll.id;
+  if (!key) return;
+  const { lastVoteKey } = await chrome.storage.local.get('lastVoteKey');
+  if (key === lastVoteKey) return; // already popped for this vote
+  await chrome.storage.local.set({ lastVoteKey: key });
   // Watching the stream → the on-page card handles it. Otherwise pop the module.
   if (await focusedOnKick()) return;
   await openVoteWindow();
@@ -90,9 +119,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.type === 'connect') { await connect().catch(() => {}); reply({ ok: true }); }
     else if (msg.type === 'disconnect') { await disconnect(); reply({ ok: true }); }
     else if (msg.type === 'authState') { reply({ connected: !!(await getToken()) }); }
-    // Network proxy for the content script (avoids page tracking-prevention).
-    else if (msg.type === 'getActive') { reply(await fetchActive()); }
+    // Network proxy for the vote window / content script.
+    else if (msg.type === 'getActive') { reply(await fetchActiveVote()); }
     else if (msg.type === 'castVote') { reply(await castVote(msg.command)); }
+    else if (msg.type === 'castTradeVote') { reply(await castTradeVote(msg.payload)); }
   })();
   return true; // async reply
 });
