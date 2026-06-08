@@ -123,6 +123,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 'getActive') { reply(await fetchActiveVote()); }
     else if (msg.type === 'castVote') { reply(await castVote(msg.command)); }
     else if (msg.type === 'castTradeVote') { reply(await castTradeVote(msg.payload)); }
+    // Watch-to-earn (YouTube content script).
+    else if (msg.type === 'isEligible') {
+      const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      const ids = ((r && r.latestVideos) || []).map((v) => v.videoId).filter(Boolean);
+      reply({ eligible: ids.includes(msg.videoId) });
+    }
+    else if (msg.type === 'earn') {
+      const token = await getToken();
+      const r = token ? await fetch(C.API + C.EARN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ videoId: msg.videoId, action: msg.action }) }).then((x) => x.json()).catch(() => null) : null;
+      reply(r || { credited: false });
+    }
+    else if (msg.type === 'earnHeartbeat') {
+      const token = await getToken();
+      const r = token ? await fetch(C.API + C.EARN_HEARTBEAT, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ videoId: msg.videoId, seconds: msg.seconds, durationSec: msg.durationSec }) }).then((x) => x.json()).catch(() => null) : null;
+      reply(r || {});
+    }
     // Vote window asks to resize itself to its content height.
     else if (msg.type === 'resize' && typeof msg.height === 'number') {
       const { voteWin } = await chrome.storage.local.get('voteWin');
