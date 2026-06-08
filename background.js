@@ -26,7 +26,7 @@ async function disconnect() {
   if (token) {
     await fetch(C.API + C.DISCONNECT, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
   }
-  await chrome.storage.local.remove(['token', 'lastVoteKey']);
+  await chrome.storage.local.remove(['token', 'lastVoteKey', 'sigSeen', 'notifUrls']);
 }
 
 // Fetch BOTH vote systems (custom polls + trade buy/sell votes) and return a
@@ -133,6 +133,38 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   return true; // async reply
 });
 
-chrome.notifications.onClicked.addListener(() => chrome.tabs.create({ url: C.CHANNEL_URL }));
+// Kick-live + new-YouTube-video notifications, polled on the same alarm. Seeds
+// last-seen silently on first run so installing never spams old videos.
+async function checkSignals() {
+  const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  if (!r) return;
+  const store = await chrome.storage.local.get(['sigSeen', 'notifUrls']);
+  const seen = store.sigSeen || null;
+  const notifUrls = store.notifUrls || {};
+  const nowVideos = {};
+  (r.latestVideos || []).forEach((v) => { if (v.videoId) nowVideos[v.channelId] = v.videoId; });
+
+  if (seen) {
+    if (r.streamLive && !seen.live) {
+      const id = `live-${Date.now()}`;
+      notifUrls[id] = r.channelUrl;
+      chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: 'Mizkif is live', message: 'The stream just went live — tap to watch.', priority: 2 });
+    }
+    (r.latestVideos || []).forEach((v) => {
+      if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId]) {
+        const id = `vid-${v.videoId}`;
+        notifUrls[id] = v.url;
+        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: `New video — ${v.channelName}`, message: v.title || 'New upload — tap to watch.', priority: 2 });
+      }
+    });
+  }
+  await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos }, notifUrls });
+}
+
+chrome.notifications.onClicked.addListener(async (id) => {
+  const { notifUrls } = await chrome.storage.local.get('notifUrls');
+  chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
+  chrome.notifications.clear(id);
+});
 chrome.runtime.onInstalled.addListener(() => chrome.alarms.create('poll', { periodInMinutes: 0.5 }));
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') checkPoll(); });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') { checkPoll(); checkSignals(); } });

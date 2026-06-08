@@ -9,6 +9,7 @@ self.RGC = {
   VOTE: '/api/custom-polls/vote',
   TRADES_ACTIVE: '/api/trades/active',
   VOTES: '/api/votes',
+  STATUS: '/api/extension/status',
   CONNECT_PAGE: 'https://rinaudoglobal.com/extension/connect',
   EXCHANGE: '/api/extension/connect',
   DISCONNECT: '/api/extension/disconnect',
