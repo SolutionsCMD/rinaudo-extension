@@ -7,8 +7,10 @@
 //   {type:'getActive'} → { poll:{id,question,options:[{label,command}]}|null, myCommand } | null
 //   {type:'castVote', command} → { ok, ... }
 const C = self.RGC;
+console.log('[RGC] vote-card content script loaded on', location.href);
 
 let host = null, shadow = null, shownPollId = null;
+let lastLogState = '';
 let current = null; // last poll object rendered, for re-render after voting
 
 function ensureHost() {
@@ -76,8 +78,11 @@ function clear() {
 
 async function tick() {
   let data = null;
-  try { data = await chrome.runtime.sendMessage({ type: 'getActive' }); } catch { return; }
+  try { data = await chrome.runtime.sendMessage({ type: 'getActive' }); }
+  catch (e) { console.log('[RGC] getActive failed (SW asleep / not connected?):', e && e.message); return; }
   const poll = data && data.poll;
+  const state = poll ? `poll:${poll.id}` : (data ? 'no-poll' : 'no-data(not connected?)');
+  if (state !== lastLogState) { console.log('[RGC]', state); lastLogState = state; }
   if (!poll) return clear();
   const mine = data.myCommand || null;
   if (poll.id !== shownPollId) {
