@@ -1,9 +1,10 @@
 // Runs on youtube.com watch + shorts pages. If the video is one of Mizkif's
 // eligible latest uploads, shows an earning widget and credits watch (focus-gated
-// heartbeats, server-verified) / like / comment via the service worker. SPA-aware
-// (YouTube navigates client-side) — re-checks on URL change.
+// heartbeats) / like / comment via the service worker. SPA-aware. Verbose [RGC-yt]
+// logging so the YouTube-DOM-dependent bits (like/comment) can be diagnosed live.
 const C = self.RGC;
-let host = null, shadow = null, state = null, acc = 0;
+const LOG = (...a) => console.log('[RGC-yt]', ...a);
+let host = null, shadow = null, state = null, acc = 0, tickN = 0, commentHooked = false;
 
 function currentVideoId() {
   const u = new URL(location.href);
@@ -11,20 +12,15 @@ function currentVideoId() {
   return u.searchParams.get('v') || '';
 }
 function getVideoEl() { return document.querySelector('video'); }
-function isLiked() {
-  const b = document.querySelector('ytd-menu-renderer button[aria-pressed], like-button-view-model button[aria-pressed], #segmented-like-button button[aria-pressed]');
-  return !!(b && b.getAttribute('aria-pressed') === 'true');
+
+// Like: find the button whose label mentions "like" (not "dislike") and read aria-pressed.
+function likeButton() {
+  return [...document.querySelectorAll('button[aria-pressed]')].find((b) => {
+    const l = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
+    return l.includes('like') && !l.includes('dislike');
+  }) || null;
 }
-function myChannelName() {
-  const a = document.querySelector('#avatar-btn img, ytd-topbar-menu-button-renderer img');
-  return a ? (a.getAttribute('alt') || '').trim() : '';
-}
-function iCommented() {
-  const me = myChannelName();
-  if (!me) return false;
-  return [...document.querySelectorAll('ytd-comment-view-model #author-text, ytd-comment-renderer #author-text')]
-    .some((el) => (el.textContent || '').trim() === me);
-}
+function isLiked() { const b = likeButton(); return !!(b && b.getAttribute('aria-pressed') === 'true'); }
 
 function ensureWidget() {
   if (host) return;
@@ -60,16 +56,33 @@ function drawWidget() {
 }
 function clearWidget() { if (host) { host.remove(); host = null; shadow = null; } state = null; }
 
+async function fireEarn(action) {
+  const vid = state && state.videoId; if (!vid) return;
+  const r = await chrome.runtime.sendMessage({ type: 'earn', videoId: vid, action }).catch(() => null);
+  LOG('earn', action, '→', r);
+  if (r && r.credited) { if (action === 'like') state.likeDone = true; if (action === 'comment') state.commentDone = true; drawWidget(); }
+}
+
+// Comment: catch the click on the comment "Comment"/submit button (more reliable
+// than matching authorship). Attached once; checks state at click time.
+function hookComment() {
+  if (commentHooked) return; commentHooked = true;
+  document.addEventListener('click', (e) => {
+    if (!state || state.commentDone) return;
+    const n = e.target.closest && e.target.closest('#submit-button, ytd-commentbox #submit-button, ytd-comment-simplebox-renderer #submit-button, [aria-label="Comment"]');
+    if (n) { LOG('comment submit click detected'); setTimeout(() => fireEarn('comment'), 400); }
+  }, true);
+}
+
 async function start(videoId) {
   if (!videoId) return clearWidget();
   const res = await chrome.runtime.sendMessage({ type: 'isEligible', videoId }).catch(() => ({ eligible: false }));
+  LOG('start', videoId, 'eligible=', res && res.eligible);
   if (!res || !res.eligible) return clearWidget();
   state = { videoId, accrued: 0, target: 600, watchDone: false, likeDone: false, commentDone: false };
-  acc = 0;
-  drawWidget();
+  acc = 0; hookComment(); drawWidget();
 }
 
-// 1Hz loop: accrue focus-gated playback; poll like/comment; heartbeat every ~15s.
 setInterval(async () => {
   if (!state) return;
   const vid = currentVideoId();
@@ -79,18 +92,16 @@ setInterval(async () => {
   const focused = document.visibilityState === 'visible' && document.hasFocus();
   if (playing && focused && !state.watchDone) acc += 1;
 
-  if (!state.likeDone && isLiked()) {
-    const r = await chrome.runtime.sendMessage({ type: 'earn', videoId: vid, action: 'like' }).catch(() => null);
-    if (r && r.credited) { state.likeDone = true; drawWidget(); }
-  }
-  if (!state.commentDone && iCommented()) {
-    const r = await chrome.runtime.sendMessage({ type: 'earn', videoId: vid, action: 'comment' }).catch(() => null);
-    if (r && r.credited) { state.commentDone = true; drawWidget(); }
-  }
+  tickN++;
+  if (tickN % 5 === 0) LOG('tick playing=' + playing + ' focused=' + focused + ' acc=' + acc + ' liked=' + isLiked() + ' likeBtn=' + !!likeButton());
+
+  if (!state.likeDone && isLiked()) fireEarn('like');
+
   if (acc >= 15 && !state.watchDone) {
     const durationSec = (v && v.duration && isFinite(v.duration)) ? Math.round(v.duration) : 600;
     const send = acc; acc = 0;
     const res = await chrome.runtime.sendMessage({ type: 'earnHeartbeat', videoId: vid, seconds: send, durationSec }).catch(() => null);
+    LOG('heartbeat send=' + send + ' dur=' + durationSec + ' →', res);
     if (res) {
       if (typeof res.accruedSec === 'number') state.accrued = res.accruedSec;
       if (typeof res.target === 'number') state.target = res.target;
@@ -100,10 +111,6 @@ setInterval(async () => {
   }
 }, 1000);
 
-// SPA navigation: re-evaluate when the URL changes.
 let lastUrl = location.href;
-setInterval(() => {
-  if (location.href !== lastUrl) { lastUrl = location.href; start(currentVideoId()); }
-}, 1000);
-
+setInterval(() => { if (location.href !== lastUrl) { lastUrl = location.href; start(currentVideoId()); } }, 1000);
 start(currentVideoId());
