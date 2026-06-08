@@ -1,13 +1,12 @@
-// Runs only on Mizkif's Kick channel. Polls the active poll (~7s), injects a
-// shadow-DOM vote card when one opens, submits the member's choice with their
-// bearer token, and clears the card when the poll closes.
+// Runs only on Mizkif's Kick channel. Pure UI: it asks the service worker for
+// the active poll (~7s) and to cast votes — the SW does the network, because a
+// cross-site fetch from this page context gets blocked by Edge tracking
+// prevention / page CSP (ERR_BLOCKED_BY_CLIENT). Injects a shadow-DOM vote card.
 //
-// Contracts (verified against the live API):
-//   GET  /api/custom-polls/active → { poll: { id, question, options:[{label,command}] } | null,
-//                                     tally, myCommand: string|null }
-//   POST /api/custom-polls/vote   body { command }
+// SW message contract:
+//   {type:'getActive'} → { poll:{id,question,options:[{label,command}]}|null, myCommand } | null
+//   {type:'castVote', command} → { ok, ... }
 const C = self.RGC;
-const token = async () => (await chrome.storage.local.get('token')).token || null;
 
 let host = null, shadow = null, shownPollId = null;
 let current = null; // last poll object rendered, for re-render after voting
@@ -64,13 +63,8 @@ function render(poll, mine) {
 }
 
 async function submit(command) {
-  const t = await token();
-  if (!t || !current) return;
-  await fetch(C.API + C.VOTE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-    body: JSON.stringify({ command }),
-  }).catch(() => {});
+  if (!current) return;
+  chrome.runtime.sendMessage({ type: 'castVote', command }).catch(() => {});
   render(current, command); // optimistic; next tick confirms via myCommand
 }
 
@@ -81,18 +75,15 @@ function clear() {
 }
 
 async function tick() {
-  const t = await token();
-  if (!t) return clear();
-  const r = await fetch(C.API + C.ACTIVE, { headers: { Authorization: `Bearer ${t}` } }).catch(() => null);
-  const data = r && r.ok ? await r.json() : null;
+  let data = null;
+  try { data = await chrome.runtime.sendMessage({ type: 'getActive' }); } catch { return; }
   const poll = data && data.poll;
   if (!poll) return clear();
-  // Re-render on new poll, or when our vote state changes (e.g. confirmed).
   const mine = data.myCommand || null;
   if (poll.id !== shownPollId) {
     shownPollId = poll.id;
     render(poll, mine);
-  } else if (mine && !shadow.querySelector('.voted')) {
+  } else if (mine && shadow && !shadow.querySelector('.voted')) {
     render(poll, mine);
   }
 }

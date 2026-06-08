@@ -60,11 +60,27 @@ async function checkPoll() {
   });
 }
 
+// Cast a vote on behalf of the content script (the content script's own fetch
+// is blocked by the page's tracking-prevention/CSP; the SW request isn't).
+async function castVote(command) {
+  const token = await getToken();
+  if (!token) return { ok: false };
+  const r = await fetch(C.API + C.VOTE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ command }),
+  }).catch(() => null);
+  return r && r.ok ? r.json() : { ok: false };
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
     if (msg.type === 'connect') { await connect().catch(() => {}); reply({ ok: true }); }
     else if (msg.type === 'disconnect') { await disconnect(); reply({ ok: true }); }
     else if (msg.type === 'authState') { reply({ connected: !!(await getToken()) }); }
+    // Network proxy for the content script (avoids page tracking-prevention).
+    else if (msg.type === 'getActive') { reply(await fetchActive()); }
+    else if (msg.type === 'castVote') { reply(await castVote(msg.command)); }
   })();
   return true; // async reply
 });
