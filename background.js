@@ -36,28 +36,40 @@ async function fetchActive() {
   return r.ok ? r.json() : null;
 }
 
-// Any Mizkif Kick tab open? If so, the content-script card handles it — skip the
-// notification so we don't double-nudge.
-async function onKickTab() {
-  const tabs = await chrome.tabs.query({ url: C.CHANNEL_TAB_MATCH });
-  return tabs.length > 0;
+// Is the member actively looking at the Kick stream right now? (host permission
+// for kick.com lets us read that tab's URL; other tabs read as undefined → false.)
+async function focusedOnKick() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return !!(tab && /^https:\/\/kick\.com\/mizkif/.test(tab.url || ''));
+  } catch { return false; }
 }
+
+// Pop the interactive vote module in its own small window. Reuses one window if
+// it's already open (focus it) rather than stacking.
+async function openVoteWindow() {
+  const { voteWin } = await chrome.storage.local.get('voteWin');
+  if (voteWin != null) {
+    try { await chrome.windows.update(voteWin, { focused: true, drawAttention: true }); return; } catch { /* gone */ }
+  }
+  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 360, height: 380, focused: true });
+  await chrome.storage.local.set({ voteWin: w.id });
+}
+chrome.windows.onRemoved.addListener(async (id) => {
+  const { voteWin } = await chrome.storage.local.get('voteWin');
+  if (id === voteWin) await chrome.storage.local.remove('voteWin');
+});
 
 async function checkPoll() {
   const data = await fetchActive();
   const poll = data && data.poll; // /api/custom-polls/active → { poll: {id, question, ...} | null, ... }
   if (!poll) return;
   const { lastPollId } = await chrome.storage.local.get('lastPollId');
-  if (poll.id === lastPollId) return; // already alerted on this poll
+  if (poll.id === lastPollId) return; // already popped for this poll
   await chrome.storage.local.set({ lastPollId: poll.id });
-  if (await onKickTab()) return;
-  chrome.notifications.create(`poll-${poll.id}`, {
-    type: 'basic',
-    iconUrl: 'icons/icon128.png',
-    title: 'Poll open on stream',
-    message: poll.question || 'A vote just opened — back to the stream to vote.',
-    priority: 2,
-  });
+  // Watching the stream → the on-page card handles it. Otherwise pop the module.
+  if (await focusedOnKick()) return;
+  await openVoteWindow();
 }
 
 // Cast a vote on behalf of the content script (the content script's own fetch
