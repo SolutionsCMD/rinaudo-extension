@@ -10,6 +10,18 @@ function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.
 const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
 const votesWord = (n) => `${n} ${n === 1 ? 'vote' : 'votes'}`;
 
+// Resize the popup window to fit the module's actual content (short votes get a
+// short window; many options grow it, up to a cap, then options scroll inside).
+let lastH = 0;
+function fitWindow() {
+  const content = document.body.scrollHeight;
+  const frame = window.outerHeight - window.innerHeight; // titlebar etc.
+  const target = Math.min(820, Math.max(120, content + frame + 2));
+  if (Math.abs(target - lastH) < 3) return;
+  lastH = target;
+  chrome.runtime.sendMessage({ type: 'resize', height: target }).catch(() => {});
+}
+
 // Normalize the SW payload into one render model regardless of vote type.
 function buildModel(data) {
   const tr = data && data.trade;
@@ -65,6 +77,7 @@ function draw(model) {
   card.append(opts);
   card.append(el('div', 'hint', effMine ? 'Tap another option to change your vote' : 'Tap to vote'));
   root.replaceChildren(card);
+  fitWindow();
 }
 
 function cast(model, rw) {
@@ -82,6 +95,7 @@ async function tick() {
   if (!model) {
     if (shownKey) { root.replaceChildren(el('p', 'muted', 'Vote closed.')); setTimeout(() => window.close(), 1200); shownKey = null; }
     else root.replaceChildren(el('p', 'muted', 'No vote open right now.'));
+    fitWindow();
     return;
   }
   if (model.voteKey !== shownKey) { shownKey = model.voteKey; optimisticKey = null; } // new vote
@@ -91,3 +105,6 @@ async function tick() {
 
 tick();
 setInterval(tick, 3000);
+// Re-fit once fonts have swapped in (Fraunces can change the measured height).
+window.addEventListener('load', () => setTimeout(fitWindow, 250));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitWindow);

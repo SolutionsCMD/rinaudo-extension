@@ -77,7 +77,7 @@ async function openVoteWindow() {
   if (voteWin != null) {
     try { await chrome.windows.update(voteWin, { focused: true, drawAttention: true }); return; } catch { /* gone */ }
   }
-  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 384, height: 500, focused: true });
+  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 384, height: 300, focused: true });
   await chrome.storage.local.set({ voteWin: w.id });
 }
 chrome.windows.onRemoved.addListener(async (id) => {
@@ -123,6 +123,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 'getActive') { reply(await fetchActiveVote()); }
     else if (msg.type === 'castVote') { reply(await castVote(msg.command)); }
     else if (msg.type === 'castTradeVote') { reply(await castTradeVote(msg.payload)); }
+    // Vote window asks to resize itself to its content height.
+    else if (msg.type === 'resize' && typeof msg.height === 'number') {
+      const { voteWin } = await chrome.storage.local.get('voteWin');
+      if (voteWin != null) { try { await chrome.windows.update(voteWin, { height: Math.round(msg.height) }); } catch { /* gone */ } }
+      reply({ ok: true });
+    }
   })();
   return true; // async reply
 });
