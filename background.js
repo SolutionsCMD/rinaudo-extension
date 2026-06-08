@@ -157,8 +157,19 @@ async function checkSignals() {
         chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: `New video — ${v.channelName}`, message: v.title || 'New upload — tap to watch.', priority: 2 });
       }
     });
+    const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New post — Instagram', twitter: 'New tweet — Mizkif' };
+    (r.latestSocial || []).forEach((s) => {
+      const prev = (seen.social || {})[s.platform];
+      if (s.url && prev && s.url !== prev) {
+        const id = `soc-${s.platform}-${Date.now()}`;
+        notifUrls[id] = s.url;
+        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title || 'Tap to open.', priority: 2 });
+      }
+    });
   }
-  await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos }, notifUrls });
+  const nowSocial = {};
+  (r.latestSocial || []).forEach((s) => { if (s.url) nowSocial[s.platform] = s.url; });
+  await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos, social: nowSocial }, notifUrls });
 }
 
 chrome.notifications.onClicked.addListener(async (id) => {
