@@ -5,8 +5,8 @@
   <style>
     body { width: 260px; margin: 0; font-family: system-ui, sans-serif; background: #0A131F; color: #F4EFE3; padding: 18px; }
     h1 { font-size: 14px; margin: 0 0 8px; letter-spacing: .02em; }
-    #status { font-size: 12px; color: #A9A697; line-height: 1.5; margin: 0 0 14px; }
-    #status .ok { color: #7FB791; }
+    #status, #s2status { font-size: 12px; color: #A9A697; line-height: 1.5; margin: 0 0 14px; }
+    #status .ok, #s2status .ok { color: #7FB791; }
     button { width: 100%; padding: 10px; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; }
     button:disabled { opacity: .6; cursor: default; }
     .connect { background: #53FC18; color: #0A131F; }
@@ -17,7 +17,7 @@
   <h1>Rinaudo Capital</h1>
   <p id="status">…</p>
   <button id="action" class="connect">Connect with Kick</button>
-  <p id="s2status" style="font-size:12px;color:#A9A697;line-height:1.5;margin:14px 0 14px;">…</p>
+  <p id="s2status">…</p>
   <button id="s2connect" class="connect">Connect with Kick (Season 2)</button>
   <script src="popup.js"></script>
 </body>
