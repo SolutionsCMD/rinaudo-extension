@@ -2,7 +2,6 @@
 // S2 engagement target, shows an earn widget and credits like/comment via the
 // service worker. SPA-aware. Best-effort detection (DOM-based), gated server-side
 // by the target allow-list + once-per-(user,target,action) idempotency.
-const C = self.S2;
 const LOG = (...a) => console.log('[RGC-x]', ...a);
 let host = null, shadow = null, state = null, commentHooked = false, rewards = { likeReward: 0, commentReward: 0 };
 
@@ -34,6 +33,7 @@ function rowEl(label, amt, done) {
   r.append(l, a); return r;
 }
 function drawWidget() {
+  if (!state) return;
   ensureWidget();
   const card = document.createElement('div'); card.className = 'w';
   const h = document.createElement('div'); h.className = 'h'; h.textContent = 'Earn tickets'; card.append(h);
