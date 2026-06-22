@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Rinaudo Capital Live Votes (Browser Extension)</title>
+  <meta name="robots" content="index,follow" />
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; padding: 2.5rem 1.25rem 4rem;
+      font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1a1a1a; background: #fafafa;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .25rem; }
+    h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; }
+    .meta { color: #666; font-size: .9rem; margin-bottom: 2rem; }
+    ul { padding-left: 1.25rem; }
+    li { margin: .35rem 0; }
+    code { background: rgba(0,0,0,.06); padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+    a { color: #1a56db; }
+    footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid rgba(0,0,0,.1); color: #666; font-size: .9rem; }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e6e6e6; background: #111; }
+      .meta, footer { color: #999; }
+      code { background: rgba(255,255,255,.1); }
+      a { color: #7aa2f7; }
+      footer { border-color: rgba(255,255,255,.12); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <p class="meta">Rinaudo Capital — Live Votes (browser extension) · Last updated 10 June 2026</p>
+
+    <p>
+      This policy explains what the <strong>Rinaudo Capital — Live Votes</strong> browser extension
+      ("the extension") does with your data. It applies only to the extension, not to the
+      <a href="https://rinaudoglobal.com">rinaudoglobal.com</a> website or any other service.
+    </p>
+
+    <h2>What the extension does</h2>
+    <p>
+      The extension lets members vote on live stock picks from Mizkif's stream, notifies them when a
+      poll opens or new content is posted, and credits watch-to-earn activity to their Rinaudo account.
+    </p>
+
+    <h2>What we store</h2>
+    <ul>
+      <li>
+        <strong>Your account token.</strong> When you choose "Connect with Kick," a single
+        authentication token is stored locally in your browser (<code>chrome.storage.local</code>).
+        It is used only to authenticate your requests to rinaudoglobal.com. It never leaves your
+        browser except in the <code>Authorization</code> header of calls to rinaudoglobal.com, and it
+        is removed when you disconnect.
+      </li>
+      <li>
+        <strong>Local state only.</strong> The extension also keeps small bookkeeping values locally
+        (e.g. the last poll already shown, last-seen videos) so it doesn't notify you twice. These
+        stay on your device.
+      </li>
+    </ul>
+
+    <h2>What we send to rinaudoglobal.com</h2>
+    <p>The extension communicates <strong>only</strong> with <code>https://rinaudoglobal.com</code>, to:</p>
+    <ul>
+      <li>exchange your Connect-with-Kick login for an account token;</li>
+      <li>fetch the currently active poll or trade vote, and submit your vote;</li>
+      <li>check whether the stream is live or new videos/posts exist, to power notifications;</li>
+      <li>
+        report watch-to-earn activity — the video ID and seconds watched — for eligible videos, so
+        the activity can be credited to your account.
+      </li>
+    </ul>
+
+    <h2>What we do <em>not</em> do</h2>
+    <ul>
+      <li>No analytics or telemetry.</li>
+      <li>No advertising, and no selling or sharing of data with third parties.</li>
+      <li>No tracking of your general browsing. The extension runs only on Mizkif's Kick channel page and on YouTube watch/shorts pages, and does not read or collect the contents of those pages.</li>
+      <li>No collection of names, emails, payment details, or other personal information by the extension itself.</li>
+    </ul>
+
+    <h2>Permissions, and why</h2>
+    <ul>
+      <li><code>identity</code> — the one-time "Connect with Kick" sign-in.</li>
+      <li><code>storage</code> — to store your account token locally.</li>
+      <li><code>alarms</code> — a periodic timer to check for open polls and new content.</li>
+      <li><code>notifications</code> — desktop alerts when a poll opens or new content is posted.</li>
+      <li><code>host access</code> to kick.com, rinaudoglobal.com, and youtube.com — to show the vote card on the stream, talk to the Rinaudo APIs, and run watch-to-earn on eligible videos.</li>
+    </ul>
+
+    <h2>Your choices</h2>
+    <p>
+      You can disconnect at any time from the extension popup, which deletes the stored token and
+      tells rinaudoglobal.com to revoke it. Uninstalling the extension removes all locally stored data.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions about this policy? Email <a href="mailto:privacy@rinaudoglobal.com">privacy@rinaudoglobal.com</a>.
+    </p>
+
+    <footer>
+      © 2026 Rinaudo Global. This policy may be updated; material changes will be reflected by the
+      "Last updated" date above.
+    </footer>
+  </div>
+</body>
+</html>
