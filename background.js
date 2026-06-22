@@ -21,6 +21,40 @@ async function connect() {
   if (token) await chrome.storage.local.set({ token });
 }
 
+// --- Season 2 (engagement → tickets) ---
+const S2 = self.S2;
+const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Token || null;
+
+async function s2Connect() {
+  const redirect = chrome.identity.getRedirectURL(); // https://<id>.chromiumapp.org/
+  const url = `${S2.CONNECT_PAGE}?ext_redirect=${encodeURIComponent(redirect)}`;
+  const done = await chrome.identity.launchWebAuthFlow({ url, interactive: true });
+  const code = new URL(done).searchParams.get('code');
+  if (!code) throw new Error('no code in redirect');
+  const r = await fetch(S2.API + S2.EXCHANGE, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+  });
+  const { token } = await r.json();
+  if (token) await chrome.storage.local.set({ s2Token: token });
+}
+
+async function s2Targets() {
+  const token = await getS2Token();
+  if (!token) return { targets: [], likeReward: 0, commentReward: 0 };
+  const r = await fetch(S2.API + S2.TARGETS, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+  return r && r.ok ? r.json() : { targets: [], likeReward: 0, commentReward: 0 };
+}
+
+async function s2Engagement(action, ref) {
+  const token = await getS2Token();
+  if (!token) return { credited: false };
+  const r = await fetch(S2.API + S2.ENGAGEMENT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ platform: 'x', action, ref }),
+  }).catch(() => null);
+  return r && r.ok ? r.json() : { credited: false };
+}
+
 async function disconnect() {
   const token = await getToken();
   if (token) {
@@ -139,6 +173,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       const r = token ? await fetch(C.API + C.EARN_HEARTBEAT, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ videoId: msg.videoId, seconds: msg.seconds, durationSec: msg.durationSec }) }).then((x) => x.json()).catch(() => null) : null;
       reply(r || {});
     }
+    else if (msg.type === 's2Connect') { await s2Connect().catch(() => {}); reply({ ok: true }); }
+    else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
+    else if (msg.type === 's2Targets') { reply(await s2Targets()); }
+    else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.action, msg.ref)); }
     // Vote window asks to resize itself to its content height.
     else if (msg.type === 'resize' && typeof msg.height === 'number') {
       const { voteWin } = await chrome.storage.local.get('voteWin');

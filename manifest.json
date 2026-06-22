@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Vote on Mizkif's stock picks live, and get pinged the moment a poll opens.",
   "permissions": ["storage", "alarms", "notifications", "identity"],
-  "host_permissions": ["https://kick.com/*", "https://rinaudoglobal.com/*", "https://www.youtube.com/*"],
+  "host_permissions": ["https://kick.com/*", "https://rinaudoglobal.com/*", "https://www.youtube.com/*", "https://x.com/*", "https://twitter.com/*", "http://localhost:4020/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup/popup.html", "default_title": "Rinaudo Capital" },
   "icons": { "128": "icons/icon128.png" },
@@ -18,6 +18,11 @@
     {
       "matches": ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"],
       "js": ["config.js", "content/youtube.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://x.com/*/status/*", "https://twitter.com/*/status/*"],
+      "js": ["config.js", "content/x.js"],
       "run_at": "document_idle"
     }
   ]
