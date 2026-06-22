@@ -34,15 +34,17 @@ async function s2Connect() {
   const r = await fetch(S2.API + S2.EXCHANGE, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
   });
+  if (!r.ok) throw new Error(`exchange failed: ${r.status}`);
   const { token } = await r.json();
-  if (token) await chrome.storage.local.set({ s2Token: token });
+  if (!token) throw new Error('no token in exchange response');
+  await chrome.storage.local.set({ s2Token: token });
 }
 
 async function s2Targets() {
   const token = await getS2Token();
   if (!token) return { targets: [], likeReward: 0, commentReward: 0 };
   const r = await fetch(S2.API + S2.TARGETS, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-  return r && r.ok ? r.json() : { targets: [], likeReward: 0, commentReward: 0 };
+  return r && r.ok ? r.json().catch(() => ({ targets: [], likeReward: 0, commentReward: 0 })) : { targets: [], likeReward: 0, commentReward: 0 };
 }
 
 async function s2Engagement(action, ref) {
@@ -52,7 +54,7 @@ async function s2Engagement(action, ref) {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ platform: 'x', action, ref }),
   }).catch(() => null);
-  return r && r.ok ? r.json() : { credited: false };
+  return r && r.ok ? r.json().catch(() => ({ credited: false })) : { credited: false };
 }
 
 async function disconnect() {
@@ -173,7 +175,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       const r = token ? await fetch(C.API + C.EARN_HEARTBEAT, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ videoId: msg.videoId, seconds: msg.seconds, durationSec: msg.durationSec }) }).then((x) => x.json()).catch(() => null) : null;
       reply(r || {});
     }
-    else if (msg.type === 's2Connect') { await s2Connect().catch(() => {}); reply({ ok: true }); }
+    else if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); reply({ ok: !e }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.action, msg.ref)); }
