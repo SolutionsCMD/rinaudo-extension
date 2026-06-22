@@ -19,11 +19,11 @@ self.RGC = {
 };
 
 // Season-2 backend (separate app/DB from S1). Engagement (X like/comment) →
-// tickets lands here. For local dev S2 runs on :4020; swap API for the deployed
-// S2 origin when it ships.
+// tickets lands here. Points at the deployed S2 origin; for same-machine local
+// dev, temporarily change API + CONNECT_PAGE to http://localhost:4020.
 self.S2 = {
-  API: 'http://localhost:4020',
-  CONNECT_PAGE: 'http://localhost:4020/extension/connect',
+  API: 'https://s2.jsolutions.dev',
+  CONNECT_PAGE: 'https://s2.jsolutions.dev/extension/connect',
   EXCHANGE: '/api/extension/connect',
   TARGETS: '/api/extension/targets',
   ENGAGEMENT: '/api/extension/engagement',
