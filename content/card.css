@@ -1,2 +1,0 @@
-/* Host for the shadow-DOM vote card. Pinned bottom-right, above Kick's UI. */
-#rgc-vote-host { position: fixed; right: 18px; bottom: 18px; z-index: 2147483647; }

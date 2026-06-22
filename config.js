@@ -1,26 +1,15 @@
-// Shared config. Loaded both as a content script (page isolated world) and via
+// Shared config. Loaded as a content script (isolated world) and via
 // importScripts() in the service worker — `self` exists in both, so this works
-// in each. To point at staging or a different channel, change it here only.
+// in each. S1 (rinaudoglobal) is used only for the public notifications feed now.
 self.RGC = {
   API: 'https://rinaudoglobal.com',
   CHANNEL_URL: 'https://kick.com/mizkif',
-  CHANNEL_TAB_MATCH: 'https://kick.com/mizkif*',
-  ACTIVE: '/api/custom-polls/active',
-  VOTE: '/api/custom-polls/vote',
-  TRADES_ACTIVE: '/api/trades/active',
-  VOTES: '/api/votes',
   STATUS: '/api/extension/status',
-  EARN: '/api/extension/earn',
-  EARN_HEARTBEAT: '/api/extension/earn-heartbeat',
-  CONNECT_PAGE: 'https://rinaudoglobal.com/extension/connect',
-  EXCHANGE: '/api/extension/connect',
-  DISCONNECT: '/api/extension/disconnect',
-  POLL_FAST_MS: 7000,
 };
 
-// Season-2 backend (separate app/DB from S1). Engagement (X like/comment) →
-// tickets lands here. Points at the deployed S2 origin; for same-machine local
-// dev, temporarily change API + CONNECT_PAGE to http://localhost:4020.
+// Season-2 backend (separate app/DB). Engagement (X like/comment) → tickets.
+// Points at the deployed S2 origin; for same-machine local dev, temporarily
+// change API + CONNECT_PAGE to http://localhost:4020.
 self.S2 = {
   API: 'https://s2.jsolutions.dev',
   CONNECT_PAGE: 'https://s2.jsolutions.dev/extension/connect',
