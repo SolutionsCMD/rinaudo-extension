@@ -1,10 +1,10 @@
-// Service worker: runs the Season-2 "Connect with Kick" flow (engagement →
-// tickets) and fires desktop notifications when Mizkif goes live or posts.
+// Service worker: Season-2 "Connect with Kick" (tickets), the live-poll vote
+// module (on-stream card + off-tab pop-out window), and desktop notifications
+// when Mizkif goes live or posts.
 importScripts('config.js');
 const C = self.RGC;   // notifications: public status feed + channel url
-const S2 = self.S2;   // engagement → tickets
+const S2 = self.S2;   // engagement + polls
 
-// --- Season 2 (engagement → tickets) ---
 const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Token || null;
 
 async function s2Connect() {
@@ -39,18 +39,81 @@ async function s2Engagement(action, ref) {
   return r && r.ok ? r.json().catch(() => ({ credited: false })) : { credited: false };
 }
 
+// --- Live poll vote module ---
+async function s2Poll() {
+  const token = await getS2Token();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const r = await fetch(S2.API + S2.POLL, { headers }).catch(() => null);
+  const base = r && r.ok ? await r.json().catch(() => ({ poll: null, tally: [], myVote: null })) : { poll: null, tally: [], myVote: null };
+  return { ...base, connected: !!token };
+}
+
+async function s2PollVote(pollId, optionIdx) {
+  const token = await getS2Token();
+  if (!token) return { ok: false, reason: 'not_connected' };
+  const r = await fetch(S2.API + S2.POLL_VOTE, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ pollId, optionIdx }),
+  }).catch(() => null);
+  return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
+}
+
+// Is the active tab Mizkif's Kick channel? (kick.com host permission makes
+// tab.url readable for that tab; other tabs read undefined → false.)
+async function focusedOnKick() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return !!(tab && /^https:\/\/kick\.com\/mizkif/.test(tab.url || ''));
+  } catch { return false; }
+}
+
+// Pop the vote window, reusing one if already open.
+async function openVoteWindow() {
+  const { voteWin } = await chrome.storage.local.get('voteWin');
+  if (voteWin != null) {
+    try { await chrome.windows.update(voteWin, { focused: true, drawAttention: true }); return; } catch { /* gone */ }
+  }
+  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 360, height: 320, focused: true });
+  await chrome.storage.local.set({ voteWin: w.id });
+}
+chrome.windows.onRemoved.addListener(async (id) => {
+  const { voteWin } = await chrome.storage.local.get('voteWin');
+  if (id === voteWin) await chrome.storage.local.remove('voteWin');
+});
+
+// On the alarm: if a NEW poll is open AND the viewer isn't on the Kick tab, pop
+// the window (deduped per poll id). On the Kick tab, the on-page card handles it.
+async function checkPoll() {
+  const data = await s2Poll();
+  const poll = data && data.poll;
+  if (!poll) return;
+  const key = 'poll:' + poll.id;
+  const { lastPollKey } = await chrome.storage.local.get('lastPollKey');
+  if (key === lastPollKey) return;
+  await chrome.storage.local.set({ lastPollKey: key });
+  if (await focusedOnKick()) return;
+  await openVoteWindow();
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
     if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); reply({ ok: !e }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.action, msg.ref)); }
+    else if (msg.type === 's2Poll') { reply(await s2Poll()); }
+    else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
+    else if (msg.type === 'resize' && typeof msg.height === 'number') {
+      const { voteWin } = await chrome.storage.local.get('voteWin');
+      if (voteWin != null) { try { await chrome.windows.update(voteWin, { height: Math.round(msg.height) }); } catch { /* gone */ } }
+      reply({ ok: true });
+    }
   })();
   return true; // async reply
 });
 
 // --- Notifications: Kick go-live + new YouTube upload + new TikTok/IG/X post ---
-// Polled on a 30s alarm against the public status feed (no login needed). Seeds
+// Polled on the 30s alarm against the public status feed (no login needed). Seeds
 // last-seen silently on first run so installing never spams old items.
 async function checkSignals() {
   const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
@@ -96,4 +159,4 @@ chrome.notifications.onClicked.addListener(async (id) => {
   chrome.notifications.clear(id);
 });
 chrome.runtime.onInstalled.addListener(() => chrome.alarms.create('poll', { periodInMinutes: 0.5 }));
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') checkSignals(); });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') { checkSignals(); checkPoll(); } });

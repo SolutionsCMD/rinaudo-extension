@@ -16,4 +16,7 @@ self.S2 = {
   EXCHANGE: '/api/extension/connect',
   TARGETS: '/api/extension/targets',
   ENGAGEMENT: '/api/extension/engagement',
+  POLL: '/api/extension/poll',
+  POLL_VOTE: '/api/extension/poll-vote',
+  POLL_FAST_MS: 5000,
 };

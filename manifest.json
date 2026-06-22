@@ -4,11 +4,16 @@
   "version": "0.3.0",
   "description": "Earn tickets for liking and commenting on Mizkif's posts, and get pinged when he goes live or posts.",
   "permissions": ["storage", "alarms", "notifications", "identity"],
-  "host_permissions": ["https://rinaudoglobal.com/*", "https://x.com/*", "https://twitter.com/*", "https://s2.jsolutions.dev/*"],
+  "host_permissions": ["https://rinaudoglobal.com/*", "https://x.com/*", "https://twitter.com/*", "https://s2.jsolutions.dev/*", "https://kick.com/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup/popup.html", "default_title": "Rinaudo Capital" },
   "icons": { "128": "icons/icon128.png" },
   "content_scripts": [
+    {
+      "matches": ["https://kick.com/mizkif*"],
+      "js": ["config.js", "content/kick.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": ["https://x.com/*/status/*", "https://twitter.com/*/status/*"],
       "js": ["config.js", "content/x.js"],
