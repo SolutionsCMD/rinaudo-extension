@@ -164,22 +164,23 @@ async function checkSignals() {
     if (r.streamLive && !seen.live) {
       const id = `live-${Date.now()}`;
       notifUrls[id] = r.channelUrl;
-      chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: 'Mizkif is live', message: 'The stream just went live — tap to watch.', priority: 2 });
+      chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/kick.png', title: 'Mizkif is live on Kick', message: 'The stream just went live — tap to watch.', priority: 2 });
     }
     (r.latestVideos || []).forEach((v) => {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId]) {
         const id = `vid-${v.videoId}`;
         notifUrls[id] = v.url;
-        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: `New video — ${v.channelName}`, message: v.title || 'New upload — tap to watch.', priority: 2 });
+        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube video — ${v.channelName}`, message: v.title || 'New upload — tap to watch.', priority: 2 });
       }
     });
-    const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New post — Instagram', twitter: 'New tweet — Mizkif' };
+    const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New Instagram — Mizkif', twitter: 'New X post — Mizkif' };
+    const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
     (r.latestSocial || []).forEach((s) => {
       const prev = (seen.social || {})[s.platform];
       if (s.url && prev && s.url !== prev) {
         const id = `soc-${s.platform}-${Date.now()}`;
         notifUrls[id] = s.url;
-        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title || 'Tap to open.', priority: 2 });
+        chrome.notifications.create(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title || 'Tap to open.', priority: 2 });
       }
     });
   }
