@@ -3,7 +3,13 @@
   "name": "Rinaudo Capital",
   "version": "0.4.0",
   "description": "Earn tickets for liking and commenting on Mizkif's posts, and get pinged when he goes live or posts.",
-  "browser_specific_settings": { "gecko": { "id": "rinaudo-capital@jsolutions.dev", "strict_min_version": "121.0" } },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "rinaudo-capital@jsolutions.dev",
+      "strict_min_version": "121.0",
+      "data_collection_permissions": { "required": ["none"], "optional": ["technicalAndInteraction"] }
+    }
+  },
   "permissions": ["storage", "alarms", "notifications", "identity"],
   "host_permissions": ["https://rinaudoglobal.com/*", "https://x.com/*", "https://twitter.com/*", "https://s2.jsolutions.dev/*", "https://kick.com/*"],
   "background": { "scripts": ["config.js", "background.js"] },
