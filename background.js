@@ -1,7 +1,9 @@
 // Service worker: Season-2 "Connect with Kick" (tickets), the live-poll vote
 // module (on-stream card + off-tab pop-out window), and desktop notifications
 // when Mizkif goes live or posts.
-importScripts('config.js');
+// Chrome (service worker) loads config via importScripts; Firefox (event page)
+// loads config.js via manifest background.scripts, so importScripts is absent there.
+if (typeof importScripts === 'function') importScripts('config.js');
 const C = self.RGC;   // notifications: public status feed + channel url
 const S2 = self.S2;   // engagement + polls
 
