@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Privacy Policy — Rinaudo Capital Live Votes (Browser Extension)</title>
+  <title>Privacy Policy — Rinaudo Capital (Browser Extension)</title>
   <meta name="robots" content="index,follow" />
   <style>
     :root { color-scheme: light dark; }
@@ -33,45 +33,53 @@
 <body>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="meta">Rinaudo Capital — Live Votes (browser extension) · Last updated 10 June 2026</p>
+    <p class="meta">Rinaudo Capital (browser extension) · Last updated 25 June 2026</p>
 
     <p>
-      This policy explains what the <strong>Rinaudo Capital — Live Votes</strong> browser extension
-      ("the extension") does with your data. It applies only to the extension, not to the
+      This policy explains what the <strong>Rinaudo Capital</strong> browser extension ("the extension")
+      does with your data. It applies only to the extension, not to the
       <a href="https://rinaudoglobal.com">rinaudoglobal.com</a> website or any other service.
     </p>
 
     <h2>What the extension does</h2>
     <p>
-      The extension lets members vote on live stock picks from Mizkif's stream, notifies them when a
-      poll opens or new content is posted, and credits watch-to-earn activity to their Rinaudo account.
+      The extension lets you earn tickets in Mizkif's game by engaging with his content — liking,
+      commenting on, and watching his promoted posts and videos on X, YouTube, TikTok, and Instagram,
+      and voting on live polls from his Kick stream — and it notifies you when he goes live or posts.
+      Tickets are credited to the account you link once with "Connect with Kick."
     </p>
 
     <h2>What we store</h2>
     <ul>
       <li>
         <strong>Your account token.</strong> When you choose "Connect with Kick," a single
-        authentication token is stored locally in your browser (<code>chrome.storage.local</code>).
-        It is used only to authenticate your requests to rinaudoglobal.com. It never leaves your
-        browser except in the <code>Authorization</code> header of calls to rinaudoglobal.com, and it
-        is removed when you disconnect.
+        authentication token is stored locally in your browser (<code>chrome.storage.local</code>). It is
+        used only to authenticate your requests to <code>s2.jsolutions.dev</code>, never leaves your
+        browser except in the <code>Authorization</code> header of calls to that server, and is removed
+        when you disconnect or uninstall.
       </li>
       <li>
         <strong>Local state only.</strong> The extension also keeps small bookkeeping values locally
-        (e.g. the last poll already shown, last-seen videos) so it doesn't notify you twice. These
-        stay on your device.
+        (e.g. the last poll/video/post already shown, so you aren't notified twice, and where you dragged
+        the on-page card). These stay on your device.
       </li>
     </ul>
 
-    <h2>What we send to rinaudoglobal.com</h2>
-    <p>The extension communicates <strong>only</strong> with <code>https://rinaudoglobal.com</code>, to:</p>
+    <h2>What we send, and to whom</h2>
+    <p>The extension communicates with <strong>only two servers</strong>:</p>
     <ul>
-      <li>exchange your Connect-with-Kick login for an account token;</li>
-      <li>fetch the currently active poll or trade vote, and submit your vote;</li>
-      <li>check whether the stream is live or new videos/posts exist, to power notifications;</li>
       <li>
-        report watch-to-earn activity — the video ID and seconds watched — for eligible videos, so
-        the activity can be credited to your account.
+        <code>https://s2.jsolutions.dev</code> (the game API): to exchange your Connect-with-Kick login
+        for an account token; to record when you <strong>like, comment on, or watch</strong> one of
+        Mizkif's promoted posts or videos (we send the platform, the post/video ID, and the action — for
+        watching, periodic "still watching" signals — so the tickets can be credited); to fetch the active
+        poll and submit your vote; and to fetch the public reward-rate list. We do <strong>not</strong>
+        send the text of your comments — only that you commented on a given post.
+      </li>
+      <li>
+        <code>https://rinaudoglobal.com</code> (public status feed): the extension periodically checks
+        whether Mizkif is live or has posted, to power notifications. This requires no login and sends
+        none of your data.
       </li>
     </ul>
 
@@ -79,23 +87,30 @@
     <ul>
       <li>No analytics or telemetry.</li>
       <li>No advertising, and no selling or sharing of data with third parties.</li>
-      <li>No tracking of your general browsing. The extension runs only on Mizkif's Kick channel page and on YouTube watch/shorts pages, and does not read or collect the contents of those pages.</li>
+      <li>
+        No tracking of your general browsing. The extension runs only on Mizkif's Kick channel and on X,
+        YouTube, TikTok, and Instagram post pages, and only to detect your deliberate engagement with his
+        promoted posts and to show its own on-page card. It does not read or collect the contents of those
+        pages (your comment draft is checked locally for length only, and is never transmitted).
+      </li>
       <li>No collection of names, emails, payment details, or other personal information by the extension itself.</li>
     </ul>
 
     <h2>Permissions, and why</h2>
     <ul>
       <li><code>identity</code> — the one-time "Connect with Kick" sign-in.</li>
-      <li><code>storage</code> — to store your account token locally.</li>
+      <li><code>storage</code> — to store your account token and local state.</li>
       <li><code>alarms</code> — a periodic timer to check for open polls and new content.</li>
-      <li><code>notifications</code> — desktop alerts when a poll opens or new content is posted.</li>
-      <li><code>host access</code> to kick.com, rinaudoglobal.com, and youtube.com — to show the vote card on the stream, talk to the Rinaudo APIs, and run watch-to-earn on eligible videos.</li>
+      <li><code>notifications</code> — desktop alerts when a poll opens or Mizkif goes live or posts.</li>
+      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code> — to talk to the game API and the public notifications feed.</li>
+      <li><code>host access</code> to <code>kick.com</code> — to show the vote card on Mizkif's stream.</li>
+      <li><code>host access</code> to <code>x.com</code>, <code>twitter.com</code>, <code>youtube.com</code>, <code>tiktok.com</code>, and <code>instagram.com</code> — to detect and credit your likes, comments, and watches on Mizkif's promoted posts and videos there.</li>
     </ul>
 
     <h2>Your choices</h2>
     <p>
-      You can disconnect at any time from the extension popup, which deletes the stored token and
-      tells rinaudoglobal.com to revoke it. Uninstalling the extension removes all locally stored data.
+      You can disconnect at any time from the extension popup, which deletes the stored token and tells
+      the server to revoke it. Uninstalling the extension removes all locally stored data.
     </p>
 
     <h2>Contact</h2>
