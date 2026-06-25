@@ -4,10 +4,17 @@
 //              (the server does the anti-cheat: well-spaced heartbeats + wall time)
 //   • Like   — via the like button's aria-pressed state
 //   • Comment— via the comment submit-click hook (best-effort)
-// All network goes through the service worker (page CSP). SPA-aware.
+// All network goes through the service worker (page CSP). SPA-aware. The card
+// chrome (drag/collapse/position) is provided by RGCFrame (content/widget-frame.js).
 const C = self.S2;
-let host = null, shadow = null, state = null, commentHooked = false, lastHb = 0;
+let frame = null, state = null, commentHooked = false, lastHb = 0;
 let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0 };
+
+const ROW_CSS = `
+  .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
+  .row:first-child{margin-top:0}
+  .row .amt{color:#A9A697;font-variant-numeric:tabular-nums}
+  .done{color:#86D6A4}`;
 
 function currentVideoId() {
   const u = new URL(location.href);
@@ -23,21 +30,12 @@ function likeButton() {
 }
 function isLiked() { const b = likeButton(); return !!(b && b.getAttribute('aria-pressed') === 'true'); }
 function fmt(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+// Min 5 tickets (even a short), then 1 per whole minute past 5.
+function watchEstimate(sec) { return Math.max(5, Math.floor((sec || 0) / 60)); }
 
-function ensureWidget() {
-  if (host) return;
-  host = document.createElement('div'); host.id = 'rgc-yt-host';
-  host.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647';
-  shadow = host.attachShadow({ mode: 'open' });
-  const st = document.createElement('style');
-  st.textContent = `
-    .w{width:236px;background:#0E1B2C;color:#F4EFE3;border:1px solid #C9A766;border-radius:12px;padding:14px;font-family:system-ui,sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.6)}
-    .h{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#C9A766;margin-bottom:10px}
-    .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:7px 0}
-    .row .amt{color:#A9A697;font-variant-numeric:tabular-nums}
-    .done{color:#86D6A4}`;
-  shadow.append(st);
-  document.body.appendChild(host);
+function ensureFrame() {
+  if (frame) return;
+  frame = self.RGCFrame.mount({ key: 'yt', title: 'Earn tickets', width: 240, pos: { top: 72, right: 16 }, css: ROW_CSS });
 }
 function rowEl(label, amt, done) {
   const r = document.createElement('div'); r.className = 'row';
@@ -47,19 +45,18 @@ function rowEl(label, amt, done) {
 }
 function drawWidget() {
   if (!state) return;
-  ensureWidget();
-  const card = document.createElement('div'); card.className = 'w';
-  const h = document.createElement('div'); h.className = 'h'; h.textContent = 'Earn tickets'; card.append(h);
+  ensureFrame();
+  const body = frame.body; body.replaceChildren();
   if (state.sessionId) {
-    card.append(rowEl(state.watchDone ? 'Watched' : `Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}`,
-      `+${rewards.watchVideoReward}`, state.watchDone));
+    const amt = state.watchDone ? (state.awarded != null ? state.awarded : watchEstimate(state.watched)) : watchEstimate(state.watched);
+    body.append(rowEl(state.watchDone ? 'Watched' : `Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}`, `+${amt}`, state.watchDone));
   }
-  card.append(rowEl('Like', `+${rewards.likeReward}`, state.likeDone));
-  card.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentDone));
-  const old = shadow.querySelector('.w'); if (old) old.remove();
-  shadow.append(card);
+  body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeDone));
+  body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentDone));
+  const earned = (state.likeDone ? rewards.likeReward : 0) + (state.commentDone ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
+  frame.setPill(earned ? `+${earned}` : '🎟');
 }
-function clearWidget() { if (host) { host.remove(); host = null; shadow = null; } state = null; }
+function clearWidget() { if (frame) { frame.destroy(); frame = null; } state = null; }
 
 async function fireEngagement(action) {
   const ref = state && state.videoId; if (!ref) return;
@@ -93,7 +90,7 @@ async function claimWatch() {
   state.claiming = true;
   const r = await chrome.runtime.sendMessage({ type: 's2WatchClaim', videoRef: state.videoId }).catch(() => null);
   state.claiming = false;
-  if (r && r.ok) { state.watchDone = true; drawWidget(); }
+  if (r && r.ok) { state.watchDone = true; state.awarded = (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)); drawWidget(); }
 }
 
 async function start(videoId) {
