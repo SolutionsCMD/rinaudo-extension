@@ -17,6 +17,8 @@
     try { r = await (await fetch(RATES_URL)).json(); } catch { return; }
     if (!r || !r.watchVideo) return;
     const v = r.watchVideo;
+    const cross = v.floor / v.perMinute; // minute where per-minute overtakes the floor
+    const crossStr = Number.isInteger(cross) ? String(cross) : cross.toFixed(1);
     const items = [
       {
         t: 'Watch the live stream', a: `${r.watchtimePerHour}→${r.watchtimeMaxPerHour}/hr`,
@@ -24,7 +26,7 @@
       },
       {
         t: 'Watch his videos', a: `${v.floor}+`,
-        d: `You get max(${v.floor}, minutes watched), once per video — a short = ${v.floor}, a 12-min video = 12.`,
+        d: `${v.floor} tickets for any video up to ${crossStr} minutes, then +${v.perMinute} for each extra minute — once per video.`,
         subs: [
           'YouTube: any video or short from the last 24h, plus his latest is always eligible.',
           'TikTok: any post from the last 24h.',
