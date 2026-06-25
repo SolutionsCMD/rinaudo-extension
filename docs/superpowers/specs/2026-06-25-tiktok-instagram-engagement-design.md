@@ -87,8 +87,10 @@ Carried over from X/YouTube: at comment-submit, read `adapter.commentText()`; sk
 - `isActiveTarget` + `listActiveTargets` are already platform-agnostic; `/api/extension/targets` already returns all platforms.
 
 **Target model (24h window) for TikTok/IG:**
-- Auto-detect publishes each new TikTok/IG post (the mizdaq-prod `/api/extension/status` feed already surfaces latest TikTok + IG via IFTTT) with a **24h expiry**.
+- Auto-detect publishes each new TikTok/IG post (the mizdaq-prod `/api/extension/status` feed already surfaces latest TikTok + IG via IFTTT — confirmed: it returns `@realmizkif` TikTok + IG `/p/` URLs) with a **24h expiry**.
 - `listActiveTargets` / `isActiveTarget` filter out targets past their `expires_at` (24h).
+- **Caveat 1 — feed holds only the single latest per platform** (`social_latest` upserts on url change). To accumulate a 24h window of *multiple* posts, the auto-detect job must capture each post into `engagement_targets` as the feed rotates through them (frequent enough poll to not miss posts), not rely on the feed to hold a day's history.
+- **Caveat 2 — IFTTT's IG trigger favors feed photos, Reels are spotty.** Since *watch* targets are Reels, IG watch may not auto-detect reliably; keep manual admin publish as a backstop (and consider a better IG source if watch matters there).
 
 **Phase 2 (watch generalization):**
 - `publicEngagement()` exposes active `tiktok`/`instagram` targets (not just `youtube`).
