@@ -32,7 +32,7 @@
           'TikTok: any post from the last 24h.',
         ],
       },
-      { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on X, YouTube & TikTok.' },
+      { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on YouTube & TikTok.' },
       { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
       { t: 'Vote in a poll', a: `+${r.vote}`, d: 'Each time you vote in a live poll.' },
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },

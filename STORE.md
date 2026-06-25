@@ -6,7 +6,7 @@
 ## What it does
 Connect once with "Connect with Kick," then earn tickets in Mizkif's game by engaging
 with his content:
-- **Like / comment / watch** his promoted posts and videos on X, YouTube, TikTok, and
+- **Like / comment / watch** his promoted posts and videos on YouTube, TikTok, and
   Instagram — a small card appears on the post and credits the action.
 - **Vote** on live polls from his Kick stream (an on-stream card, plus a pop-out window
   when you're on another tab).
@@ -21,7 +21,7 @@ The popup and the on-install welcome page show a live "How to earn" list.
 - **host: https://s2.jsolutions.dev/** — the game API (connect, engagement, votes, watch, rates).
 - **host: https://rinaudoglobal.com/** — the public status feed that powers notifications (no login).
 - **host: https://kick.com/** — show the vote card on Mizkif's channel page.
-- **host: https://x.com/, https://twitter.com/, https://www.youtube.com/, https://www.tiktok.com/, https://www.instagram.com/**
+- **host: https://www.youtube.com/, https://www.tiktok.com/, https://www.instagram.com/**
   — detect and credit the member's likes / comments / watches on Mizkif's promoted posts and videos.
 
 ## Data handling
