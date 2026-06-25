@@ -21,6 +21,11 @@ self.EngageCore = (function () {
 
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const watchEstimate = (sec, r) => Math.max(r.watchFloor || 5, Math.floor((sec || 0) / 60) * (r.watchPerMinute || 1));
+  // Credit needs `reqHb` well-spaced heartbeats (first ~a tick in, then every hbInterval),
+  // which for short videos takes longer than requiredWatchSeconds. Target that
+  // heartbeat-limited time (+~2 ticks of slack) so the bar doesn't read "done" before the
+  // claim can land. For long videos requiredWatchSeconds dominates, so it's unchanged.
+  const effectiveTarget = (reqSec, reqHb, hbInterval) => Math.max(reqSec || 120, 10 + ((reqHb || 2) - 1) * (hbInterval || 20));
 
   function init(A) {
     let frame = null, state = null, commentHooked = false, lastHb = 0;
@@ -88,7 +93,8 @@ self.EngageCore = (function () {
       const dur = (v && isFinite(v.duration) && v.duration > 0) ? Math.round(v.duration) : 0;
       const s = await chrome.runtime.sendMessage({ type: 's2WatchSession', platform: A.platform, videoRef: state.ref, playerDuration: dur }).catch(() => null);
       if (!s || s.error || !s.sessionId) return; // backend not ready / not the active target / not connected
-      state.sessionId = s.sessionId; state.target = s.requiredWatchSeconds || 120; state.hbInterval = s.heartbeatIntervalSec || 20;
+      state.sessionId = s.sessionId; state.hbInterval = s.heartbeatIntervalSec || 20;
+      state.target = effectiveTarget(s.requiredWatchSeconds, s.requiredHeartbeats, state.hbInterval);
       drawWidget();
     }
     async function claimWatch() {
@@ -144,5 +150,5 @@ self.EngageCore = (function () {
     start(A.getRef());
   }
 
-  return { init };
+  return { init, effectiveTarget };
 })();
