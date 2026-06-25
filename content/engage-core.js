@@ -33,7 +33,7 @@ self.EngageCore = (function () {
 
     function ensureFrame() {
       if (frame) return;
-      frame = self.RGCFrame.mount({ key: A.platform, title: 'Earn tickets', width: 240, pos: { top: 72, right: 16 }, css: ROW_CSS });
+      frame = self.RGCFrame.mount({ key: A.platform, title: 'Earn tickets', width: 240, pos: { bottom: 16, right: 16 }, css: ROW_CSS });
     }
     // status: 'idle' | 'pending' | 'done'
     function rowEl(label, amt, status) {
@@ -48,7 +48,9 @@ self.EngageCore = (function () {
       if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchEstimate(state.watched, rewards)}`, 'done');
       if (state.claiming) return rowEl(`Watch ${fmt(state.watched)} / ${fmt(state.target)}`, '', 'pending');
       const playing = state.watchPlaying;
-      const label = `${playing ? '▶' : '⏸'} Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}${playing ? '' : ' · paused'}`;
+      const suffix = playing ? '' : (state.watchMuted ? ' · unmute to earn' : ' · paused');
+      const icon = playing ? '▶' : (state.watchMuted ? '🔇' : '⏸');
+      const label = `${icon} Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}${suffix}`;
       const r = rowEl(label, `+${watchEstimate(state.watched, rewards)}`, 'idle');
       if (!playing) r.classList.add('paused');
       return r;
@@ -118,7 +120,7 @@ self.EngageCore = (function () {
       };
       const eligible = !!(data && (data.targets || []).some((t) => t.platform === A.platform && t.ref === ref));
       if (!eligible) return clearWidget();
-      state = { ref, watched: 0, target: 0, sessionId: null, watchDone: false, watchPlaying: false, claiming: false, likeS: 'idle', commentS: 'idle' };
+      state = { ref, watched: 0, target: 0, sessionId: null, watchDone: false, watchPlaying: false, watchMuted: false, claiming: false, likeS: 'idle', commentS: 'idle' };
       lastHb = 0; hookComment(); drawWidget();
       startWatch();
     }
@@ -129,10 +131,12 @@ self.EngageCore = (function () {
       if (A.actions.like && state.likeS === 'idle' && A.isLiked()) fireEngagement('like');
       if (!A.actions.watch || !state.sessionId || state.watchDone) return;
       const v = A.getVideoEl();
-      const playing = v && !v.paused && !v.ended && v.currentTime > 0;
+      const live = v && !v.paused && !v.ended && v.currentTime > 0;
+      const audible = !!(v && !v.muted && v.volume > 0); // must be watching with sound, not idling muted
       const focused = document.visibilityState === 'visible' && document.hasFocus();
       const wasPlaying = state.watchPlaying;
-      state.watchPlaying = !!(playing && focused);
+      state.watchPlaying = !!(live && audible && focused);
+      state.watchMuted = !!(live && focused && !audible);
       if (state.watchPlaying) {
         state.watched = (state.watched || 0) + 5;
         const now = Date.now();
