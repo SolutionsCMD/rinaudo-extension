@@ -19,4 +19,9 @@ self.S2 = {
   POLL: '/api/extension/poll',
   POLL_VOTE: '/api/extension/poll-vote',
   POLL_FAST_MS: 5000,
+  // YouTube watch-to-earn (backend system already on s2; needs to accept the
+  // extension bearer — see the backend handoff).
+  WATCH_SESSION: '/api/watch/session',
+  WATCH_HEARTBEAT: '/api/watch/heartbeat',
+  WATCH_CLAIM: '/api/watch/claim',
 };

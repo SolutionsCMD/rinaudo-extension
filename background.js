@@ -31,14 +31,43 @@ async function s2Targets() {
   return r && r.ok ? r.json().catch(() => ({ targets: [], likeReward: 0, commentReward: 0 })) : { targets: [], likeReward: 0, commentReward: 0 };
 }
 
-async function s2Engagement(action, ref) {
+async function s2Engagement(platform, action, ref) {
   const token = await getS2Token();
   if (!token) return { credited: false };
   const r = await fetch(S2.API + S2.ENGAGEMENT, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ platform: 'x', action, ref }),
+    body: JSON.stringify({ platform, action, ref }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ credited: false })) : { credited: false };
+}
+
+// --- YouTube watch-to-earn (drives the existing s2 /api/watch/* flow) ---
+async function s2WatchSession(videoRef, playerDuration) {
+  const token = await getS2Token();
+  if (!token) return { error: 'not_connected' };
+  const r = await fetch(S2.API + S2.WATCH_SESSION, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ videoRef, playerDuration }),
+  }).catch(() => null);
+  return r && r.ok ? r.json().catch(() => ({ error: 'bad_json' })) : { error: r ? 'http_' + r.status : 'network' };
+}
+async function s2WatchHeartbeat(sessionId) {
+  const token = await getS2Token();
+  if (!token) return { counted: false };
+  const r = await fetch(S2.API + S2.WATCH_HEARTBEAT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ sessionId }),
+  }).catch(() => null);
+  return r && r.ok ? r.json().catch(() => ({ counted: false })) : { counted: false };
+}
+async function s2WatchClaim(videoRef) {
+  const token = await getS2Token();
+  if (!token) return { ok: false };
+  const r = await fetch(S2.API + S2.WATCH_CLAIM, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ videoRef }),
+  }).catch(() => null);
+  return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
 
 // --- Live poll vote module ---
@@ -102,7 +131,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); reply({ ok: !e }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
-    else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.action, msg.ref)); }
+    else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
+    else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.videoRef, msg.playerDuration)); }
+    else if (msg.type === 's2WatchHeartbeat') { reply(await s2WatchHeartbeat(msg.sessionId)); }
+    else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.videoRef)); }
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
     else if (msg.type === 'resize' && typeof msg.height === 'number') {
