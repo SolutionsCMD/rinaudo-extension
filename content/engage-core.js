@@ -79,7 +79,6 @@ self.EngageCore = (function () {
       if (state[key] !== 'idle') return; // already pending or done
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
-      console.log('[RGC]', action, A.platform, JSON.stringify(r)); // TEMP — remove after verifying crediting
       if (r && r.credited) { state[key] = 'done'; setDone(ref, action === 'like' ? { like: true } : { comment: true }); }
       else state[key] = 'idle';
       drawWidget();
