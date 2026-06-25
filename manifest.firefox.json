@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rinaudo Capital",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "browser_specific_settings": {
     "gecko": {

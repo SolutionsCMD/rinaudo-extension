@@ -50,14 +50,22 @@ self.EngageCore = (function () {
       a.textContent = status === 'pending' ? '⋯' : amt;
       r.append(l, a); return r;
     }
+    // The video's full-watch reward (based on its length), shown as the headline so a
+    // long video reads "+33" not "+5" (the floor). The amount actually credited comes
+    // from the claim and scales with how much was watched.
+    function watchPotential() {
+      const v = A.getVideoEl();
+      const durMin = (v && isFinite(v.duration) && v.duration > 0) ? Math.floor(v.duration / 60) : 0;
+      return Math.max(rewards.watchFloor || 5, durMin * (rewards.watchPerMinute || 1));
+    }
     function watchRow() {
-      if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchEstimate(state.watched, rewards)}`, 'done');
+      if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchPotential()}`, 'done');
       if (state.claiming) return rowEl(`Watch ${fmt(state.watched)} / ${fmt(state.target)}`, '', 'pending');
       const playing = state.watchPlaying;
       const suffix = playing ? '' : (state.watchMuted ? ' · unmute to earn' : ' · paused');
       const icon = playing ? '▶' : (state.watchMuted ? '🔇' : '⏸');
       const label = `${icon} Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}${suffix}`;
-      const r = rowEl(label, `+${watchEstimate(state.watched, rewards)}`, 'idle');
+      const r = rowEl(label, `+${watchPotential()}`, 'idle');
       if (!playing) r.classList.add('paused');
       return r;
     }
@@ -80,6 +88,9 @@ self.EngageCore = (function () {
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
       if (r && r.credited) { state[key] = 'done'; setDone(ref, action === 'like' ? { like: true } : { comment: true }); }
+      // A real (non-null) response with credited:false on a like means it's already
+      // earned (the card only shows on active targets) — show done, not a blink-to-idle.
+      else if (r && action === 'like') { state[key] = 'done'; setDone(ref, { like: true }); }
       else state[key] = 'idle';
       drawWidget();
     }
@@ -115,7 +126,12 @@ self.EngageCore = (function () {
       state.claiming = true; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2WatchClaim', platform: A.platform, videoRef: state.ref }).catch(() => null);
       state.claiming = false;
-      if (r && r.ok) { state.watchDone = true; state.awarded = (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)); setDone(state.ref, { watch: true, awarded: state.awarded }); }
+      // Credit on a successful claim OR if it was already claimed earlier (don't blink forever).
+      if (r && (r.ok || r.reason === 'already_claimed')) {
+        state.watchDone = true;
+        state.awarded = r.ok ? (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)) : null;
+        setDone(state.ref, { watch: true, awarded: state.awarded });
+      }
       drawWidget();
     }
 
