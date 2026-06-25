@@ -110,13 +110,17 @@ self.EngageCore = (function () {
       }
       // Click path: submit button pressed.
       document.addEventListener('click', (e) => {
-        if (!A.commentSubmitTarget(e.target)) return;
+        const sub = A.commentSubmitTarget(e.target);
+        console.log('[RGC-comment]', A.platform, 'click', e.target.tagName, e.target.getAttribute && e.target.getAttribute('data-e2e'), 'sub:', !!sub, 'text:', (A.commentText()||'').trim().slice(0,30), 'state:', state && state.commentS);
+        if (!sub) return;
         tryCredit();
       }, true);
       // Keyboard path: Enter in the comment input box (TikTok & YouTube accept Enter).
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' || e.shiftKey) return;
-        if (!A.commentInputTarget || !A.commentInputTarget(e.target)) return;
+        const inp = A.commentInputTarget && A.commentInputTarget(e.target);
+        console.log('[RGC-comment]', A.platform, 'enter', e.target.tagName, 'inp:', !!inp, 'text:', (A.commentText()||'').trim().slice(0,30));
+        if (!inp) return;
         tryCredit();
       }, true);
     }
