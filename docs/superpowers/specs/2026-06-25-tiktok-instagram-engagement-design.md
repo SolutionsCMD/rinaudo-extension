@@ -92,6 +92,11 @@ Carried over from X/YouTube: at comment-submit, read `adapter.commentText()`; sk
 - **Caveat 1 — feed holds only the single latest per platform** (`social_latest` upserts on url change). To accumulate a 24h window of *multiple* posts, the auto-detect job must capture each post into `engagement_targets` as the feed rotates through them (frequent enough poll to not miss posts), not rely on the feed to hold a day's history.
 - **Caveat 2 — IFTTT's IG trigger favors feed photos, Reels are spotty.** Since *watch* targets are Reels, IG watch may not auto-detect reliably; keep manual admin publish as a backstop (and consider a better IG source if watch matters there).
 
+**Authorship verification (recommended — reduces IFTTT trust + flakiness):**
+- Before publishing a candidate **TikTok** post as a target, verify it's really @realmizkif's via TikTok's **public, no-auth oEmbed**: `GET https://www.tiktok.com/oembed?url=<post url>` → check `author_url` / `author_name` matches his handle. This lets the backend accept a candidate ref from *any* source — IFTTT, a scraper, or an extension hint — **without trusting the source**, because the server independently confirms authorship (and that the post exists). It's the clean fix for flaky IFTTT.
+- **Instagram** oEmbed needs a Facebook Graph token (public access deprecated), so IG verification requires a token or a scraper API; otherwise keep IG on the IFTTT feed + manual admin publish.
+- **Security invariant:** the extension must NEVER be trusted to *assert* a post's authorship — it runs on the user's machine and is forgeable. It may only *suggest* a candidate ref; the server must verify (oEmbed/API) before publishing it as a target. Awards are always gated on the server's verified target list (`isActiveTarget`), never on an extension claim.
+
 **Phase 2 (watch generalization):**
 - `publicEngagement()` exposes active `tiktok`/`instagram` targets (not just `youtube`).
 - `/api/watch/{session,heartbeat,claim}` accept a `platform` field and match "is this ref an active target on this platform?" instead of `== eng.youtube.ref`.
