@@ -1,8 +1,9 @@
-// Shared engagement engine for per-platform content scripts (TikTok, Instagram;
-// X/YouTube may migrate here later). An adapter supplies the platform name, which
-// actions apply, and the DOM selectors; this engine does the widget, the watch
-// session loop, like/comment detection (+ the >5-char comment gate), the SW wiring,
-// and SPA re-checks. Loaded after config.js + widget-frame.js, before the adapter.
+// Shared engagement engine for per-platform content scripts (X, YouTube, TikTok,
+// Instagram). An adapter supplies the platform name, which actions apply, and the
+// DOM selectors; this engine does the widget, the watch session loop, like/comment
+// detection (+ the >5-char comment gate), the SW wiring, SPA re-checks, and the
+// per-row state indicators (idle / pending / done, plus watch playing / paused).
+// Loaded after config.js + widget-frame.js, before the adapter.
 //
 // Adapter shape:
 //   { platform, actions:{watch,like,comment}, getRef()->string, isLiked()->bool,
@@ -12,8 +13,11 @@ self.EngageCore = (function () {
   const ROW_CSS = `
     .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
     .row:first-child{margin-top:0}
-    .row .amt{color:#A9A697;font-variant-numeric:tabular-nums}
-    .done{color:#86D6A4}`;
+    .lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .amt{color:#A9A697;font-variant-numeric:tabular-nums;flex:none;margin-left:8px}
+    .done{color:#86D6A4}
+    .row.pending .lbl,.row.pending .amt{color:#8A8678}
+    .row.paused .lbl{color:#8A8678}`;
 
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const watchEstimate = (sec, r) => Math.max(r.watchFloor || 5, Math.floor((sec || 0) / 60) * (r.watchPerMinute || 1));
@@ -26,37 +30,50 @@ self.EngageCore = (function () {
       if (frame) return;
       frame = self.RGCFrame.mount({ key: A.platform, title: 'Earn tickets', width: 240, pos: { top: 72, right: 16 }, css: ROW_CSS });
     }
-    function rowEl(label, amt, done) {
-      const r = document.createElement('div'); r.className = 'row';
-      const l = document.createElement('span'); l.textContent = (done ? '✓ ' : '') + label; if (done) l.className = 'done';
-      const a = document.createElement('span'); a.className = 'amt'; a.textContent = amt;
+    // status: 'idle' | 'pending' | 'done'
+    function rowEl(label, amt, status) {
+      const r = document.createElement('div'); r.className = 'row' + (status === 'pending' ? ' pending' : '');
+      const l = document.createElement('span'); l.className = 'lbl';
+      l.textContent = (status === 'done' ? '✓ ' : '') + label; if (status === 'done') l.classList.add('done');
+      const a = document.createElement('span'); a.className = 'amt';
+      a.textContent = status === 'pending' ? '⋯' : amt;
       r.append(l, a); return r;
+    }
+    function watchRow() {
+      if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchEstimate(state.watched, rewards)}`, 'done');
+      if (state.claiming) return rowEl(`Watch ${fmt(state.watched)} / ${fmt(state.target)}`, '', 'pending');
+      const playing = state.watchPlaying;
+      const label = `${playing ? '▶' : '⏸'} Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}${playing ? '' : ' · paused'}`;
+      const r = rowEl(label, `+${watchEstimate(state.watched, rewards)}`, 'idle');
+      if (!playing) r.classList.add('paused');
+      return r;
     }
     function drawWidget() {
       if (!state) return;
       ensureFrame();
       const body = frame.body; body.replaceChildren();
-      if (A.actions.watch && state.sessionId) {
-        const amt = state.watchDone ? (state.awarded != null ? state.awarded : watchEstimate(state.watched, rewards)) : watchEstimate(state.watched, rewards);
-        body.append(rowEl(state.watchDone ? 'Watched' : `Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}`, `+${amt}`, state.watchDone));
-      }
-      if (A.actions.like) body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeDone));
-      if (A.actions.comment) body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentDone));
-      const earned = (state.likeDone ? rewards.likeReward : 0) + (state.commentDone ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
+      if (A.actions.watch && state.sessionId) body.append(watchRow());
+      if (A.actions.like) body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeS));
+      if (A.actions.comment) body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentS));
+      const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
       frame.setPill(earned ? `+${earned}` : '🎟');
     }
     function clearWidget() { if (frame) { frame.destroy(); frame = null; } state = null; }
 
     async function fireEngagement(action) {
       const ref = state && state.ref; if (!ref) return;
+      const key = action === 'like' ? 'likeS' : 'commentS';
+      if (state[key] !== 'idle') return; // already pending or done
+      state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
-      if (r && r.credited) { if (action === 'like') state.likeDone = true; if (action === 'comment') state.commentDone = true; drawWidget(); }
+      state[key] = (r && r.credited) ? 'done' : 'idle';
+      drawWidget();
     }
 
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
       document.addEventListener('click', (e) => {
-        if (!state || state.commentDone) return;
+        if (!state || state.commentS !== 'idle') return;
         const n = A.commentSubmitTarget(e.target);
         if (n) {
           if ((A.commentText() || '').trim().length <= 5) return; // >5-char gate
@@ -76,10 +93,11 @@ self.EngageCore = (function () {
     }
     async function claimWatch() {
       if (!state || state.watchDone || state.claiming) return;
-      state.claiming = true;
+      state.claiming = true; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2WatchClaim', platform: A.platform, videoRef: state.ref }).catch(() => null);
       state.claiming = false;
-      if (r && r.ok) { state.watchDone = true; state.awarded = (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)); drawWidget(); }
+      if (r && r.ok) { state.watchDone = true; state.awarded = (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)); }
+      drawWidget();
     }
 
     async function start(ref) {
@@ -94,7 +112,7 @@ self.EngageCore = (function () {
       };
       const eligible = !!(data && (data.targets || []).some((t) => t.platform === A.platform && t.ref === ref));
       if (!eligible) return clearWidget();
-      state = { ref, watched: 0, target: 0, sessionId: null, watchDone: false, likeDone: false, commentDone: false };
+      state = { ref, watched: 0, target: 0, sessionId: null, watchDone: false, watchPlaying: false, claiming: false, likeS: 'idle', commentS: 'idle' };
       lastHb = 0; hookComment(); drawWidget();
       startWatch();
     }
@@ -102,16 +120,20 @@ self.EngageCore = (function () {
     // Every 5s: detect a like, accrue focused-playing watch time, heartbeat, claim when ready.
     setInterval(() => {
       if (!state || state.ref !== A.getRef()) return;
-      if (A.actions.like && !state.likeDone && A.isLiked()) fireEngagement('like');
+      if (A.actions.like && state.likeS === 'idle' && A.isLiked()) fireEngagement('like');
       if (!A.actions.watch || !state.sessionId || state.watchDone) return;
       const v = A.getVideoEl();
       const playing = v && !v.paused && !v.ended && v.currentTime > 0;
       const focused = document.visibilityState === 'visible' && document.hasFocus();
-      if (playing && focused) {
+      const wasPlaying = state.watchPlaying;
+      state.watchPlaying = !!(playing && focused);
+      if (state.watchPlaying) {
         state.watched = (state.watched || 0) + 5;
         const now = Date.now();
         if (now - lastHb >= (state.hbInterval || 20) * 1000) { lastHb = now; chrome.runtime.sendMessage({ type: 's2WatchHeartbeat', platform: A.platform, sessionId: state.sessionId }).catch(() => {}); }
         drawWidget();
+      } else if (wasPlaying) {
+        drawWidget(); // playing -> paused: redraw once
       }
       if ((state.watched || 0) >= (state.target || 120)) claimWatch();
     }, 5000);
