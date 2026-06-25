@@ -127,8 +127,17 @@ self.EngageCore = (function () {
 
     async function startWatch() {
       if (!A.actions.watch) return;
-      const v = A.getVideoEl();
-      const dur = (v && isFinite(v.duration) && v.duration > 0) ? Math.round(v.duration) : 0;
+      // Wait up to ~10s for video metadata so the backend gets the real duration and
+      // returns accurate requirements. Sending duration=0 causes the backend to use
+      // a 120s floor, but then raises requirements at claim time once other users
+      // report the real length — leading to not_qualified claims.
+      let dur = 0;
+      for (let i = 0; i < 5 && dur === 0; i++) {
+        const v = A.getVideoEl();
+        dur = (v && isFinite(v.duration) && v.duration > 0) ? Math.round(v.duration) : 0;
+        if (dur === 0) await new Promise(r => setTimeout(r, 2000));
+        if (!state || state.ref !== A.getRef()) return; // navigated away while waiting
+      }
       const s = await chrome.runtime.sendMessage({ type: 's2WatchSession', platform: A.platform, videoRef: state.ref, playerDuration: dur }).catch(() => null);
       if (!s || s.error || !s.sessionId) return; // backend not ready / not the active target / not connected
       state.sessionId = s.sessionId; state.hbInterval = s.heartbeatIntervalSec || 20;
