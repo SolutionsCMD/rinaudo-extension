@@ -24,3 +24,4 @@ btn.addEventListener('click', async () => {
 });
 
 refresh();
+if (self.renderRates) renderRates(document.getElementById('rates'));

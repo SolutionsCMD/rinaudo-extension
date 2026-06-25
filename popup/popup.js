@@ -25,3 +25,4 @@ $('s2connect').addEventListener('click', async () => {
 });
 
 refreshS2();
+if (self.renderRates) renderRates($('rates'));

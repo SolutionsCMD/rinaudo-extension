@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SHARED=(background.js config.js content icons popup vote privacy.html welcome.html welcome.js)
+SHARED=(background.js config.js content icons popup vote privacy.html welcome.html welcome.js rates-list.js)
 
 build() {
   local manifest="$1" out="$2"

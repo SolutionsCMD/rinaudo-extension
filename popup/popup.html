@@ -11,6 +11,12 @@
     button { width: 100%; padding: 10px; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; }
     button:disabled { opacity: .6; cursor: default; }
     .connect { background: #53FC18; color: #0A131F; }
+    #rates { margin-top: 14px; border-top: 1px solid rgba(201,167,102,.18); padding-top: 12px; }
+    .rates-h { font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: #C9A766; margin-bottom: 8px; }
+    .rates-row { display: flex; justify-content: space-between; font-size: 12px; margin: 5px 0; }
+    .rates-l { color: #A9A697; }
+    .rates-amt { color: #F4EFE3; font-variant-numeric: tabular-nums; }
+    .rates-note { font-size: 11px; color: #8A8678; margin-top: 10px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -18,6 +24,8 @@
   <p id="intro">Connect with Kick to earn tickets for liking &amp; commenting on posts. You'll also get pinged when Mizkif goes live or posts.</p>
   <button id="s2connect" class="connect">Connect with Kick</button>
   <p id="s2status">…</p>
+  <div id="rates"></div>
+  <script src="../rates-list.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
