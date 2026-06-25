@@ -27,10 +27,10 @@
         d: `You get max(${v.floor}, minutes watched), once per video — a short = ${v.floor}, a 12-min video = 12.`,
         subs: [
           'YouTube: any video or short from the last 24h, plus his latest is always eligible.',
-          'TikTok & Instagram: any post from the last 24h.',
+          'TikTok: any post from the last 24h.',
         ],
       },
-      { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on X, YouTube, TikTok & Instagram.' },
+      { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on X, YouTube & TikTok.' },
       { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
       { t: 'Vote in a poll', a: `+${r.vote}`, d: 'Each time you vote in a live poll.' },
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },
