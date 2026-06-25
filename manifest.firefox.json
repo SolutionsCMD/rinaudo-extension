@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rinaudo Capital",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "browser_specific_settings": {
     "gecko": {
@@ -23,12 +23,12 @@
     },
     {
       "matches": ["https://x.com/*/status/*", "https://twitter.com/*/status/*"],
-      "js": ["config.js", "content/widget-frame.js", "content/x.js"],
+      "js": ["config.js", "content/widget-frame.js", "content/engage-core.js", "content/x.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"],
-      "js": ["config.js", "content/widget-frame.js", "content/youtube.js"],
+      "js": ["config.js", "content/widget-frame.js", "content/engage-core.js", "content/youtube.js"],
       "run_at": "document_idle"
     },
     {
