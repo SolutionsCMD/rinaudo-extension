@@ -92,7 +92,7 @@ self.EngageCore = (function () {
         // [RGC-debug] TEMP: log button-ish clicks so we can pin the real comment selectors.
         try {
           const b = e.target.closest && e.target.closest('button,[role="button"],[data-e2e],[data-testid]');
-          if (b) console.log('[RGC-debug]', A.platform, { matched: !!n, e2e: b.getAttribute('data-e2e'), testid: b.getAttribute('data-testid'), aria: b.getAttribute('aria-label'), text: (b.textContent || '').trim().slice(0, 24), commentText: (A.commentText() || '').slice(0, 24) });
+          if (b) console.log('[RGC-debug]', A.platform, JSON.stringify({ matched: !!n, e2e: b.getAttribute('data-e2e'), testid: b.getAttribute('data-testid'), aria: b.getAttribute('aria-label'), text: (b.textContent || '').trim().slice(0, 24), commentText: (A.commentText() || '').slice(0, 24) }));
         } catch { /* ignore */ }
         if (n) {
           if ((A.commentText() || '').trim().length <= 5) return; // >5-char gate
