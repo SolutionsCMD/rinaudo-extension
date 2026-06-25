@@ -31,6 +31,12 @@ self.EngageCore = (function () {
     let frame = null, state = null, commentHooked = false, lastHb = 0;
     let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1 };
 
+    // Locally remember what's already credited per (platform, post) so the ✓ state
+    // survives a refresh (the server is idempotent; this is purely the display).
+    const doneKey = (ref) => `rgcDone:${A.platform}:${ref}`;
+    async function getDone(ref) { try { const k = doneKey(ref); return (await chrome.storage.local.get(k))[k] || {}; } catch { return {}; } }
+    async function setDone(ref, patch) { try { const k = doneKey(ref); const cur = (await chrome.storage.local.get(k))[k] || {}; await chrome.storage.local.set({ [k]: { ...cur, ...patch } }); } catch { /* ignore */ } }
+
     function ensureFrame() {
       if (frame) return;
       frame = self.RGCFrame.mount({ key: A.platform, title: 'Earn tickets', width: 240, pos: { bottom: 16, right: 16 }, css: ROW_CSS });
@@ -59,7 +65,7 @@ self.EngageCore = (function () {
       if (!state) return;
       ensureFrame();
       const body = frame.body; body.replaceChildren();
-      if (A.actions.watch && state.sessionId) body.append(watchRow());
+      if (A.actions.watch && (state.sessionId || state.watchDone)) body.append(watchRow());
       if (A.actions.like) body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeS));
       if (A.actions.comment) body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentS));
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
@@ -73,7 +79,8 @@ self.EngageCore = (function () {
       if (state[key] !== 'idle') return; // already pending or done
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
-      state[key] = (r && r.credited) ? 'done' : 'idle';
+      if (r && r.credited) { state[key] = 'done'; setDone(ref, action === 'like' ? { like: true } : { comment: true }); }
+      else state[key] = 'idle';
       drawWidget();
     }
 
@@ -104,7 +111,7 @@ self.EngageCore = (function () {
       state.claiming = true; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2WatchClaim', platform: A.platform, videoRef: state.ref }).catch(() => null);
       state.claiming = false;
-      if (r && r.ok) { state.watchDone = true; state.awarded = (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)); }
+      if (r && r.ok) { state.watchDone = true; state.awarded = (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)); setDone(state.ref, { watch: true, awarded: state.awarded }); }
       drawWidget();
     }
 
@@ -120,9 +127,13 @@ self.EngageCore = (function () {
       };
       const eligible = !!(data && (data.targets || []).some((t) => t.platform === A.platform && t.ref === ref));
       if (!eligible) return clearWidget();
-      state = { ref, watched: 0, target: 0, sessionId: null, watchDone: false, watchPlaying: false, watchMuted: false, claiming: false, likeS: 'idle', commentS: 'idle' };
+      const done = await getDone(ref);
+      state = { ref, watched: 0, target: 0, sessionId: null,
+        watchDone: !!done.watch, awarded: done.watch ? (done.awarded != null ? done.awarded : null) : null,
+        watchPlaying: false, watchMuted: false, claiming: false,
+        likeS: done.like ? 'done' : 'idle', commentS: done.comment ? 'done' : 'idle' };
       lastHb = 0; hookComment(); drawWidget();
-      startWatch();
+      if (!state.watchDone) startWatch();
     }
 
     // Every 5s: detect a like, accrue focused-playing watch time, heartbeat, claim when ready.
