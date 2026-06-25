@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { margin: 0; background: #0A131F; color: #F4EFE3; font-family: system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { max-width: 460px; padding: 44px; text-align: center; }
+    .eyebrow { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #C9A766; margin-bottom: 12px; }
+    h1 { font-size: 26px; margin: 0 0 14px; }
+    p { color: #A9A697; line-height: 1.6; font-size: 14px; margin: 0 0 6px; }
+    ul { text-align: left; color: #A9A697; line-height: 1.9; font-size: 14px; margin: 20px auto; max-width: 360px; padding-left: 20px; }
+    button { margin-top: 20px; padding: 12px 24px; border: 0; border-radius: 10px; background: #53FC18; color: #0A131F; font-weight: 700; font-size: 15px; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: default; }
+    #status { margin-top: 14px; font-size: 13px; color: #A9A697; min-height: 18px; }
+    #status .ok { color: #7FB791; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">Rinaudo Capital</div>
+    <h1>You're in — one quick step.</h1>
+    <p>Connect once with Kick to start earning <strong>tickets</strong> for engaging with Mizkif. You'll also get pinged when he goes live or posts.</p>
+    <ul>
+      <li>❤️ Like &amp; comment on his X posts → tickets</li>
+      <li>▶️ Watch his latest videos → tickets</li>
+      <li>🗳️ Vote on live polls right from the stream</li>
+      <li>🔔 Go-live &amp; new-post alerts (no login needed)</li>
+    </ul>
+    <button id="connect">Connect with Kick</button>
+    <div id="status">Not connected yet.</div>
+  </div>
+  <script src="welcome.js"></script>
+</body>
+</html>

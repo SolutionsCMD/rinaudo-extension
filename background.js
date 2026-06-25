@@ -9,6 +9,17 @@ const S2 = self.S2;   // engagement + polls
 
 const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Token || null;
 
+// Toolbar "!" badge until the member connects, cleared once they do.
+async function updateBadge() {
+  const token = await getS2Token();
+  try {
+    await chrome.action.setBadgeText({ text: token ? '' : '!' });
+    if (!token) await chrome.action.setBadgeBackgroundColor({ color: '#C9A766' });
+  } catch { /* action API unavailable */ }
+}
+chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.s2Token) updateBadge(); });
+if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(updateBadge);
+
 async function s2Connect() {
   const redirect = chrome.identity.getRedirectURL(); // https://<id>.chromiumapp.org/
   const url = `${S2.CONNECT_PAGE}?ext_redirect=${encodeURIComponent(redirect)}`;
@@ -192,5 +203,9 @@ chrome.notifications.onClicked.addListener(async (id) => {
   chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
   chrome.notifications.clear(id);
 });
-chrome.runtime.onInstalled.addListener(() => chrome.alarms.create('poll', { periodInMinutes: 0.5 }));
+chrome.runtime.onInstalled.addListener((details) => {
+  chrome.alarms.create('poll', { periodInMinutes: 0.5 });
+  updateBadge();
+  if (details.reason === 'install') chrome.tabs.create({ url: 'welcome.html' });
+});
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') { checkSignals(); checkPoll(); } });
