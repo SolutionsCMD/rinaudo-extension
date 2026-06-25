@@ -8,7 +8,7 @@
 // chrome (drag/collapse/position) is provided by RGCFrame (content/widget-frame.js).
 const C = self.S2;
 let frame = null, state = null, commentHooked = false, lastHb = 0;
-let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0 };
+let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1 };
 
 const ROW_CSS = `
   .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
@@ -30,8 +30,12 @@ function likeButton() {
 }
 function isLiked() { const b = likeButton(); return !!(b && b.getAttribute('aria-pressed') === 'true'); }
 function fmt(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-// Min 5 tickets (even a short), then 1 per whole minute past 5.
-function watchEstimate(sec) { return Math.max(5, Math.floor((sec || 0) / 60)); }
+// Live estimate mirroring the server formula: max(floor, minutes × perMinute).
+// floor + perMinute come from the season economy (admin-tunable); the real award
+// is whatever the claim returns.
+function watchEstimate(sec) {
+  return Math.max(rewards.watchFloor || 5, Math.floor((sec || 0) / 60) * (rewards.watchPerMinute || 1));
+}
 
 function ensureFrame() {
   if (frame) return;
@@ -100,6 +104,8 @@ async function start(videoId) {
     likeReward: (data && data.likeReward) || 0,
     commentReward: (data && data.commentReward) || 0,
     watchVideoReward: (data && data.watchVideoReward) || 0,
+    watchFloor: (data && data.watchVideoFloor) || 5,
+    watchPerMinute: (data && data.watchTicketsPerMinute) || 1,
   };
   const eligible = !!(data && (data.targets || []).some((t) => t.platform === 'youtube' && t.ref === videoId));
   if (!eligible) return clearWidget();
