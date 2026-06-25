@@ -31,6 +31,7 @@
     commentSubmitTarget(t) {
       return t && t.closest ? t.closest('#submit-button, ytd-commentbox #submit-button, ytd-comment-simplebox-renderer #submit-button') : null;
     },
+    commentInputTarget(t) { return t && t.closest ? t.closest('#contenteditable-root, [contenteditable="true"]') : null; },
     commentText() {
       for (const el of document.querySelectorAll('ytd-commentbox #contenteditable-root')) {
         const v = (el.textContent || '').trim();

@@ -97,17 +97,27 @@ self.EngageCore = (function () {
 
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
-      document.addEventListener('click', (e) => {
-        if (!state || state.commentS !== 'idle') return;
-        if (!A.commentSubmitTarget(e.target)) return;
+      function tryCredit() {
+        if (!state || state.commentS !== 'idle') return null;
         const before = (A.commentText() || '').trim();
-        if (before.length <= 5) return; // >5-char gate
-        // Only credit once the comment actually posts — the box clears/changes on a
-        // successful submit. This also excludes the empty-box placeholder (no change).
+        if (before.length <= 5) return null;
+        // Credit once the box clears after a real submit.
         setTimeout(() => {
           if (!state || state.commentS !== 'idle') return;
           if ((A.commentText() || '').trim() !== before) fireEngagement('comment');
-        }, 1200);
+        }, 1500);
+        return before;
+      }
+      // Click path: submit button pressed.
+      document.addEventListener('click', (e) => {
+        if (!A.commentSubmitTarget(e.target)) return;
+        tryCredit();
+      }, true);
+      // Keyboard path: Enter in the comment input box (TikTok & YouTube accept Enter).
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.shiftKey) return;
+        if (!A.commentInputTarget || !A.commentInputTarget(e.target)) return;
+        tryCredit();
       }, true);
     }
 

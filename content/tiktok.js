@@ -14,7 +14,11 @@
       return /254,\s*44,\s*85|#fe2c55|rgb\(254/i.test(fill);
     },
     commentSubmitTarget(t) { return t && t.closest ? t.closest('[data-e2e="comment-post"]') : null; },
-    commentText() { const el = document.querySelector('[data-e2e="comment-input"]'); return el ? (el.textContent || el.value || '') : ''; },
+    commentInputTarget(t) { return t && t.closest ? t.closest('[data-e2e="comment-input"], [contenteditable="true"]') : null; },
+    commentText() {
+      const el = document.querySelector('[data-e2e="comment-input"]') || document.querySelector('[placeholder*="comment" i][contenteditable]');
+      return el ? (el.textContent || el.value || el.innerText || '') : '';
+    },
     getVideoEl() { return document.querySelector('video'); },
   };
   self.RGC_TIKTOK_ADAPTER = adapter;
