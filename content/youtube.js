@@ -29,6 +29,14 @@ function likeButton() {
   }) || null;
 }
 function isLiked() { const b = likeButton(); return !!(b && b.getAttribute('aria-pressed') === 'true'); }
+// Current comment draft text — for the >5-char comment gate (Mizkif's anti-spam ask).
+function commentText() {
+  for (const el of document.querySelectorAll('ytd-commentbox #contenteditable-root')) {
+    const t = (el.textContent || '').trim();
+    if (t) return t;
+  }
+  return '';
+}
 function fmt(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 // Live estimate mirroring the server formula: max(floor, minutes × perMinute).
 // floor + perMinute come from the season economy (admin-tunable); the real award
@@ -74,7 +82,10 @@ function hookComment() {
   document.addEventListener('click', (e) => {
     if (!state || state.commentDone) return;
     const n = e.target.closest && e.target.closest('#submit-button, ytd-commentbox #submit-button, ytd-comment-simplebox-renderer #submit-button');
-    if (n) setTimeout(() => fireEngagement('comment'), 600);
+    if (n) {
+      if (commentText().length <= 5) return; // comment must be >5 chars to credit
+      setTimeout(() => fireEngagement('comment'), 600);
+    }
   }, true);
 }
 

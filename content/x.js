@@ -17,6 +17,14 @@ function currentStatusId() {
   return m ? m[1] : '';
 }
 function isLiked() { return !!document.querySelector('[data-testid="unlike"]'); }
+// Current reply draft text — for the >5-char comment gate (Mizkif's anti-spam ask).
+function replyText() {
+  for (const el of document.querySelectorAll('[data-testid^="tweetTextarea_"]')) {
+    const t = (el.textContent || '').trim();
+    if (t) return t;
+  }
+  return '';
+}
 
 function ensureFrame() {
   if (frame) return;
@@ -54,7 +62,10 @@ function hookComment() {
   document.addEventListener('click', (e) => {
     if (!state || state.commentDone) return;
     const n = e.target.closest && e.target.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
-    if (n) { LOG('reply submit click detected'); setTimeout(() => fireEngagement('comment'), 600); }
+    if (n) {
+      if (replyText().length <= 5) { LOG('reply too short (<6 chars), not crediting'); return; }
+      LOG('reply submit click detected'); setTimeout(() => fireEngagement('comment'), 600);
+    }
   }, true);
 }
 
