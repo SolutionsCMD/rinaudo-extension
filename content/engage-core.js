@@ -79,6 +79,7 @@ self.EngageCore = (function () {
       if (state[key] !== 'idle') return; // already pending or done
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
+      console.log('[RGC]', action, A.platform, JSON.stringify(r)); // TEMP — remove after verifying crediting
       if (r && r.credited) { state[key] = 'done'; setDone(ref, action === 'like' ? { like: true } : { comment: true }); }
       else state[key] = 'idle';
       drawWidget();
@@ -88,16 +89,15 @@ self.EngageCore = (function () {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
       document.addEventListener('click', (e) => {
         if (!state || state.commentS !== 'idle') return;
-        const n = A.commentSubmitTarget(e.target);
-        // [RGC-debug] TEMP: log button-ish clicks so we can pin the real comment selectors.
-        try {
-          const b = e.target.closest && e.target.closest('button,[role="button"],[data-e2e],[data-testid]');
-          if (b) console.log('[RGC-debug]', A.platform, JSON.stringify({ matched: !!n, e2e: b.getAttribute('data-e2e'), testid: b.getAttribute('data-testid'), aria: b.getAttribute('aria-label'), text: (b.textContent || '').trim().slice(0, 24), commentText: (A.commentText() || '').slice(0, 24) }));
-        } catch { /* ignore */ }
-        if (n) {
-          if ((A.commentText() || '').trim().length <= 5) return; // >5-char gate
-          setTimeout(() => fireEngagement('comment'), 600);
-        }
+        if (!A.commentSubmitTarget(e.target)) return;
+        const before = (A.commentText() || '').trim();
+        if (before.length <= 5) return; // >5-char gate
+        // Only credit once the comment actually posts — the box clears/changes on a
+        // successful submit. This also excludes the empty-box placeholder (no change).
+        setTimeout(() => {
+          if (!state || state.commentS !== 'idle') return;
+          if ((A.commentText() || '').trim() !== before) fireEngagement('comment');
+        }, 1200);
       }, true);
     }
 
