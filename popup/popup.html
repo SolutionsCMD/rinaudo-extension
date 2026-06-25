@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    body { width: 260px; margin: 0; font-family: system-ui, sans-serif; background: #0A131F; color: #F4EFE3; padding: 18px; }
+    body { width: 300px; margin: 0; font-family: system-ui, sans-serif; background: #0A131F; color: #F4EFE3; padding: 18px; }
     h1 { font-size: 14px; margin: 0 0 8px; letter-spacing: .02em; }
     #intro { font-size: 12px; color: #A9A697; line-height: 1.5; margin: 0 0 14px; }
     #s2status { font-size: 12px; color: #A9A697; line-height: 1.5; margin: 10px 0 0; }
@@ -12,11 +12,15 @@
     button:disabled { opacity: .6; cursor: default; }
     .connect { background: #53FC18; color: #0A131F; }
     #rates { margin-top: 14px; border-top: 1px solid rgba(201,167,102,.18); padding-top: 12px; }
-    .rates-h { font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: #C9A766; margin-bottom: 8px; }
-    .rates-row { display: flex; justify-content: space-between; font-size: 12px; margin: 5px 0; }
-    .rates-l { color: #A9A697; }
-    .rates-amt { color: #F4EFE3; font-variant-numeric: tabular-nums; }
-    .rates-note { font-size: 11px; color: #8A8678; margin-top: 10px; line-height: 1.4; }
+    .rates-h { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #C9A766; margin-bottom: 8px; }
+    .rates-intro { font-size: 12px; color: #A9A697; line-height: 1.5; margin-bottom: 12px; }
+    .rates-item { margin: 12px 0; }
+    .rates-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .rates-l { font-size: 13px; color: #F4EFE3; font-weight: 600; }
+    .rates-amt { font-size: 12px; color: #53FC18; font-variant-numeric: tabular-nums; flex: none; }
+    .rates-desc { font-size: 11px; color: #A9A697; line-height: 1.45; margin-top: 3px; }
+    .rates-sub { font-size: 11px; color: #8A8678; line-height: 1.45; margin-top: 3px; padding-left: 10px; border-left: 1px solid rgba(201,167,102,.2); }
+    .rates-note { font-size: 11px; color: #8A8678; line-height: 1.5; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(201,167,102,.12); }
   </style>
 </head>
 <body>
