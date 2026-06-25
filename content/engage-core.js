@@ -137,6 +137,7 @@ self.EngageCore = (function () {
 
     async function start(ref) {
       if (!ref) return clearWidget();
+      if (state && state.ref === ref) return; // same video — don't reset progress on minor URL tweaks
       const data = await chrome.runtime.sendMessage({ type: 's2Targets' }).catch(() => null);
       rewards = {
         likeReward: (data && data.likeReward) || 0,
@@ -164,10 +165,10 @@ self.EngageCore = (function () {
       const v = A.getVideoEl();
       const live = v && !v.paused && !v.ended && v.currentTime > 0;
       const audible = !!(v && !v.muted && v.volume > 0); // must be watching with sound, not idling muted
-      const focused = document.visibilityState === 'visible' && document.hasFocus();
+      const visible = document.visibilityState === 'visible'; // tab must be visible, but window focus doesn't matter
       const wasPlaying = state.watchPlaying;
-      state.watchPlaying = !!(live && audible && focused);
-      state.watchMuted = !!(live && focused && !audible);
+      state.watchPlaying = !!(live && audible && visible);
+      state.watchMuted = !!(live && visible && !audible);
       if (state.watchPlaying) {
         state.watched = (state.watched || 0) + 5;
         const now = Date.now();
