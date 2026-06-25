@@ -146,13 +146,21 @@ self.EngageCore = (function () {
         watchFloor: (data && data.watchVideoFloor) || 5,
         watchPerMinute: (data && data.watchTicketsPerMinute) || 1,
       };
-      const eligible = !!(data && (data.targets || []).some((t) => t.platform === A.platform && t.ref === ref));
-      if (!eligible) return clearWidget();
-      const done = await getDone(ref);
+      const target = data && (data.targets || []).find((t) => t.platform === A.platform && t.ref === ref);
+      if (!target) return clearWidget();
+      // Merge server done flags (bearer-scoped, authoritative) with local cache.
+      const local = await getDone(ref);
+      const srv = target.done || {};
+      const likeDone = !!(srv.like || local.like);
+      const commentDone = !!(srv.comment || local.comment);
+      const watchDone = !!(srv.watch || local.watch);
+      if (srv.like && !local.like) setDone(ref, { like: true });
+      if (srv.comment && !local.comment) setDone(ref, { comment: true });
+      if (srv.watch && !local.watch) setDone(ref, { watch: true });
       state = { ref, watched: 0, target: 0, sessionId: null,
-        watchDone: !!done.watch, awarded: done.watch ? (done.awarded != null ? done.awarded : null) : null,
+        watchDone, awarded: local.awarded != null ? local.awarded : null,
         watchPlaying: false, watchMuted: false, claiming: false,
-        likeS: done.like ? 'done' : 'idle', commentS: done.comment ? 'done' : 'idle' };
+        likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle' };
       lastHb = 0; hookComment(); drawWidget();
       if (!state.watchDone) startWatch();
     }
