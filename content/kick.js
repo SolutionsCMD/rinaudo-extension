@@ -3,6 +3,18 @@
 // Live tally, one changeable vote. The card chrome (drag/collapse/position) is
 // provided by RGCFrame (content/widget-frame.js).
 const C = self.S2;
+// --- Watchtime widget state ---
+let wtFrame = null;   // second RGCFrame, independent of the poll frame
+let wtEarned = 0;     // running session total (cosmetic, resets on page reload)
+let wtPlaying = false;
+let wtMuted = false;
+
+const WT_CSS = `
+  .row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+  .lbl{color:#F4EFE3}
+  .amt{color:#86D6A4;font-variant-numeric:tabular-nums}
+  .sub{font-size:11px;color:#8A8678;margin-top:4px}`;
+
 let frame = null, shownPollId = null, optimisticIdx = null;
 
 const POLL_CSS = `
@@ -16,6 +28,54 @@ const POLL_CSS = `
   .ltext{position:relative;z-index:1;flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cnt{position:relative;z-index:1;font-variant-numeric:tabular-nums;color:#A9A697;font-size:12px}
   .hint{font-size:10px;letter-spacing:.06em;color:#8A8678;margin-top:10px;text-transform:uppercase}`;
+
+function ensureWtFrame() {
+  if (wtFrame) return;
+  wtFrame = self.RGCFrame.mount({
+    key: 'kick-watch',
+    title: 'Watching',
+    width: 220,
+    pos: { bottom: 200, right: 16 },
+    css: WT_CSS,
+  });
+}
+
+function drawWtWidget(status) {
+  // status: 'playing' | 'paused' | 'muted' | 'offline'
+  if (status === 'offline') {
+    if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    return;
+  }
+  ensureWtFrame();
+  const body = wtFrame.body;
+  body.replaceChildren();
+
+  const row = document.createElement('div'); row.className = 'row';
+  const lbl = document.createElement('span'); lbl.className = 'lbl';
+  const amt = document.createElement('span'); amt.className = 'amt';
+
+  if (status === 'playing') {
+    lbl.textContent = '▶ Watching';
+    amt.textContent = wtEarned > 0 ? `+${wtEarned} earned` : 'earning…';
+  } else if (status === 'muted') {
+    lbl.textContent = '🔇 Unmute to earn';
+    amt.textContent = '';
+  } else {
+    lbl.textContent = '⏸ Paused';
+    amt.textContent = '';
+  }
+
+  row.append(lbl, amt);
+  body.append(row);
+
+  if (status === 'playing' && wtEarned > 0) {
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = 'Keep tab open & unmuted';
+    body.append(sub);
+  }
+
+  wtFrame.setPill(wtEarned > 0 ? `+${wtEarned}` : '🎟');
+}
 
 function ensureFrame() {
   if (frame) return;
@@ -67,3 +127,37 @@ async function tick() {
 setInterval(tick, (C && C.POLL_FAST_MS) || 5000);
 tick();
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
+
+// --- Kick watchtime: send checkin every 60s while stream is playing ---
+async function wtTick() {
+  const v = document.querySelector('video');
+  const live = v && !v.paused && !v.ended && v.currentTime > 0;
+  const audible = !!(v && !v.muted && v.volume > 0);
+  const visible = document.visibilityState === 'visible';
+
+  wtPlaying = !!(live && audible && visible);
+  wtMuted = !!(live && visible && !audible);
+
+  if (!wtPlaying) {
+    drawWtWidget(wtMuted ? 'muted' : 'paused');
+    return;
+  }
+
+  const result = await chrome.runtime.sendMessage({ type: 's2KickCheckin' }).catch(() => null);
+  if (!result) return;
+
+  if (result.reason === 'stream_offline') {
+    drawWtWidget('offline');
+    return;
+  }
+  if (result.ok && result.awarded > 0) {
+    wtEarned = result.totalEarned;
+  }
+  drawWtWidget('playing');
+}
+
+setInterval(wtTick, 60_000);
+wtTick(); // run once on load so widget appears immediately if stream is live
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') wtTick();
+});
