@@ -17,7 +17,8 @@ self.EngageCore = (function () {
     .amt{color:#A9A697;font-variant-numeric:tabular-nums;flex:none;margin-left:8px}
     .done{color:#86D6A4}
     .row.pending .lbl,.row.pending .amt{color:#8A8678}
-    .row.paused .lbl{color:#8A8678}`;
+    .row.paused .lbl{color:#8A8678}
+    .hint{font-size:11px;color:#6B6960;margin:2px 0 6px;line-height:1.3}`;
 
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const watchEstimate = (sec, r) => Math.max(r.watchFloor || 5, Math.floor((sec || 0) / 60) * (r.watchPerMinute || 1));
@@ -69,13 +70,20 @@ self.EngageCore = (function () {
       if (!playing) r.classList.add('paused');
       return r;
     }
+    function hint(text) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = text; return h; }
     function drawWidget() {
       if (!state) return;
       ensureFrame();
       const body = frame.body; body.replaceChildren();
-      if (A.actions.watch && (state.sessionId || state.watchDone)) body.append(watchRow());
+      if (A.actions.watch && (state.sessionId || state.watchDone)) {
+        body.append(watchRow());
+        if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
+      }
       if (A.actions.like) body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeS));
-      if (A.actions.comment) body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentS));
+      if (A.actions.comment) {
+        body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentS));
+        if (state.commentS === 'idle') body.append(hint('Comment must be 5+ characters'));
+      }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
       frame.setPill(earned ? `+${earned}` : '🎟');
     }
