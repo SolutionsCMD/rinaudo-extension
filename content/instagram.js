@@ -16,13 +16,17 @@
       return false;
     },
     commentSubmitTarget(t) {
-      // Language-agnostic: the Post/submit button is always the only [role="button"] or
-      // button directly inside the comment form, not matched by text content.
       const b = t && t.closest ? t.closest('[role="button"], button') : null;
+      const txt = (A.commentText() || '').trim();
+      console.log('[RGC-ig-comment] click', t && t.tagName, 'role:', t && t.getAttribute && t.getAttribute('role'), 'b:', !!b, 'btext:', b && (b.textContent||'').trim().slice(0,20), 'inForm:', !!(b && b.closest('form, [class*="comment" i]')), 'textarea:', txt.slice(0,20));
       return (b && b.closest('form, [class*="comment" i]')) ? b : null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest('textarea, [contenteditable="true"]') : null; },
-    commentText() { const el = document.querySelector('textarea[aria-label*="comment" i], textarea[placeholder*="comment" i]'); return el ? (el.value || el.textContent || '') : ''; },
+    commentText() {
+      const el = document.querySelector('textarea[aria-label*="comment" i], textarea[placeholder*="comment" i], textarea');
+      console.log('[RGC-ig-text]', el && el.tagName, el && (el.value||el.textContent||'').trim().slice(0,30));
+      return el ? (el.value || el.textContent || '') : '';
+    },
     getVideoEl() { return document.querySelector('video'); },
   };
   self.RGC_IG_ADAPTER = adapter;
