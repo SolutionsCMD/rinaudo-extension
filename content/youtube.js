@@ -10,6 +10,9 @@
       '#segmented-like-button button[aria-pressed]',
       '#like-button button[aria-pressed]',
       'ytd-segmented-like-dislike-button-renderer button[aria-pressed]',
+      // Shorts player: like button lives in ytd-like-button-renderer inside the overlay
+      'ytd-like-button-renderer button[aria-pressed]',
+      'ytd-reel-player-overlay-renderer button[aria-pressed]',
     ]) {
       const el = document.querySelector(sel);
       if (el) return el;
