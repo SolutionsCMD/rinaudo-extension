@@ -17,14 +17,20 @@
     },
     commentSubmitTarget(t) {
       const b = t && t.closest ? t.closest('[role="button"], button') : null;
-      const txt = (A.commentText() || '').trim();
-      console.log('[RGC-ig-comment] click', t && t.tagName, 'role:', t && t.getAttribute && t.getAttribute('role'), 'b:', !!b, 'btext:', b && (b.textContent||'').trim().slice(0,20), 'inForm:', !!(b && b.closest('form, [class*="comment" i]')), 'textarea:', txt.slice(0,20));
-      return (b && b.closest('form, [class*="comment" i]')) ? b : null;
+      if (!b) return null;
+      // Confirm the button shares a container with a textarea (language-agnostic).
+      // Instagram doesn't use <form> or class="comment", so walk up ~8 levels.
+      let el = b;
+      for (let i = 0; i < 8; i++) {
+        el = el.parentElement;
+        if (!el) break;
+        if (el.querySelector('textarea')) return b;
+      }
+      return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest('textarea, [contenteditable="true"]') : null; },
     commentText() {
       const el = document.querySelector('textarea[aria-label*="comment" i], textarea[placeholder*="comment" i], textarea');
-      console.log('[RGC-ig-text]', el && el.tagName, el && (el.value||el.textContent||'').trim().slice(0,30));
       return el ? (el.value || el.textContent || '') : '';
     },
     getVideoEl() { return document.querySelector('video'); },
