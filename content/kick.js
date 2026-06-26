@@ -35,7 +35,7 @@ function ensureWtFrame() {
     key: 'kick-watch',
     title: 'Watching',
     width: 220,
-    pos: { bottom: 200, right: 16 },
+    pos: { bottom: 280, right: 16 },
     css: WT_CSS,
   });
 }
