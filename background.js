@@ -80,6 +80,15 @@ async function s2WatchClaim(platform, videoRef) {
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
+async function s2KickCheckin() {
+  const token = await getS2Token();
+  if (!token) return { ok: false, reason: 'not_connected' };
+  const r = await fetch(S2.API + S2.KICK_CHECKIN, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => null);
+  return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
+}
 
 // --- Live poll vote module ---
 async function s2Poll() {
@@ -146,6 +155,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.platform, msg.videoRef, msg.playerDuration)); }
     else if (msg.type === 's2WatchHeartbeat') { reply(await s2WatchHeartbeat(msg.sessionId)); }
     else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.platform, msg.videoRef)); }
+    else if (msg.type === 's2KickCheckin') { reply(await s2KickCheckin()); }
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
     else if (msg.type === 'resize' && typeof msg.height === 'number') {

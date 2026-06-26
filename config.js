@@ -24,4 +24,5 @@ self.S2 = {
   WATCH_SESSION: '/api/watch/session',
   WATCH_HEARTBEAT: '/api/watch/heartbeat',
   WATCH_CLAIM: '/api/watch/claim',
+  KICK_CHECKIN: '/api/extension/kick/checkin',
 };
