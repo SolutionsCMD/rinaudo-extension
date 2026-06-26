@@ -208,4 +208,35 @@ chrome.runtime.onInstalled.addListener((details) => {
   updateBadge();
   if (details.reason === 'install') chrome.tabs.create({ url: 'welcome.html' });
 });
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') { checkSignals(); checkPoll(); } });
+// --- New earn target notifications ---
+// Fires once per new target ref when the admin adds a YouTube/TikTok/IG/X post.
+const TARGET_ICONS = { youtube: 'icons/youtube.png', tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', x: 'icons/x.png' };
+const TARGET_TITLES = { youtube: 'New YouTube target — earn tickets', tiktok: 'New TikTok target — earn tickets', instagram: 'New Instagram target — earn tickets', x: 'New X target — earn tickets' };
+async function checkNewTargets() {
+  const data = await s2Targets();
+  const refs = (data.targets || []).map((t) => `${t.platform}:${t.ref}`);
+  if (!refs.length) return;
+  const store = await chrome.storage.local.get(['seenTargets', 'notifUrls']);
+  const seen = new Set(store.seenTargets || []);
+  const notifUrls = store.notifUrls || {};
+  const fresh = refs.filter((k) => !seen.has(k));
+  if (seen.size > 0) { // don't notify on very first load
+    for (const key of fresh) {
+      const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
+      if (!t) continue;
+      const id = `target-${key}`;
+      notifUrls[id] = t.url || '';
+      chrome.notifications.create(id, {
+        type: 'basic',
+        iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
+        title: TARGET_TITLES[t.platform] || 'New earn target',
+        message: t.label || t.url || 'Tap to open and earn tickets.',
+        priority: 2,
+      });
+    }
+  }
+  refs.forEach((k) => seen.add(k));
+  await chrome.storage.local.set({ seenTargets: [...seen], notifUrls });
+}
+
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') { checkSignals(); checkPoll(); checkNewTargets(); } });
