@@ -1,15 +1,22 @@
 // YouTube adapter for engage-core. Selectors carried over verbatim from the prior
 // bespoke youtube.js. Watch + like + comment. Runs on /watch and /shorts.
 (function () {
-  // The video's like toggle — a control labelled "like" (not "dislike"). YouTube puts
-  // aria-pressed on the button or a wrapping element, so match either and read pressed
-  // state from the control or its nearest aria-pressed ancestor.
+  // The video's like toggle. Uses language-agnostic structural selectors — the like
+  // button always lives in #segmented-like-button / #like-button regardless of UI
+  // language, and aria-pressed is always present. Avoids aria-label text matching
+  // which breaks on non-English YouTube (e.g. Portuguese "Gostei").
   function likeControl() {
-    const sel = 'button[aria-pressed], [role="button"][aria-pressed], button[aria-label], [role="button"][aria-label]';
-    return [...document.querySelectorAll(sel)].find((b) => {
-      const l = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
-      return l.includes('like') && !l.includes('dislike');
-    }) || null;
+    for (const sel of [
+      '#segmented-like-button button[aria-pressed]',
+      '#like-button button[aria-pressed]',
+      'ytd-segmented-like-dislike-button-renderer button[aria-pressed]',
+    ]) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    // Fallback: first aria-pressed button in the top-level actions bar
+    // (like always precedes dislike in DOM order).
+    return document.querySelector('#top-level-buttons-computed button[aria-pressed]') || null;
   }
   const adapter = {
     platform: 'youtube',
@@ -24,9 +31,7 @@
     getRef() { return this.refFromUrl(location.href); },
     isLiked() {
       const b = likeControl();
-      if (!b) return false;
-      const host = b.getAttribute('aria-pressed') != null ? b : b.closest('[aria-pressed]');
-      return !!(host && host.getAttribute('aria-pressed') === 'true');
+      return !!(b && b.getAttribute('aria-pressed') === 'true');
     },
     commentSubmitTarget(t) {
       return t && t.closest ? t.closest('#submit-button, ytd-commentbox #submit-button, ytd-comment-simplebox-renderer #submit-button') : null;
