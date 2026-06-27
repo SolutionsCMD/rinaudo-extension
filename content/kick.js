@@ -150,8 +150,12 @@ async function wtTick() {
     drawWtWidget('offline');
     return;
   }
+  // Accumulate the per-checkin delta locally. The server's totalEarned is now a
+  // per-epoch-hour figure (shared cap with chat watchtime) and resets each hour,
+  // so mirroring it would make this counter jump backwards. Summing `awarded`
+  // keeps it a monotonic session total, matching what the server actually credited.
   if (result.ok && result.awarded > 0) {
-    wtEarned = result.totalEarned;
+    wtEarned += result.awarded;
   }
   drawWtWidget('playing');
 }
