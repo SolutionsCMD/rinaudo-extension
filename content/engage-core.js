@@ -18,6 +18,8 @@ self.EngageCore = (function () {
     .done{color:#86D6A4}
     .row.pending .lbl,.row.pending .amt{color:#8A8678}
     .row.paused .lbl{color:#8A8678}
+    .row.blocked .lbl{color:#E8B339}
+    .row.blocked .amt{color:#E8B339}
     .hint{font-size:11px;color:#6B6960;margin:2px 0 6px;line-height:1.3}`;
 
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -61,6 +63,12 @@ self.EngageCore = (function () {
     }
     function watchRow() {
       if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchPotential()}`, 'done');
+      // Watched enough, but the watch reward is gated behind like + comment on this post.
+      if (state.watchBlocked) {
+        const r = rowEl('✓ Watched — like & comment to collect', `+${watchPotential()}`, 'idle');
+        r.classList.add('blocked');
+        return r;
+      }
       if (state.claiming) return rowEl(`Watch ${fmt(state.watched)} / ${fmt(state.target)}`, '', 'pending');
       const playing = state.watchPlaying;
       const suffix = playing ? '' : (state.watchMuted ? ' · unmute to earn' : ' · paused');
@@ -77,7 +85,8 @@ self.EngageCore = (function () {
       const body = frame.body; body.replaceChildren();
       if (A.actions.watch && (state.sessionId || state.watchDone)) {
         body.append(watchRow());
-        if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
+        if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough — like & comment on this post to collect its tickets'));
+        else if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
       }
       if (A.actions.like) body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeS));
       if (A.actions.comment) {
@@ -159,8 +168,12 @@ self.EngageCore = (function () {
       // Credit on a successful claim OR if it was already claimed earlier (don't blink forever).
       if (r && (r.ok || r.reason === 'already_claimed')) {
         state.watchDone = true;
+        state.watchBlocked = false;
         state.awarded = r.ok ? (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)) : null;
         setDone(state.ref, { watch: true, awarded: state.awarded });
+      } else if (r && r.reason === 'engagement_required') {
+        // Watch time is satisfied; the reward is held until the user likes AND comments.
+        state.watchBlocked = true;
       }
       drawWidget();
     }
@@ -193,7 +206,7 @@ self.EngageCore = (function () {
       if (srv.watch && !local.watch) setDone(ref, { watch: true });
       state = { ref, watched: 0, target: 0, sessionId: null,
         watchDone, awarded: local.awarded != null ? local.awarded : null,
-        watchPlaying: false, watchMuted: false, claiming: false,
+        watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle' };
       lastHb = 0; hookComment(); drawWidget();
       if (!state.watchDone) startWatch();
@@ -219,7 +232,12 @@ self.EngageCore = (function () {
       } else if (wasPlaying) {
         drawWidget(); // playing -> paused: redraw once
       }
-      if ((state.watched || 0) >= (state.target || 120)) claimWatch();
+      // Claim once watched enough. If the reward is blocked on engagement, don't
+      // re-hammer the server every 5s — only retry the claim once like AND comment land.
+      if ((state.watched || 0) >= (state.target || 120)) {
+        if (!state.watchBlocked) claimWatch();
+        else if (state.likeS === 'done' && state.commentS === 'done') claimWatch();
+      }
     }, 5000);
 
     // SPA URL changes → re-evaluate eligibility for the new post.

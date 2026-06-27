@@ -38,7 +38,7 @@
             { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
           ]
         : [
-            { t: 'Like & comment on a post', a: 'Required', d: 'Like AND comment on a recent post — required to earn watchtime tickets for that video.' },
+            { t: 'Like & comment to earn', a: 'Required', d: 'Like AND comment on a post to collect its watchtime tickets — both are required on that post.' },
           ]),
       { t: 'Vote in a poll', a: `+${r.vote}`, d: 'Each time you vote in a live poll.' },
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },
@@ -57,7 +57,7 @@
     }
     add(el, 'rates-note', r.like > 0 || r.comment > 0
       ? 'You earn on his recent posts only — a card appears on the post when it counts. Each like, comment, and watch credits once per post.'
-      : 'You earn on his recent posts only — a card appears on the post when it counts. Like AND comment on a video to earn its watchtime tickets. Watch credits once per video.');
+      : 'You earn on his recent posts only — a card appears on the post when it counts. Like AND comment on a post to collect that post\'s watchtime tickets. Each credits once per post.');
   }
 
   self.renderRates = renderRates;
