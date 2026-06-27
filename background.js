@@ -338,6 +338,31 @@ async function checkManualPush() {
   await chrome.storage.local.set({ seenPushIds: [...seen], notifUrls: urls });
 }
 
+// --- Update check: compare the server's latest published version to ours ---
+// Returns true if `latest` is a higher semver than `current` (numeric per-segment,
+// so 1.0.13 > 1.0.9 — a plain string compare would get that backwards).
+function isNewerVersion(latest, current) {
+  const a = String(latest || '').split('.').map((n) => parseInt(n, 10) || 0);
+  const b = String(current || '').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] || 0, y = b[i] || 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
+}
+async function checkLatestVersion() {
+  const r = await fetch(S2.API + S2.VERSION).catch(() => null);
+  if (!r || !r.ok) return;
+  const data = await r.json().catch(() => null);
+  const latest = data && data.version;
+  if (!latest) return;
+  let current = '';
+  try { current = chrome.runtime.getManifest().version || ''; } catch { /* ignore */ }
+  // Stored for the overlay header badge and the popup to read.
+  await chrome.storage.local.set({ extUpdate: { latest, available: isNewerVersion(latest, current) } });
+}
+
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== 'poll') return;
   // Run sequentially, NOT concurrently: checkSignals and checkNewTargets both
@@ -349,4 +374,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   await checkPoll();
   await checkNewTargets();
   await checkManualPush();
+  await checkLatestVersion();
 });
+// Also check right away on SW startup, so the badge appears without waiting for the alarm.
+checkLatestVersion();

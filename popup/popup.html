@@ -21,14 +21,18 @@
     .rates-desc { font-size: 11px; color: #A9A697; line-height: 1.45; margin-top: 3px; }
     .rates-sub { font-size: 11px; color: #8A8678; line-height: 1.45; margin-top: 3px; padding-left: 10px; border-left: 1px solid rgba(201,167,102,.2); }
     .rates-note { font-size: 11px; color: #8A8678; line-height: 1.5; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(201,167,102,.12); }
+    #update { display: none; font-size: 12px; line-height: 1.45; margin: 0 0 12px; padding: 9px 11px; border-radius: 8px; background: rgba(232,179,57,.12); border: 1px solid rgba(232,179,57,.45); color: #E8B339; }
+    #ver { font-size: 10px; color: #6B6960; font-family: ui-monospace, monospace; margin-top: 14px; text-align: right; }
   </style>
 </head>
 <body>
   <h1>Rinaudo Capital</h1>
+  <div id="update"></div>
   <p id="intro">Connect with Kick to earn tickets for liking &amp; commenting on posts. You'll also get pinged when Mizkif goes live or posts.</p>
   <button id="s2connect" class="connect">Connect with Kick</button>
   <p id="s2status">…</p>
   <div id="rates"></div>
+  <p id="ver"></p>
   <script src="../rates-list.js"></script>
   <script src="popup.js"></script>
 </body>

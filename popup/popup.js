@@ -24,5 +24,19 @@ $('s2connect').addEventListener('click', async () => {
   refreshS2();
 });
 
+// Show the current version, and an update banner if the SW flagged a newer one.
+async function refreshVersion() {
+  let current = '';
+  try { current = chrome.runtime.getManifest().version || ''; } catch { /* ignore */ }
+  $('ver').textContent = current ? 'v' + current : '';
+  const { extUpdate } = await chrome.storage.local.get('extUpdate').catch(() => ({}));
+  if (extUpdate && extUpdate.available) {
+    const u = $('update');
+    u.textContent = `Update available — v${extUpdate.latest}. Reload the extension to get the latest version.`;
+    u.style.display = 'block';
+  }
+}
+
 refreshS2();
+refreshVersion();
 if (self.renderRates) renderRates($('rates'));

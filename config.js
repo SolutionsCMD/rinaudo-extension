@@ -26,4 +26,5 @@ self.S2 = {
   WATCH_CLAIM: '/api/watch/claim',
   KICK_CHECKIN: '/api/extension/kick/checkin',
   PUSH: '/api/extension/push',
+  VERSION: '/api/extension/version',
 };
