@@ -41,9 +41,24 @@ function ensureWtFrame() {
 }
 
 function drawWtWidget(status) {
-  // status: 'playing' | 'paused' | 'muted' | 'offline'
+  // status: 'playing' | 'paused' | 'muted' | 'offline' | 'required'
   if (status === 'offline') {
     if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    return;
+  }
+  if (status === 'required') {
+    ensureWtFrame();
+    const body = wtFrame.body;
+    body.replaceChildren();
+    const row = document.createElement('div'); row.className = 'row';
+    const lbl = document.createElement('span'); lbl.className = 'lbl';
+    lbl.textContent = '🎟 Like & comment to earn';
+    row.append(lbl);
+    body.append(row);
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = 'Required for watchtime';
+    body.append(sub);
+    wtFrame.setPill('🎟');
     return;
   }
   ensureWtFrame();
@@ -151,6 +166,10 @@ async function wtTick() {
   // saying "▶ Watching / earning…" while no tickets are actually being credited.
   if (result.reason === 'stream_offline' || result.reason === 'watchtime_disabled') {
     drawWtWidget('offline');
+    return;
+  }
+  if (result.reason === 'engagement_required') {
+    drawWtWidget('required');
     return;
   }
   // Accumulate the per-checkin delta locally. The server's totalEarned is now a
