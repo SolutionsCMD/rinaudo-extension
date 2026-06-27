@@ -146,7 +146,10 @@ async function wtTick() {
   const result = await chrome.runtime.sendMessage({ type: 's2KickCheckin' }).catch(() => null);
   if (!result) return;
 
-  if (result.reason === 'stream_offline') {
+  // Hide the widget when there's nothing to earn: stream offline OR the admin has the
+  // watchtime master switch off. Without the watchtime_disabled case the card would keep
+  // saying "▶ Watching / earning…" while no tickets are actually being credited.
+  if (result.reason === 'stream_offline' || result.reason === 'watchtime_disabled') {
     drawWtWidget('offline');
     return;
   }
