@@ -96,9 +96,12 @@ self.EngageCore = (function () {
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
       if (r && r.credited) { state[key] = 'done'; setDone(ref, action === 'like' ? { like: true } : { comment: true }); }
-      // A real (non-null) response with credited:false on a like means it's already
-      // earned (the card only shows on active targets) — show done, not a blink-to-idle.
-      else if (r && action === 'like') { state[key] = 'done'; setDone(ref, { like: true }); }
+      // A genuine already-earned response (HTTP 200, credited:false) on a like → show done.
+      // Must distinguish from an ERROR object (e.g. {error:'http_409'} when the post isn't an
+      // active target yet, or an auth blip): error objects have no `credited` field, so fall
+      // through to idle and retry. Marking the like done on an error would stick it "done"
+      // forever in local storage and the like could never credit later.
+      else if (r && action === 'like' && 'credited' in r) { state[key] = 'done'; setDone(ref, { like: true }); }
       else state[key] = 'idle';
       drawWidget();
     }
@@ -178,9 +181,13 @@ self.EngageCore = (function () {
       // Merge server done flags (bearer-scoped, authoritative) with local cache.
       const local = await getDone(ref);
       const srv = target.done || {};
-      const likeDone = !!(srv.like || local.like);
+      // Like: trust the server's per-user flag as authoritative. ORing the local cache
+      // would let a stale local "done" (written by the old transient-error bug) keep
+      // suppressing the like even after the server says it was never earned.
+      const likeDone = !!srv.like;
       const commentDone = !!(srv.comment || local.comment);
       const watchDone = !!(srv.watch || local.watch);
+      if (!srv.like && local.like) setDone(ref, { like: false }); // heal a stale cached "done"
       if (srv.like && !local.like) setDone(ref, { like: true });
       if (srv.comment && !local.comment) setDone(ref, { comment: true });
       if (srv.watch && !local.watch) setDone(ref, { watch: true });
