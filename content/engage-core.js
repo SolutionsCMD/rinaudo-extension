@@ -20,6 +20,7 @@ self.EngageCore = (function () {
     .row.paused .lbl{color:#8A8678}
     .row.blocked .lbl{color:#E8B339}
     .row.blocked .amt{color:#E8B339}
+    .amt.req{color:#E8B339}
     .hint{font-size:11px;color:#6B6960;margin:2px 0 6px;line-height:1.3}`;
 
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -51,7 +52,14 @@ self.EngageCore = (function () {
       l.textContent = (status === 'done' ? '✓ ' : '') + label; if (status === 'done') l.classList.add('done');
       const a = document.createElement('span'); a.className = 'amt';
       a.textContent = status === 'pending' ? '⋯' : amt;
+      if (amt === 'Required') a.classList.add('req');
       r.append(l, a); return r;
+    }
+    // Like/comment amount text. When the action earns no tickets of its own (reward 0),
+    // it's a gate for the watch reward, so show 'Required' instead of a pointless '+0'.
+    function socialAmt(reward, status) {
+      if (reward > 0) return `+${reward}`;
+      return status === 'done' ? '' : 'Required';
     }
     // The video's full-watch reward (based on its length), shown as the headline so a
     // long video reads "+33" not "+5" (the floor). The amount actually credited comes
@@ -88,9 +96,9 @@ self.EngageCore = (function () {
         if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough — like & comment on this post to collect its tickets'));
         else if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
       }
-      if (A.actions.like) body.append(rowEl('Like', `+${rewards.likeReward}`, state.likeS));
+      if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
       if (A.actions.comment) {
-        body.append(rowEl('Comment', `+${rewards.commentReward}`, state.commentS));
+        body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
         if (state.commentS === 'idle') body.append(hint('Comment must be 5+ characters'));
       }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
