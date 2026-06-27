@@ -35,10 +35,30 @@ async function s2Connect() {
   await chrome.storage.local.set({ s2Token: token });
 }
 
+// Opaque per-install device token — a random id WE generate (NOT a fingerprint, hardware
+// id, or anything derived from the machine). Stored locally, resettable. Sent as the
+// X-RGC-Device header so the backend can cluster multi-accounts for cashout review.
+let _deviceId = null;
+async function getDeviceId() {
+  if (_deviceId) return _deviceId;
+  const { rgcDeviceId } = await chrome.storage.local.get('rgcDeviceId');
+  if (rgcDeviceId) { _deviceId = rgcDeviceId; return _deviceId; }
+  _deviceId = (self.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'd-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+  await chrome.storage.local.set({ rgcDeviceId: _deviceId });
+  return _deviceId;
+}
+async function s2Headers(token, json) {
+  const h = { Authorization: `Bearer ${token}`, 'X-RGC-Device': await getDeviceId() };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
 async function s2Targets() {
   const token = await getS2Token();
   if (!token) return { targets: [], likeReward: 0, commentReward: 0 };
-  const r = await fetch(S2.API + S2.TARGETS, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+  const r = await fetch(S2.API + S2.TARGETS, { headers: await s2Headers(token) }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ targets: [], likeReward: 0, commentReward: 0 })) : { targets: [], likeReward: 0, commentReward: 0 };
 }
 
@@ -46,7 +66,7 @@ async function s2Engagement(platform, action, ref) {
   const token = await getS2Token();
   if (!token) return { credited: false };
   const r = await fetch(S2.API + S2.ENGAGEMENT, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ platform, action, ref }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ credited: false })) : { credited: false };
@@ -57,7 +77,7 @@ async function s2WatchSession(platform, videoRef, playerDuration) {
   const token = await getS2Token();
   if (!token) return { error: 'not_connected' };
   const r = await fetch(S2.API + S2.WATCH_SESSION, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ platform, videoRef, playerDuration }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ error: 'bad_json' })) : { error: r ? 'http_' + r.status : 'network' };
@@ -66,7 +86,7 @@ async function s2WatchHeartbeat(sessionId) {
   const token = await getS2Token();
   if (!token) return { counted: false };
   const r = await fetch(S2.API + S2.WATCH_HEARTBEAT, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ sessionId }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ counted: false })) : { counted: false };
@@ -75,7 +95,7 @@ async function s2WatchClaim(platform, videoRef) {
   const token = await getS2Token();
   if (!token) return { ok: false };
   const r = await fetch(S2.API + S2.WATCH_CLAIM, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ platform, videoRef }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
@@ -85,7 +105,7 @@ async function s2KickCheckin() {
   if (!token) return { ok: false, reason: 'not_connected' };
   const r = await fetch(S2.API + S2.KICK_CHECKIN, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: await s2Headers(token),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
@@ -103,7 +123,7 @@ async function s2PollVote(pollId, optionIdx) {
   const token = await getS2Token();
   if (!token) return { ok: false, reason: 'not_connected' };
   const r = await fetch(S2.API + S2.POLL_VOTE, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ pollId, optionIdx }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
