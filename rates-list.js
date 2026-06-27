@@ -32,8 +32,14 @@
           'TikTok: any post from the last 24h.',
         ],
       },
-      { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on YouTube & TikTok.' },
-      { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
+      ...(r.like > 0 || r.comment > 0
+        ? [
+            { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on YouTube & TikTok.' },
+            { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
+          ]
+        : [
+            { t: 'Like & comment on a post', a: 'Required', d: 'Like AND comment on a recent post to unlock your watchtime tickets. No direct ticket reward — but required to earn on the live stream.' },
+          ]),
       { t: 'Vote in a poll', a: `+${r.vote}`, d: 'Each time you vote in a live poll.' },
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },
     ];
@@ -49,7 +55,9 @@
       if (it.d) add(item, 'rates-desc', it.d);
       for (const s of (it.subs || [])) add(item, 'rates-sub', s);
     }
-    add(el, 'rates-note', 'You earn on his recent posts only — a card appears on the post when it counts. Each like, comment, and watch credits once per post.');
+    add(el, 'rates-note', r.like > 0 || r.comment > 0
+      ? 'You earn on his recent posts only — a card appears on the post when it counts. Each like, comment, and watch credits once per post.'
+      : 'You earn on his recent posts only — a card appears on the post when it counts. Like AND comment to unlock watchtime. Watch credits once per video.');
   }
 
   self.renderRates = renderRates;
