@@ -33,7 +33,7 @@
 <body>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="meta">Rinaudo Capital (browser extension) · Last updated 25 June 2026</p>
+    <p class="meta">Rinaudo Capital (browser extension) · Last updated 27 June 2026</p>
 
     <p>
       This policy explains what the <strong>Rinaudo Capital</strong> browser extension ("the extension")
@@ -57,6 +57,19 @@
         used only to authenticate your requests to <code>s2.jsolutions.dev</code>, never leaves your
         browser except in the <code>Authorization</code> header of calls to that server, and is removed
         when you disconnect or uninstall.
+      </li>
+      <li>
+        <strong>An anti-fraud device token.</strong> A random identifier the extension generates the
+        first time it runs and stores locally (<code>chrome.storage.local</code>). It is <em>not</em>
+        derived from your hardware and contains no personal information — it simply lets the game tell
+        one browser install apart from another so a single person can't farm tickets across many
+        accounts. You can reset it by clearing the extension's storage or reinstalling.
+      </li>
+      <li>
+        <strong>A device fingerprint.</strong> The extension computes a one-way hash of general device
+        characteristics (graphics renderer, a canvas drawing, browser/timezone/CPU details) and caches
+        that hash locally. We store only the resulting hash, never the underlying values, and use it
+        only to detect duplicate accounts and automated abuse.
       </li>
       <li>
         <strong>Local state only.</strong> The extension also keeps small bookkeeping values locally
@@ -83,9 +96,22 @@
       </li>
     </ul>
 
+    <h2>Preventing duplicate accounts and bots</h2>
+    <p>
+      Because tickets have real value, we take basic steps to stop one person from farming them with
+      many fake accounts or bots. With each authenticated request to <code>s2.jsolutions.dev</code>, the
+      extension includes the anti-fraud <strong>device token</strong> and <strong>device fingerprint</strong>
+      described above. The server additionally records a <strong>one-way, salted hash of your IP
+      address</strong> (your actual IP address is never stored — only a hash that can be compared for a
+      match, not reversed). These signals are used <em>only</em> to group accounts that appear to share a
+      device or network for manual review before payouts. They are never sold, shared with third parties,
+      used for advertising, or used to track your browsing, and they are never shown to other users.
+    </p>
+
     <h2>What we do <em>not</em> do</h2>
     <ul>
-      <li>No analytics or telemetry.</li>
+      <li>No analytics, advertising, or behavioral tracking. The only device and network signals we
+        collect are the anti-fraud identifiers described above, used solely to keep the ticket economy fair.</li>
       <li>No advertising, and no selling or sharing of data with third parties.</li>
       <li>
         No tracking of your general browsing. The extension runs only on Mizkif's Kick channel and on X,
