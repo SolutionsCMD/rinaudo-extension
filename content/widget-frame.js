@@ -14,6 +14,7 @@ self.RGCFrame = (function () {
     .bar:active{cursor:grabbing}
     .dot{width:7px;height:7px;border-radius:50%;background:#53FC18;flex:none;box-shadow:0 0 8px rgba(83,252,24,.7)}
     .ttl{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#C9A766;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ver{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.04em;color:#6B6960;flex:none}
     .min{cursor:pointer;color:#8A8678;font-size:17px;line-height:1;background:none;border:0;padding:0 3px;font-family:inherit}
     .min:hover{color:#F4EFE3}
     .body{padding:11px 14px 14px}
@@ -23,6 +24,10 @@ self.RGCFrame = (function () {
     .hidden{display:none}`;
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  // Extension version, shown in every frame header so users can report it from a screenshot.
+  let VER = '';
+  try { VER = (chrome.runtime.getManifest().version) || ''; } catch { /* ignore */ }
 
   function mount(opts) {
     const key = 'frame:' + opts.key;
@@ -47,8 +52,9 @@ self.RGCFrame = (function () {
     const bar = document.createElement('div'); bar.className = 'bar';
     const bdot = document.createElement('span'); bdot.className = 'dot';
     const bttl = document.createElement('span'); bttl.className = 'ttl'; bttl.textContent = opts.title || '';
+    const bver = document.createElement('span'); bver.className = 'ver'; bver.textContent = VER ? 'v' + VER : '';
     const minBtn = document.createElement('button'); minBtn.className = 'min'; minBtn.type = 'button'; minBtn.textContent = '–'; minBtn.title = 'Minimize';
-    bar.append(bdot, bttl, minBtn);
+    bar.append(bdot, bttl, bver, minBtn);
     const body = document.createElement('div'); body.className = 'body';
     card.append(bar, body);
 
