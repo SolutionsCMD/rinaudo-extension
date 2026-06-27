@@ -249,4 +249,14 @@ async function checkNewTargets() {
   await chrome.storage.local.set({ seenTargets: [...seen], notifUrls });
 }
 
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'poll') { checkSignals(); checkPoll(); checkNewTargets(); } });
+chrome.alarms.onAlarm.addListener(async (a) => {
+  if (a.name !== 'poll') return;
+  // Run sequentially, NOT concurrently: checkSignals and checkNewTargets both
+  // read-modify-write the shared notifUrls map in storage. Run in parallel, one writes
+  // back a stale copy and clobbers the other's click-URL — so a target notification loses
+  // its URL and the click falls back to the Kick channel URL. Awaiting keeps each one's
+  // read+write atomic with respect to the others.
+  await checkSignals();
+  await checkPoll();
+  await checkNewTargets();
+});
