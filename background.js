@@ -49,8 +49,50 @@ async function getDeviceId() {
   await chrome.storage.local.set({ rgcDeviceId: _deviceId });
   return _deviceId;
 }
+// Fuzzy machine fingerprint: a stable hash of GPU / canvas / UA / cores / timezone.
+// Unlike the device token it survives a reinstall or fresh profile on the SAME machine.
+// It is NOT unique (same model + browser collide) — the backend treats it as a weak,
+// review-only signal. Computed once via OffscreenCanvas in the service worker, then cached.
+let _fp = null;
+async function getFingerprint() {
+  if (_fp != null) return _fp;
+  const { rgcFp } = await chrome.storage.local.get('rgcFp');
+  if (rgcFp) { _fp = rgcFp; return _fp; }
+  const parts = [];
+  try { parts.push(navigator.userAgent || ''); } catch {}
+  try { parts.push((navigator.languages || [navigator.language]).join(',')); } catch {}
+  try { parts.push(String(navigator.hardwareConcurrency || ''), String(navigator.deviceMemory || '')); } catch {}
+  try { parts.push(Intl.DateTimeFormat().resolvedOptions().timeZone || ''); } catch {}
+  try {
+    const gl = new OffscreenCanvas(1, 1).getContext('webgl');
+    if (gl) {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      if (dbg) parts.push(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || '', gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+      parts.push(gl.getParameter(gl.VERSION) || '');
+    }
+  } catch {}
+  try {
+    const cv = new OffscreenCanvas(200, 50), ctx = cv.getContext('2d');
+    ctx.textBaseline = 'top'; ctx.font = '14px Arial';
+    ctx.fillStyle = '#069'; ctx.fillText('rgc fp⚡', 2, 2);
+    ctx.fillStyle = 'rgba(102,200,0,.7)'; ctx.fillText('rgc fp⚡', 4, 6);
+    const buf = await (await cv.convertToBlob()).arrayBuffer();
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+    parts.push([...h.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join(''));
+  } catch {}
+  try {
+    const enc = new TextEncoder().encode(parts.join('|'));
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', enc));
+    _fp = [...d.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await chrome.storage.local.set({ rgcFp: _fp });
+  } catch { _fp = ''; }
+  return _fp;
+}
+
 async function s2Headers(token, json) {
   const h = { Authorization: `Bearer ${token}`, 'X-RGC-Device': await getDeviceId() };
+  const fp = await getFingerprint();
+  if (fp) h['X-RGC-Fingerprint'] = fp;
   if (json) h['Content-Type'] = 'application/json';
   return h;
 }
