@@ -38,7 +38,7 @@
             { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
           ]
         : [
-            { t: 'Like & comment to earn', a: 'Required', d: 'Like AND comment on a post to collect its watchtime tickets — both are required on that post.' },
+            { t: 'Like & comment to earn', a: 'Required', d: 'Like AND comment on a post to collect its watchtime tickets — both are required on that post. Your comment must be more than 5 characters.' },
           ]),
       { t: 'Vote in a poll', a: `+${r.vote}`, d: 'Each time you vote in a live poll.' },
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },
