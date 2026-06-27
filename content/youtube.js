@@ -7,6 +7,11 @@
   // which breaks on non-English YouTube (e.g. Portuguese "Gostei").
   function likeControl() {
     for (const sel of [
+      // Current YouTube (2024+) renders like/dislike as web-component view-models with
+      // no stable id. like-button-view-model wraps ONLY the like button; the segmented
+      // wrapper lists like before dislike, so the first aria-pressed match is the like.
+      'like-button-view-model button[aria-pressed]',
+      'segmented-like-dislike-button-view-model button[aria-pressed]',
       '#segmented-like-button button[aria-pressed]',
       '#like-button button[aria-pressed]',
       'ytd-segmented-like-dislike-button-renderer button[aria-pressed]',
@@ -17,9 +22,10 @@
       const el = document.querySelector(sel);
       if (el) return el;
     }
-    // Fallback: first aria-pressed button in the top-level actions bar
-    // (like always precedes dislike in DOM order).
-    return document.querySelector('#top-level-buttons-computed button[aria-pressed]') || null;
+    // Fallbacks: first aria-pressed button in the watch metadata block, then the legacy
+    // actions bar (like always precedes dislike in DOM order).
+    return document.querySelector('ytd-watch-metadata button[aria-pressed]')
+      || document.querySelector('#top-level-buttons-computed button[aria-pressed]') || null;
   }
   const adapter = {
     platform: 'youtube',
