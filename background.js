@@ -249,6 +249,33 @@ async function checkNewTargets() {
   await chrome.storage.local.set({ seenTargets: [...seen], notifUrls });
 }
 
+async function checkManualPush() {
+  const r = await fetch(S2.API + S2.PUSH).catch(() => null);
+  if (!r || !r.ok) return;
+  const data = await r.json().catch(() => null);
+  if (!data || !data.push) return;
+  const push = data.push;
+
+  const { seenPushIds, notifUrls } = await chrome.storage.local.get(['seenPushIds', 'notifUrls']);
+  const seen = new Set(seenPushIds || []);
+  if (seen.has(push.id)) return;
+
+  seen.add(push.id);
+  const id = `manual-push-${push.id}`;
+  const urls = notifUrls || {};
+  urls[id] = push.url;
+
+  chrome.notifications.create(id, {
+    type: 'basic',
+    iconUrl: 'icons/youtube.png',
+    title: push.title,
+    message: push.message || 'Tap to open.',
+    priority: 2,
+  });
+
+  await chrome.storage.local.set({ seenPushIds: [...seen], notifUrls: urls });
+}
+
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== 'poll') return;
   // Run sequentially, NOT concurrently: checkSignals and checkNewTargets both
@@ -259,4 +286,5 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   await checkSignals();
   await checkPoll();
   await checkNewTargets();
+  await checkManualPush();
 });
