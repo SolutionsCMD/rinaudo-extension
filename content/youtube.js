@@ -59,17 +59,22 @@
     getVideoEl() {
       const vids = Array.from(document.querySelectorAll('video'));
       if (vids.length <= 1) return vids[0] || null;
-      // Shorts preloads several <video>s (prev/next reels). querySelector('video') would
-      // grab a preloaded, paused one. Pick the active reel's video: playing + on-screen,
-      // falling back to whichever is visible, then to any playing one.
-      const inView = (v) => {
+      // Shorts preloads several <video>s (prev/next reels). The ACTIVE short is the one
+      // filling the viewport. Score by visible area and strongly prefer a playing one —
+      // NOT by currentTime, which resets to 0 at every loop boundary and would otherwise
+      // make us drop the active short and grab a preloaded paused reel (timer freezes).
+      const visibleArea = (v) => {
         const r = v.getBoundingClientRect();
-        return r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+        const w = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+        const h = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+        return w * h;
       };
-      return vids.find((v) => !v.paused && v.currentTime > 0 && inView(v))
-        || vids.find((v) => inView(v) && v.currentTime > 0)
-        || vids.find((v) => !v.paused)
-        || vids[0] || null;
+      let best = null, bestScore = -1;
+      for (const v of vids) {
+        const score = visibleArea(v) + (!v.paused ? 1e9 : 0); // playing wins over any paused
+        if (score > bestScore) { bestScore = score; best = v; }
+      }
+      return best || vids[0] || null;
     },
   };
   self.RGC_YT_ADAPTER = adapter;
