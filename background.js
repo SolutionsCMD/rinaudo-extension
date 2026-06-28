@@ -9,6 +9,20 @@ const S2 = self.S2;   // engagement + polls
 
 const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Token || null;
 
+// Post/video notifications open the PLATFORM HOMEPAGE, not the direct video URL, so
+// members search for it themselves — search demand + in-app discovery is a stronger
+// signal to the platform's algorithm than an external deep-link. Unknown hosts (e.g.
+// a Kick stream or a custom link) are left as-is so go-live still opens the stream.
+function homepageFor(url) {
+  let host = '';
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+  if (host.endsWith('youtube.com') || host === 'youtu.be') return 'https://www.youtube.com';
+  if (host.endsWith('tiktok.com')) return 'https://www.tiktok.com';
+  if (host.endsWith('instagram.com') || host === 'instagr.am') return 'https://www.instagram.com';
+  if (host.endsWith('x.com') || host.endsWith('twitter.com')) return 'https://x.com';
+  return url;
+}
+
 // Toolbar "!" badge until the member connects, cleared once they do.
 async function updateBadge() {
   const token = await getS2Token();
@@ -250,8 +264,8 @@ async function checkSignals() {
     (r.latestVideos || []).forEach((v) => {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId]) {
         const id = `vid-${v.videoId}`;
-        notifUrls[id] = v.url;
-        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube video — ${v.channelName}`, message: v.title || 'New upload — tap to watch.', priority: 2 });
+        notifUrls[id] = homepageFor(v.url);
+        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube video — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : 'New upload — search for it on YouTube.', priority: 2 });
       }
     });
     const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New Instagram — Mizkif', twitter: 'New X post — Mizkif' };
@@ -260,8 +274,8 @@ async function checkSignals() {
       const prev = (seen.social || {})[s.platform];
       if (s.url && prev && s.url !== prev) {
         const id = `soc-${s.platform}-${Date.now()}`;
-        notifUrls[id] = s.url;
-        chrome.notifications.create(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title || 'Tap to open.', priority: 2 });
+        notifUrls[id] = homepageFor(s.url);
+        chrome.notifications.create(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title} — open the app and search for it.` : 'New post — open the app and search for it.', priority: 2 });
       }
     });
   }
@@ -297,12 +311,12 @@ async function checkNewTargets() {
       const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
       if (!t) continue;
       const id = `target-${key}`;
-      notifUrls[id] = t.url || '';
+      notifUrls[id] = homepageFor(t.url || '');
       chrome.notifications.create(id, {
         type: 'basic',
         iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
         title: TARGET_TITLES[t.platform] || 'New earn target',
-        message: t.label || t.url || 'Tap to open and earn tickets.',
+        message: t.label ? `${t.label} — search for it to earn tickets.` : 'Search for the new post to earn tickets.',
         priority: 2,
       });
     }
@@ -325,13 +339,13 @@ async function checkManualPush() {
   seen.add(push.id);
   const id = `manual-push-${push.id}`;
   const urls = notifUrls || {};
-  urls[id] = push.url;
+  urls[id] = homepageFor(push.url);
 
   chrome.notifications.create(id, {
     type: 'basic',
     iconUrl: 'icons/youtube.png',
     title: push.title,
-    message: push.message || 'Tap to open.',
+    message: push.message || 'Open the app and search for it.',
     priority: 2,
   });
 
