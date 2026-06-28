@@ -13,6 +13,7 @@
       const fill = path ? (path.getAttribute('fill') || getComputedStyle(path).fill || '') : '';
       return /254,\s*44,\s*85|#fe2c55|rgb\(254/i.test(fill);
     },
+    likeTarget(t) { return t && t.closest ? t.closest('[data-e2e="like-icon"], [data-e2e="browse-like-icon"]') : null; },
     commentSubmitTarget(t) { return t && t.closest ? t.closest('[data-e2e="comment-post"]') : null; },
     commentInputTarget(t) { return t && t.closest ? t.closest('[data-e2e="comment-input"], [contenteditable="true"]') : null; },
     commentText() {

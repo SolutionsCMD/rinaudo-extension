@@ -15,6 +15,9 @@
       }
       return false;
     },
+    // Broad on purpose — any button/svg click arms the sampler, but isLiked() (red heart)
+    // is what actually credits, so a click on a non-like control never fires a like.
+    likeTarget(t) { return t && t.closest ? t.closest('[role="button"], button, svg') : null; },
     commentSubmitTarget(t) {
       const b = t && t.closest ? t.closest('[role="button"], button') : null;
       if (!b) return null;

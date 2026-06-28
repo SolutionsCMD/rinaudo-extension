@@ -32,7 +32,7 @@ self.EngageCore = (function () {
   const effectiveTarget = (reqSec, reqHb, hbInterval) => Math.max(reqSec || 120, 10 + ((reqHb || 2) - 1) * (hbInterval || 20));
 
   function init(A) {
-    let frame = null, state = null, commentHooked = false, lastHb = 0;
+    let frame = null, state = null, commentHooked = false, likeHooked = false, lastHb = 0;
     let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1 };
 
     // Locally remember what's already credited per (platform, post) so the ✓ state
@@ -149,6 +149,25 @@ self.EngageCore = (function () {
       }, true);
     }
 
+    // Catch a like the instant it's clicked. The 5s poll alone can miss a like that the
+    // platform optimistically lights up then reverts within a couple seconds (e.g. a
+    // logged-out/flaky TikTok session) — so on a click of the like control we sample
+    // isLiked() a few times over ~2s and credit as soon as it reads liked.
+    function hookLike() {
+      if (likeHooked || !A.actions.like || !A.likeTarget) return; likeHooked = true;
+      document.addEventListener('click', (e) => {
+        if (!A.likeTarget(e.target)) return;
+        if (!state || state.likeS !== 'idle') return;
+        let tries = 0;
+        const iv = setInterval(() => {
+          tries++;
+          if (!state || state.likeS !== 'idle') { clearInterval(iv); return; }
+          if (A.isLiked()) { clearInterval(iv); fireEngagement('like'); }
+          else if (tries >= 8) clearInterval(iv); // ~2s of 250ms samples
+        }, 250);
+      }, true);
+    }
+
     async function startWatch() {
       if (!A.actions.watch) return;
       // Wait up to ~10s for video metadata so the backend gets the real duration and
@@ -216,7 +235,7 @@ self.EngageCore = (function () {
         watchDone, awarded: local.awarded != null ? local.awarded : null,
         watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle' };
-      lastHb = 0; hookComment(); drawWidget();
+      lastHb = 0; hookComment(); hookLike(); drawWidget();
       if (!state.watchDone) startWatch();
     }
 

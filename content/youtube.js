@@ -42,6 +42,9 @@
       const b = likeControl();
       return !!(b && b.getAttribute('aria-pressed') === 'true');
     },
+    likeTarget(t) {
+      return t && t.closest ? t.closest('like-button-view-model, segmented-like-dislike-button-view-model, #segmented-like-button, #like-button, ytd-like-button-renderer, ytd-reel-player-overlay-renderer') : null;
+    },
     commentSubmitTarget(t) {
       return t && t.closest ? t.closest('#submit-button, ytd-commentbox #submit-button, ytd-comment-simplebox-renderer #submit-button') : null;
     },
