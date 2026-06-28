@@ -99,7 +99,7 @@ self.EngageCore = (function () {
       if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
       if (A.actions.comment) {
         body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
-        if (state.commentS === 'idle') body.append(hint('Comment must be 5+ characters'));
+        if (state.commentS === 'idle') body.append(hint('Comment must be more than 5 characters'));
       }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
       frame.setPill(earned ? `+${earned}` : '🎟');
