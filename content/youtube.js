@@ -56,7 +56,21 @@
       }
       return '';
     },
-    getVideoEl() { return document.querySelector('video'); },
+    getVideoEl() {
+      const vids = Array.from(document.querySelectorAll('video'));
+      if (vids.length <= 1) return vids[0] || null;
+      // Shorts preloads several <video>s (prev/next reels). querySelector('video') would
+      // grab a preloaded, paused one. Pick the active reel's video: playing + on-screen,
+      // falling back to whichever is visible, then to any playing one.
+      const inView = (v) => {
+        const r = v.getBoundingClientRect();
+        return r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+      };
+      return vids.find((v) => !v.paused && v.currentTime > 0 && inView(v))
+        || vids.find((v) => inView(v) && v.currentTime > 0)
+        || vids.find((v) => !v.paused)
+        || vids[0] || null;
+    },
   };
   self.RGC_YT_ADAPTER = adapter;
   if (self.EngageCore) self.EngageCore.init(adapter);

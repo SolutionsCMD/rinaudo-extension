@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rinaudo Capital",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "permissions": ["storage", "alarms", "notifications", "identity"],
   "host_permissions": ["https://rinaudoglobal.com/*", "https://s2.jsolutions.dev/*", "https://kick.com/*", "https://www.youtube.com/*", "https://www.tiktok.com/*", "https://www.instagram.com/*", "https://x.com/*", "https://twitter.com/*"],
