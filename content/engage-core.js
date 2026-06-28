@@ -43,7 +43,7 @@ self.EngageCore = (function () {
 
     function ensureFrame() {
       if (frame) return;
-      frame = self.RGCFrame.mount({ key: A.platform, title: 'Earn tickets', width: 240, pos: { bottom: 16, right: 16 }, css: ROW_CSS });
+      frame = self.RGCFrame.mount({ key: A.platform, title: '🎟 Earn Tickets', width: 240, pos: { bottom: 16, right: 16 }, css: ROW_CSS });
     }
     // status: 'idle' | 'pending' | 'done'
     function rowEl(label, amt, status) {
