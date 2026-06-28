@@ -158,18 +158,29 @@ self.EngageCore = (function () {
       document.addEventListener('click', (e) => {
         if (!A.likeTarget(e.target)) return;
         if (!state || state.likeS !== 'idle') return;
+        // Captured BEFORE the page toggles the like, so this reflects the pre-click state.
+        // We only treat the click as a like (not an un-like) when we weren't already liked.
+        const wasLiked = A.isLiked();
         let tries = 0;
         const iv = setInterval(() => {
           tries++;
           if (!state || state.likeS !== 'idle') { clearInterval(iv); return; }
-          if (A.isLiked()) { clearInterval(iv); fireEngagement('like'); }
-          else if (tries >= 8) clearInterval(iv); // ~2s of 250ms samples
+          if (A.isLiked()) { clearInterval(iv); fireEngagement('like'); return; } // confirmed liked
+          // Optimistic fallback: clicked the like control from an un-liked state but we still
+          // can't positively read the red heart after ~5s (selector drift, or the platform
+          // visually reverted a like it didn't persist). Credit the intent so people don't
+          // have to click 5–6 times. Un-likes (wasLiked) are never credited here.
+          if (tries >= 20) { clearInterval(iv); if (!wasLiked) fireEngagement('like'); }
         }, 250);
       }, true);
     }
 
     async function startWatch() {
       if (!A.actions.watch) return;
+      // Guard against overlapping attempts so the load watchdog can't spawn duplicate
+      // sessions while a prior attempt is still in its metadata wait.
+      if (!state || state.watchStarting || state.sessionId || state.watchDone) return;
+      state.watchStarting = true;
       // Wait up to ~10s for video metadata so the backend gets the real duration and
       // returns accurate requirements. Sending duration=0 causes the backend to use
       // a 120s floor, but then raises requirements at claim time once other users
@@ -179,10 +190,12 @@ self.EngageCore = (function () {
         const v = A.getVideoEl();
         dur = (v && isFinite(v.duration) && v.duration > 0) ? Math.round(v.duration) : 0;
         if (dur === 0) await new Promise(r => setTimeout(r, 2000));
-        if (!state || state.ref !== A.getRef()) return; // navigated away while waiting
+        if (!state || state.ref !== A.getRef()) { if (state) state.watchStarting = false; return; } // navigated away while waiting
       }
       const s = await chrome.runtime.sendMessage({ type: 's2WatchSession', platform: A.platform, videoRef: state.ref, playerDuration: dur }).catch(() => null);
-      if (!s || s.error || !s.sessionId) return; // backend not ready / not the active target / not connected
+      if (!state || state.ref !== A.getRef()) return;
+      state.watchStarting = false;
+      if (!s || s.error || !s.sessionId) return; // backend not ready / not the active target / not connected — watchdog will retry
       state.sessionId = s.sessionId; state.hbInterval = s.heartbeatIntervalSec || 20;
       state.target = effectiveTarget(s.requiredWatchSeconds, s.requiredHeartbeats, state.hbInterval);
       drawWidget();
@@ -268,8 +281,31 @@ self.EngageCore = (function () {
     }, 5000);
 
     // SPA URL changes → re-evaluate eligibility for the new post.
+    // Plus a cold-load WATCHDOG: on a direct/fresh load, start() (or the session start)
+    // can bail before the video, the targets list, or the service worker are ready, and
+    // with no URL change it would never retry — the user had to refresh. So while we're on
+    // a fresh ref but haven't established a watch session yet, re-attempt a few times with
+    // backoff, then stop (so we don't hammer on a page that simply isn't a target).
     let lastUrl = location.href;
-    setInterval(() => { if (location.href !== lastUrl) { lastUrl = location.href; start(A.getRef()); } }, 1000);
+    let wdRef = null, wdTries = 0, wdNextAt = 0;
+    setInterval(() => {
+      const ref = A.getRef();
+      const now = Date.now();
+      if (location.href !== lastUrl) {
+        lastUrl = location.href; wdRef = ref; wdTries = 0; wdNextAt = 0;
+        start(ref);
+        return;
+      }
+      if (!ref) return;
+      if (ref !== wdRef) { wdRef = ref; wdTries = 0; wdNextAt = 0; } // a fresh ref to settle
+      // Established = we have state for this ref and (no watch, or a session/terminal state).
+      const established = state && state.ref === ref &&
+        (!A.actions.watch || state.sessionId || state.watchDone || state.watchBlocked);
+      if (established || wdTries >= 6 || now < wdNextAt) return;
+      wdTries++; wdNextAt = now + 2000 * wdTries; // 2s, 4s, 6s … backoff
+      if (!state || state.ref !== ref) start(ref);          // setup never took — redo it
+      else if (A.actions.watch && !state.sessionId) startWatch(); // session never started — retry it
+    }, 1000);
     start(A.getRef());
   }
 
