@@ -37,6 +37,23 @@ async function refreshVersion() {
   }
 }
 
+// Per-platform desktop-notification toggles. Stored in notifPrefs (opt-out: a platform
+// is on unless explicitly false), read by the service worker before firing each toast.
+async function initNotifToggles() {
+  const { notifPrefs } = await chrome.storage.local.get('notifPrefs').catch(() => ({}));
+  const prefs = notifPrefs || {};
+  for (const box of document.querySelectorAll('#notifs input[data-p]')) {
+    const p = box.getAttribute('data-p');
+    box.checked = prefs[p] !== false; // default on
+    box.addEventListener('change', async () => {
+      const { notifPrefs: cur } = await chrome.storage.local.get('notifPrefs').catch(() => ({}));
+      const next = { ...(cur || {}), [p]: box.checked };
+      await chrome.storage.local.set({ notifPrefs: next });
+    });
+  }
+}
+
 refreshS2();
 refreshVersion();
+initNotifToggles();
 if (self.renderRates) renderRates($('rates'));

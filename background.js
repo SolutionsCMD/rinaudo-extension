@@ -23,6 +23,11 @@ function homepageFor(url) {
   return url;
 }
 
+// Per-platform toast-notification toggles (set in the popup). Opt-OUT: a platform is on
+// unless its pref is explicitly false. Keys: kick, youtube, tiktok, instagram, x.
+const prefOn = (prefs, p) => !prefs || prefs[p] !== false;
+const SOCIAL_PLATFORM_KEY = { tiktok: 'tiktok', instagram: 'instagram', twitter: 'x' };
+
 // Toolbar "!" badge until the member connects, cleared once they do.
 async function updateBadge() {
   const token = await getS2Token();
@@ -249,20 +254,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 async function checkSignals() {
   const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   if (!r) return;
-  const store = await chrome.storage.local.get(['sigSeen', 'notifUrls']);
+  const store = await chrome.storage.local.get(['sigSeen', 'notifUrls', 'notifPrefs']);
   const seen = store.sigSeen || null;
   const notifUrls = store.notifUrls || {};
+  const prefs = store.notifPrefs;
   const nowVideos = {};
   (r.latestVideos || []).forEach((v) => { if (v.videoId) nowVideos[v.channelId] = v.videoId; });
 
   if (seen) {
-    if (r.streamLive && !seen.live) {
+    if (r.streamLive && !seen.live && prefOn(prefs, 'kick')) {
       const id = `live-${Date.now()}`;
       notifUrls[id] = r.channelUrl;
       chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/kick.png', title: 'Mizkif is live on Kick', message: 'The stream just went live — tap to watch.', priority: 2 });
     }
     (r.latestVideos || []).forEach((v) => {
-      if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId]) {
+      if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
         const id = `vid-${v.videoId}`;
         notifUrls[id] = homepageFor(v.url);
         chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube video — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : 'New upload — search for it on YouTube.', priority: 2 });
@@ -272,7 +278,7 @@ async function checkSignals() {
     const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
     (r.latestSocial || []).forEach((s) => {
       const prev = (seen.social || {})[s.platform];
-      if (s.url && prev && s.url !== prev) {
+      if (s.url && prev && s.url !== prev && prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) {
         const id = `soc-${s.platform}-${Date.now()}`;
         notifUrls[id] = homepageFor(s.url);
         chrome.notifications.create(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title} — open the app and search for it.` : 'New post — open the app and search for it.', priority: 2 });
@@ -302,14 +308,16 @@ async function checkNewTargets() {
   const data = await s2Targets();
   const refs = (data.targets || []).map((t) => `${t.platform}:${t.ref}`);
   if (!refs.length) return;
-  const store = await chrome.storage.local.get(['seenTargets', 'notifUrls']);
+  const store = await chrome.storage.local.get(['seenTargets', 'notifUrls', 'notifPrefs']);
   const seen = new Set(store.seenTargets || []);
   const notifUrls = store.notifUrls || {};
+  const prefs = store.notifPrefs;
   const fresh = refs.filter((k) => !seen.has(k));
   if (seen.size > 0) { // don't notify on very first load
     for (const key of fresh) {
       const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
       if (!t) continue;
+      if (!prefOn(prefs, t.platform)) continue;
       const id = `target-${key}`;
       notifUrls[id] = homepageFor(t.url || '');
       chrome.notifications.create(id, {

@@ -23,6 +23,11 @@
     .rates-note { font-size: 11px; color: #8A8678; line-height: 1.5; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(201,167,102,.12); }
     #update { display: none; font-size: 12px; line-height: 1.45; margin: 0 0 12px; padding: 9px 11px; border-radius: 8px; background: rgba(232,179,57,.12); border: 1px solid rgba(232,179,57,.45); color: #E8B339; }
     #ver { font-size: 10px; color: #6B6960; font-family: ui-monospace, monospace; margin-top: 14px; text-align: right; }
+    #notifs { margin-top: 14px; border-top: 1px solid rgba(201,167,102,.18); padding-top: 12px; }
+    .notif-h { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #C9A766; margin-bottom: 4px; }
+    .notif-sub { font-size: 11px; color: #8A8678; line-height: 1.45; margin-bottom: 10px; }
+    .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: 13px; color: #F4EFE3; cursor: pointer; }
+    .notif-row input { width: auto; cursor: pointer; accent-color: #53FC18; transform: scale(1.2); }
   </style>
 </head>
 <body>
@@ -31,6 +36,15 @@
   <p id="intro">Connect with Kick to earn tickets for liking &amp; commenting on posts. You'll also get pinged when Mizkif goes live or posts.</p>
   <button id="s2connect" class="connect">Connect with Kick</button>
   <p id="s2status">…</p>
+  <div id="notifs">
+    <div class="notif-h">Notifications</div>
+    <p class="notif-sub">Choose which alerts pop up on your desktop.</p>
+    <label class="notif-row"><span>Kick — goes live</span><input type="checkbox" data-p="kick"></label>
+    <label class="notif-row"><span>YouTube — new video</span><input type="checkbox" data-p="youtube"></label>
+    <label class="notif-row"><span>TikTok — new post</span><input type="checkbox" data-p="tiktok"></label>
+    <label class="notif-row"><span>Instagram — new post</span><input type="checkbox" data-p="instagram"></label>
+    <label class="notif-row"><span>X — new post</span><input type="checkbox" data-p="x"></label>
+  </div>
   <div id="rates"></div>
   <p id="ver"></p>
   <script src="../rates-list.js"></script>
