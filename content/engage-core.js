@@ -123,55 +123,43 @@ self.EngageCore = (function () {
       drawWidget();
     }
 
+    // GESTURE-TRUST: credit the comment when the user SUBMITS one with 6+ characters typed.
+    // We no longer wait to confirm the box cleared (that re-derivation of platform state was
+    // the brittle part that broke across UIs). We still read the typed text — but only to
+    // enforce the "more than 5 characters" quality gate.
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
-      function tryCredit() {
-        if (!state || state.commentS !== 'idle') return null;
-        const before = (A.commentText() || '').trim();
-        if (before.length <= 5) return null;
-        // Credit once the box clears after a real submit.
-        setTimeout(() => {
-          if (!state || state.commentS !== 'idle') return;
-          if ((A.commentText() || '').trim() !== before) fireEngagement('comment');
-        }, 1500);
-        return before;
+      function trySubmit() {
+        if (!state || state.commentS !== 'idle') return;
+        const text = (A.commentText() || '').trim();
+        if (text.length <= 5) return; // quality gate — must be MORE than 5 chars
+        fireEngagement('comment');
       }
-      // Click path: submit button pressed.
+      // Click path: the post/submit button was pressed.
       document.addEventListener('click', (e) => {
-        if (!A.commentSubmitTarget(e.target)) return;
-        tryCredit();
+        if (A.commentSubmitTarget(e.target)) trySubmit();
       }, true);
-      // Keyboard path: Enter in the comment input box (TikTok & YouTube accept Enter).
+      // Keyboard path: Enter in the comment input box (TikTok & YouTube submit on Enter).
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' || e.shiftKey) return;
         if (!A.commentInputTarget || !A.commentInputTarget(e.target)) return;
-        tryCredit();
+        trySubmit();
       }, true);
     }
 
-    // Catch a like the instant it's clicked. The 5s poll alone can miss a like that the
-    // platform optimistically lights up then reverts within a couple seconds (e.g. a
-    // logged-out/flaky TikTok session) — so on a click of the like control we sample
-    // isLiked() a few times over ~2s and credit as soon as it reads liked.
+    // GESTURE-TRUST: credit the like the instant the user clicks the like control from a
+    // not-liked state. We no longer sample the heart's color afterward (brittle across UIs
+    // and platform reverts) — the click IS the signal. The pre-click isLiked() read only
+    // guards against crediting an un-like; if it can't tell, we still credit the intent.
     function hookLike() {
       if (likeHooked || !A.actions.like || !A.likeTarget) return; likeHooked = true;
       document.addEventListener('click', (e) => {
         if (!A.likeTarget(e.target)) return;
         if (!state || state.likeS !== 'idle') return;
-        // Captured BEFORE the page toggles the like, so this reflects the pre-click state.
-        // We only treat the click as a like (not an un-like) when we weren't already liked.
-        const wasLiked = A.isLiked();
-        let tries = 0;
-        const iv = setInterval(() => {
-          tries++;
-          if (!state || state.likeS !== 'idle') { clearInterval(iv); return; }
-          if (A.isLiked()) { clearInterval(iv); fireEngagement('like'); return; } // confirmed liked
-          // Optimistic fallback: clicked the like control from an un-liked state but we still
-          // can't positively read the red heart after ~5s (selector drift, or the platform
-          // visually reverted a like it didn't persist). Credit the intent so people don't
-          // have to click 5–6 times. Un-likes (wasLiked) are never credited here.
-          if (tries >= 20) { clearInterval(iv); if (!wasLiked) fireEngagement('like'); }
-        }, 250);
+        // Captured during the capture phase, BEFORE the page toggles the like, so this is
+        // the pre-click state. Skip only when we're clearly already liked (an un-like).
+        if (A.isLiked()) return;
+        fireEngagement('like');
       }, true);
     }
 
