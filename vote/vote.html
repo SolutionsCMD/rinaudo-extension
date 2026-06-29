@@ -48,24 +48,12 @@
       color: #F4EFE3; min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
     .hint { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .08em; color: #6E6B60;
       text-transform: uppercase; margin-top: 12px; text-align: center; }
-    #rates { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(201,167,102,.16); }
-    .rates-h { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #C9A766; margin-bottom: 8px; }
-    .rates-intro { font-size: 12px; color: #9FA6B0; line-height: 1.5; margin-bottom: 12px; }
-    .rates-item { margin: 11px 0; }
-    .rates-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-    .rates-l { font-size: 13px; color: #F4EFE3; font-weight: 600; }
-    .rates-amt { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #86D6A4; font-variant-numeric: tabular-nums; flex: none; }
-    .rates-desc { font-size: 11px; color: #9FA6B0; line-height: 1.45; margin-top: 3px; }
-    .rates-sub { font-size: 11px; color: #6E6B60; line-height: 1.45; margin-top: 3px; padding-left: 10px; border-left: 1px solid rgba(201,167,102,.2); }
-    .rates-note { font-size: 11px; color: #6E6B60; line-height: 1.5; margin-top: 12px; }
     @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } .pollFill, .pollOpt { transition: none; } }
   </style>
 </head>
 <body>
   <div id="root"><p class="muted">Loading poll…</p></div>
-  <div id="rates"></div>
   <script src="../config.js"></script>
-  <script src="../rates-list.js"></script>
   <script src="vote.js"></script>
 </body>
 </html>

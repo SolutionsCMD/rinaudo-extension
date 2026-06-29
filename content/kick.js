@@ -3,6 +3,20 @@
 // Live tally, one changeable vote. The card chrome (drag/collapse/position) is
 // provided by RGCFrame (content/widget-frame.js).
 const C = self.S2;
+
+// Vote card visibility pref (default on). Updated instantly when toggled in popup.
+let voteCardEnabled = true;
+chrome.storage.local.get('widgetPrefs').then(({ widgetPrefs }) => {
+  voteCardEnabled = (widgetPrefs || {}).voteCard !== false;
+}).catch(() => {});
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== 'rgcWidgetPrefs') return;
+  chrome.storage.local.get('widgetPrefs').then(({ widgetPrefs }) => {
+    voteCardEnabled = (widgetPrefs || {}).voteCard !== false;
+    if (!voteCardEnabled) clear();
+  }).catch(() => {});
+});
+
 // --- Watchtime widget state ---
 let wtFrame = null;   // second RGCFrame, independent of the poll frame
 let wtEarned = 0;     // running session total (cosmetic, resets on page reload)
@@ -129,8 +143,8 @@ function vote(idx, connected) {
 function clear() { if (frame) { frame.destroy(); frame = null; } shownPollId = null; optimisticIdx = null; }
 
 async function tick() {
-  // Same SPA guard: clear poll widget when navigated away from Mizkif's channel.
-  if (!location.pathname.toLowerCase().startsWith('/mizkif')) {
+  // SPA guard + vote-card toggle: clear when navigated away or user has disabled the widget.
+  if (!location.pathname.toLowerCase().startsWith('/mizkif') || !voteCardEnabled) {
     clear();
     return;
   }

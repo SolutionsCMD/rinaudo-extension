@@ -53,7 +53,23 @@ async function initNotifToggles() {
   }
 }
 
+async function initWidgetToggles() {
+  const { widgetPrefs } = await chrome.storage.local.get('widgetPrefs').catch(() => ({}));
+  const prefs = widgetPrefs || {};
+  const box = $('toggleVote');
+  box.checked = prefs.voteCard !== false; // default on
+  box.addEventListener('change', async () => {
+    const { widgetPrefs: cur } = await chrome.storage.local.get('widgetPrefs').catch(() => ({}));
+    await chrome.storage.local.set({ widgetPrefs: { ...(cur || {}), voteCard: box.checked } });
+    // Tell any open Kick tab to apply the change immediately.
+    chrome.tabs.query({ url: 'https://kick.com/mizkif*' }, (tabs) => {
+      for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'rgcWidgetPrefs' }).catch(() => {});
+    });
+  });
+}
+
 refreshS2();
 refreshVersion();
 initNotifToggles();
+initWidgetToggles();
 if (self.renderRates) renderRates($('rates'));

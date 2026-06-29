@@ -65,7 +65,7 @@ async function tick() {
 }
 
 tick();
-if (self.renderRates) renderRates(document.getElementById('rates')).then(() => fitWindow());
+fitWindow();
 setInterval(tick, 3000);
 window.addEventListener('load', () => setTimeout(fitWindow, 250));
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitWindow);
