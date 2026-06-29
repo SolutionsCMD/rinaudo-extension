@@ -312,24 +312,29 @@ async function checkNewTargets() {
   const seen = new Set(store.seenTargets || []);
   const notifUrls = store.notifUrls || {};
   const prefs = store.notifPrefs;
-  const fresh = refs.filter((k) => !seen.has(k));
-  if (seen.size > 0) { // don't notify on very first load
-    for (const key of fresh) {
-      const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
-      if (!t) continue;
-      if (!prefOn(prefs, t.platform)) continue;
-      const id = `target-${key}`;
-      notifUrls[id] = homepageFor(t.url || '');
-      chrome.notifications.create(id, {
-        type: 'basic',
-        iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
-        title: TARGET_TITLES[t.platform] || 'New earn target',
-        message: t.label ? `${t.label} — search for it to earn tickets.` : 'Search for the new post to earn tickets.',
-        priority: 2,
-      });
-    }
+  const firstRun = seen.size === 0;
+  // On the very first load, silently seed everything as seen (no install spam).
+  if (firstRun) { refs.forEach((k) => seen.add(k)); await chrome.storage.local.set({ seenTargets: [...seen], notifUrls }); return; }
+  for (const key of refs) {
+    if (seen.has(key)) continue;
+    const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
+    if (!t) continue;
+    // Staggered TikTok rollout: the server gates `notify` per-user so toasts spread out.
+    // A not-yet-eligible target is NOT marked seen, so it can still fire at this user's
+    // slot on a later poll. (Earning is unaffected — the target is live regardless.)
+    if (t.notify === false) continue;
+    seen.add(key); // only mark seen once we've decided to notify
+    if (!prefOn(prefs, t.platform)) continue; // user muted this platform — seen, but no toast
+    const id = `target-${key}`;
+    notifUrls[id] = homepageFor(t.url || '');
+    chrome.notifications.create(id, {
+      type: 'basic',
+      iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
+      title: TARGET_TITLES[t.platform] || 'New earn target',
+      message: t.label ? `${t.label} — search for it to earn tickets.` : 'Search for the new post to earn tickets.',
+      priority: 2,
+    });
   }
-  refs.forEach((k) => seen.add(k));
   await chrome.storage.local.set({ seenTargets: [...seen], notifUrls });
 }
 
