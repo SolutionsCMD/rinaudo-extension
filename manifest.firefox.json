@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Rinaudo Capital",
-  "version": "1.0.27",
+  "version": "1.0.29",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "browser_specific_settings": {
     "gecko": {
       "id": "rinaudo-capital@jsolutions.dev",
-      "strict_min_version": "142.0",
-      "data_collection_permissions": { "required": ["technicalAndInteraction"], "optional": [] }
+      "strict_min_version": "142.0"
     }
   },
   "permissions": ["storage", "alarms", "notifications", "identity"],
