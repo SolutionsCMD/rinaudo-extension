@@ -129,6 +129,11 @@ function vote(idx, connected) {
 function clear() { if (frame) { frame.destroy(); frame = null; } shownPollId = null; optimisticIdx = null; }
 
 async function tick() {
+  // Same SPA guard: clear poll widget when navigated away from Mizkif's channel.
+  if (!location.pathname.toLowerCase().startsWith('/mizkif')) {
+    clear();
+    return;
+  }
   const data = await chrome.runtime.sendMessage({ type: 's2Poll' }).catch(() => null);
   const poll = data && data.poll;
   if (!poll) return clear();
@@ -145,6 +150,13 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // --- Kick watchtime: send checkin every 60s while stream is playing ---
 async function wtTick() {
+  // Kick is a SPA: the content script survives client-side navigation to other channels.
+  // Guard so we only earn (and show the widget) while actually on Mizkif's channel.
+  if (!location.pathname.toLowerCase().startsWith('/mizkif')) {
+    if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    return;
+  }
+
   const v = document.querySelector('video');
   const live = v && !v.paused && !v.ended && v.currentTime > 0;
   const audible = !!(v && !v.muted && v.volume > 0);
