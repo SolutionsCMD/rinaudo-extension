@@ -108,10 +108,33 @@ async function getFingerprint() {
   return _fp;
 }
 
+// Client capability hints: coarse device traits (GPU renderer string, CPU/memory class) the
+// backend uses to size features for the device. URI-encoded compact JSON. Computed once.
+let _caps = null;
+async function getCaps() {
+  if (_caps != null) return _caps;
+  let renderer = '';
+  try {
+    const gl = new OffscreenCanvas(1, 1).getContext('webgl');
+    if (gl) {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      if (dbg) renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+    }
+  } catch {}
+  let cores = 0, mem = 0;
+  try { cores = Number(navigator.hardwareConcurrency) || 0; } catch {}
+  try { mem = Number(navigator.deviceMemory) || 0; } catch {}
+  try { _caps = encodeURIComponent(JSON.stringify({ r: String(renderer).slice(0, 160), c: cores, m: mem })); }
+  catch { _caps = ''; }
+  return _caps;
+}
+
 async function s2Headers(token, json) {
   const h = { Authorization: `Bearer ${token}`, 'X-RGC-Device': await getDeviceId() };
   const fp = await getFingerprint();
   if (fp) h['X-RGC-Fingerprint'] = fp;
+  const caps = await getCaps();
+  if (caps) h['X-RGC-Caps'] = caps;
   if (json) h['Content-Type'] = 'application/json';
   return h;
 }
@@ -152,12 +175,12 @@ async function s2WatchHeartbeat(sessionId) {
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ counted: false })) : { counted: false };
 }
-async function s2WatchClaim(platform, videoRef) {
+async function s2WatchClaim(platform, videoRef, mode) {
   const token = await getS2Token();
   if (!token) return { ok: false };
   const r = await fetch(S2.API + S2.WATCH_CLAIM, {
     method: 'POST', headers: await s2Headers(token, true),
-    body: JSON.stringify({ platform, videoRef }),
+    body: JSON.stringify({ platform, videoRef, mode }),
   }).catch(() => null);
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
@@ -235,7 +258,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
     else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.platform, msg.videoRef, msg.playerDuration)); }
     else if (msg.type === 's2WatchHeartbeat') { reply(await s2WatchHeartbeat(msg.sessionId)); }
-    else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.platform, msg.videoRef)); }
+    else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.platform, msg.videoRef, msg.mode)); }
     else if (msg.type === 's2KickCheckin') { reply(await s2KickCheckin()); }
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }

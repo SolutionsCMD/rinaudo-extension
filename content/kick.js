@@ -18,8 +18,11 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 // --- Watchtime widget state ---
-let wtFrame = null;   // second RGCFrame, independent of the poll frame
-let wtEarned = 0;     // running session total (cosmetic, resets on page reload)
+let wtFrame = null;    // second RGCFrame, independent of the poll frame
+let wtHourEarned = 0;  // server-credited tickets this epoch-hour (chat + extension combined)
+let wtPerHour = 0;     // this user's hourly rate, from the server
+let wtOffline = false; // last checkin said stream_offline / watchtime_disabled
+let wtConnect = false; // last checkin said not_connected (show connect prompt)
 let wtPlaying = false;
 let wtMuted = false;
 
@@ -60,17 +63,19 @@ function drawWtWidget(status) {
     if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
     return;
   }
-  if (status === 'required') {
+  if (status === 'required' || status === 'connect') {
     ensureWtFrame();
     const body = wtFrame.body;
     body.replaceChildren();
     const row = document.createElement('div'); row.className = 'row';
     const lbl = document.createElement('span'); lbl.className = 'lbl';
-    lbl.textContent = '🎟 Like & comment to earn';
+    lbl.textContent = status === 'connect' ? '🎟 Connect to earn' : '🎟 Like & comment to earn';
     row.append(lbl);
     body.append(row);
     const sub = document.createElement('div'); sub.className = 'sub';
-    sub.textContent = 'Required for watchtime';
+    sub.textContent = status === 'connect'
+      ? 'Open the extension popup and connect with Kick'
+      : 'Required for watchtime';
     body.append(sub);
     wtFrame.setPill('🎟');
     return;
@@ -83,27 +88,30 @@ function drawWtWidget(status) {
   const lbl = document.createElement('span'); lbl.className = 'lbl';
   const amt = document.createElement('span'); amt.className = 'amt';
 
+  const capped = wtPerHour > 0 && wtHourEarned >= wtPerHour;
   if (status === 'playing') {
-    lbl.textContent = '▶ Watching';
-    amt.textContent = wtEarned > 0 ? `+${wtEarned} earned` : 'earning…';
+    lbl.textContent = capped ? '✓ Watching' : '▶ Watching';
+    amt.textContent = wtHourEarned > 0 ? `+${wtHourEarned} this hour` : 'earning…';
   } else if (status === 'muted') {
     lbl.textContent = '🔇 Unmute to earn';
-    amt.textContent = '';
+    amt.textContent = wtHourEarned > 0 ? `+${wtHourEarned} this hour` : '';
   } else {
     lbl.textContent = '⏸ Paused';
-    amt.textContent = '';
+    amt.textContent = wtHourEarned > 0 ? `+${wtHourEarned} this hour` : '';
   }
 
   row.append(lbl, amt);
   body.append(row);
 
-  if (status === 'playing' && wtEarned > 0) {
+  if (status === 'playing') {
     const sub = document.createElement('div'); sub.className = 'sub';
-    sub.textContent = 'Keep tab open & unmuted';
+    sub.textContent = capped
+      ? `Hourly max earned (${wtPerHour}/hr) — resets next hour`
+      : 'Keep tab open & unmuted';
     body.append(sub);
   }
 
-  wtFrame.setPill(wtEarned > 0 ? `+${wtEarned}` : '🎟');
+  wtFrame.setPill(capped ? '✓' : wtHourEarned > 0 ? `+${wtHourEarned}` : '🎟');
 }
 
 function ensureFrame() {
@@ -163,6 +171,45 @@ tick();
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
 
 // --- Kick watchtime: send checkin every 60s while stream is playing ---
+
+// Kick pages can hold several <video> elements (sidebar hover-previews, clip
+// players) that are muted autoplay. querySelector('video') used to grab whichever
+// came first in the DOM, so the widget read mute/pause state off the wrong player
+// and told unmuted viewers to unmute. The live player is by far the largest —
+// pick the biggest rendered video instead.
+function mainVideo() {
+  let best = null, bestArea = 0;
+  for (const v of document.querySelectorAll('video')) {
+    const r = v.getBoundingClientRect();
+    const area = r.width * r.height;
+    if (area > bestArea) { best = v; bestArea = area; }
+  }
+  return best;
+}
+
+// Local player status. Cheap (no network) — safe to poll frequently so the
+// widget reacts to mute/pause changes in seconds, not at the next 60s checkin.
+function wtStatus() {
+  const v = mainVideo();
+  const live = v && !v.paused && !v.ended && v.currentTime > 0;
+  const audible = !!(v && !v.muted && v.volume > 0);
+  const visible = document.visibilityState === 'visible';
+  wtPlaying = !!(live && audible && visible);
+  wtMuted = !!(live && visible && !audible);
+  return wtPlaying ? 'playing' : wtMuted ? 'muted' : 'paused';
+}
+
+// Fast UI-only refresh: redraw from local player state, no network.
+function wtUiTick() {
+  if (!location.pathname.toLowerCase().startsWith('/mizkif')) {
+    if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    return;
+  }
+  if (wtOffline) { drawWtWidget('offline'); return; }
+  if (wtConnect) { drawWtWidget('connect'); return; }
+  drawWtWidget(wtStatus());
+}
+
 async function wtTick() {
   // Kick is a SPA: the content script survives client-side navigation to other channels.
   // Guard so we only earn (and show the widget) while actually on Mizkif's channel.
@@ -171,16 +218,9 @@ async function wtTick() {
     return;
   }
 
-  const v = document.querySelector('video');
-  const live = v && !v.paused && !v.ended && v.currentTime > 0;
-  const audible = !!(v && !v.muted && v.volume > 0);
-  const visible = document.visibilityState === 'visible';
-
-  wtPlaying = !!(live && audible && visible);
-  wtMuted = !!(live && visible && !audible);
-
+  const status = wtStatus();
   if (!wtPlaying) {
-    drawWtWidget(wtMuted ? 'muted' : 'paused');
+    if (!wtOffline && !wtConnect) drawWtWidget(status);
     return;
   }
 
@@ -191,24 +231,35 @@ async function wtTick() {
   // watchtime master switch off. Without the watchtime_disabled case the card would keep
   // saying "▶ Watching / earning…" while no tickets are actually being credited.
   if (result.reason === 'stream_offline' || result.reason === 'watchtime_disabled') {
+    wtOffline = true;
     drawWtWidget('offline');
     return;
   }
+  wtOffline = false;
+  if (result.reason === 'not_connected') {
+    wtConnect = true;
+    drawWtWidget('connect');
+    return;
+  }
+  wtConnect = false;
   if (result.reason === 'engagement_required') {
     drawWtWidget('required');
     return;
   }
-  // Accumulate the per-checkin delta locally. The server's totalEarned is now a
-  // per-epoch-hour figure (shared cap with chat watchtime) and resets each hour,
-  // so mirroring it would make this counter jump backwards. Summing `awarded`
-  // keeps it a monotonic session total, matching what the server actually credited.
-  if (result.ok && result.awarded > 0) {
-    wtEarned += result.awarded;
+  // Mirror the server's per-hour truth. totalEarned counts everything credited this
+  // epoch-hour (chat watchtime + extension combined) — chatting earns the full hourly
+  // rate up front, so extension checkins often award 0 while the viewer HAS earned.
+  // Showing the hour total (and a "max earned" state) instead of a session sum stops
+  // the widget from sitting on "earning…" forever for active chatters.
+  if (result.ok) {
+    wtHourEarned = Number(result.totalEarned) || 0;
+    wtPerHour = Number(result.perHour) || 0;
   }
   drawWtWidget('playing');
 }
 
 setInterval(wtTick, 60_000);
+setInterval(wtUiTick, 5_000);
 wtTick(); // run once on load so widget appears immediately if stream is live
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') wtTick();

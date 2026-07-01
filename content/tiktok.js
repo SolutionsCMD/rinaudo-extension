@@ -24,6 +24,7 @@
       // shares a container with the comment box.
       const b = t.closest('[role="button"], button');
       if (!b) return null;
+      if (b.closest('[data-e2e*="like-icon"]')) return null; // the like control is never a comment submit
       let el = b;
       for (let i = 0; i < 8; i++) {
         el = el.parentElement; if (!el) break;

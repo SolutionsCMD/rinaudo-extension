@@ -86,6 +86,28 @@ self.EngageCore = (function () {
       if (!playing) r.classList.add('paused');
       return r;
     }
+    // "Watch again for +N" — a second timer shown once the base watch is done, for eligible
+    // targets (TikTok / YouTube Shorts). The clip just loops, so this is seamless: the timer
+    // reads as a continuation of the first (base → 2×base) even though the extra watch needed
+    // is only one more base length.
+    function replayRow() {
+      const rw = state.replayReward || 1;
+      if (state.replayAllDone) return rowEl('Watched again', `+${rw * (state.replayUsed || 1)}`, 'done');
+      const base = state.baseTarget || state.target || 0;
+      const shownWatched = base + (state.watched || 0);
+      const shownTarget = base + (state.target || base); // ≈ 2×base
+      if (state.claiming) return rowEl(`Watch again ${fmt(shownWatched)} / ${fmt(shownTarget)}`, '', 'pending');
+      const playing = state.watchPlaying;
+      const suffix = playing ? '' : (state.watchMuted ? ' · unmute to earn' : ' · paused');
+      const icon = playing ? '▶' : (state.watchMuted ? '🔇' : '⏸');
+      const r = rowEl(`${icon} Watch again ${fmt(shownWatched)} / ${fmt(shownTarget)}${suffix}`, `+${rw}`, 'idle');
+      if (!playing) r.classList.add('paused');
+      return r;
+    }
+    // Does this target offer a second-watch reward the user hasn't exhausted?
+    function replayAvailable() {
+      return !!(state && state.replayEligible && (state.replayMax || 0) > 0);
+    }
     function hint(text) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = text; return h; }
     function drawWidget() {
       if (!state) return;
@@ -95,13 +117,18 @@ self.EngageCore = (function () {
         body.append(watchRow());
         if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough — like & comment on this post to collect its tickets'));
         else if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
+        // Second-watch row: appears seamlessly once the base watch is collected.
+        if (state.watchDone && replayAvailable()) {
+          body.append(replayRow());
+          if (!state.replayAllDone) body.append(hint('Keep watching for one more ticket'));
+        }
       }
       if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
       if (A.actions.comment) {
         body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
         if (state.commentS === 'idle') body.append(hint('Comment must be more than 5 characters'));
       }
-      const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0);
+      const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
       frame.setPill(earned ? `+${earned}` : '🎟');
     }
     function clearWidget() { if (frame) { frame.destroy(); frame = null; } state = null; }
@@ -137,6 +164,10 @@ self.EngageCore = (function () {
       }
       // Click path: the post/submit button was pressed.
       document.addEventListener('click', (e) => {
+        // A like (or other action-bar) click must never be mistaken for a comment submit —
+        // on TikTok the like control shares the action bar with the comment box, so without
+        // this guard clicking Like would auto-credit the comment too.
+        if (A.likeTarget && A.likeTarget(e.target)) return;
         if (A.commentSubmitTarget(e.target)) trySubmit();
       }, true);
       // Keyboard path: Enter in the comment input box (TikTok & YouTube submit on Enter).
@@ -199,10 +230,51 @@ self.EngageCore = (function () {
         state.watchBlocked = false;
         state.awarded = r.ok ? (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)) : null;
         setDone(state.ref, { watch: true, awarded: state.awarded });
+        // Seamlessly roll into the second-watch timer if this target offers replays.
+        if (replayAvailable() && (state.replayUsed || 0) < (state.replayMax || 0)) maybeStartReplay();
+        else if (replayAvailable()) state.replayAllDone = true;
       } else if (r && r.reason === 'engagement_required') {
         // Watch time is satisfied; the reward is held until the user likes AND comments.
         state.watchBlocked = true;
       }
+      drawWidget();
+    }
+
+    // Open a fresh watch session for a "watch again" pass. The base watch's target is saved
+    // as baseTarget (for the continuation display) before state.target is reset to the new
+    // session's requirement. Idempotent-ish: guarded so the 5s loop can safely re-attempt.
+    async function maybeStartReplay() {
+      if (!state || !state.watchDone || !replayAvailable()) return;
+      if (state.replaying || state.replayStarting || state.replayAllDone) return;
+      if ((state.replayUsed || 0) >= (state.replayMax || 0)) { state.replayAllDone = true; return; }
+      state.replayStarting = true;
+      if (!state.baseTarget) state.baseTarget = state.target || 0;
+      const v = A.getVideoEl();
+      const dur = (v && isFinite(v.duration) && v.duration > 0) ? Math.round(v.duration) : 0;
+      const s = await chrome.runtime.sendMessage({ type: 's2WatchSession', platform: A.platform, videoRef: state.ref, playerDuration: dur }).catch(() => null);
+      if (!state || state.ref !== A.getRef()) return;
+      state.replayStarting = false;
+      if (!s || s.error || !s.sessionId) return; // backend not ready — the loop will retry
+      state.sessionId = s.sessionId; state.hbInterval = s.heartbeatIntervalSec || state.hbInterval || 20;
+      state.watched = 0;
+      state.target = effectiveTarget(s.requiredWatchSeconds, s.requiredHeartbeats, state.hbInterval);
+      if (!state.baseTarget) state.baseTarget = state.target;
+      state.replaying = true;
+      drawWidget();
+    }
+    async function claimReplayWatch() {
+      if (!state || !state.replaying || state.claiming) return;
+      state.claiming = true; drawWidget();
+      const r = await chrome.runtime.sendMessage({ type: 's2WatchClaim', platform: A.platform, videoRef: state.ref, mode: 'replay' }).catch(() => null);
+      state.claiming = false;
+      if (r && (r.ok || r.reason === 'replay_exhausted')) {
+        state.replaying = false;
+        state.sessionId = null;
+        state.replayUsed = r.ok ? (r.used != null ? r.used : (state.replayUsed || 0) + 1) : (state.replayMax || 0);
+        if ((state.replayUsed || 0) >= (state.replayMax || 0)) state.replayAllDone = true;
+        else maybeStartReplay(); // more slots left — roll straight into the next pass
+      }
+      // not_qualified / transient: keep accruing; the 5s loop retries the claim.
       drawWidget();
     }
 
@@ -232,10 +304,19 @@ self.EngageCore = (function () {
       if (srv.like && !local.like) setDone(ref, { like: true });
       if (srv.comment && !local.comment) setDone(ref, { comment: true });
       if (srv.watch && !local.watch) setDone(ref, { watch: true });
+      // "Watch again" replay config for this target (server-gated: present only for eligible
+      // TikTok / YouTube Shorts). Absent → the second-watch timer never shows.
+      const rep = srv.replay || null;
+      const replayUsed = rep ? (rep.used || 0) : 0;
+      const replayMax = rep ? (rep.max || 0) : 0;
       state = { ref, watched: 0, target: 0, sessionId: null,
         watchDone, awarded: local.awarded != null ? local.awarded : null,
         watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
-        likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle' };
+        likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle',
+        replayEligible: !!(rep && rep.eligible), replayMax, replayUsed,
+        replayReward: rep ? (rep.reward || 1) : 1,
+        replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
+        baseTarget: 0 };
       lastHb = 0; hookComment(); hookLike(); drawWidget();
       if (!state.watchDone) startWatch();
     }
@@ -244,7 +325,17 @@ self.EngageCore = (function () {
     setInterval(() => {
       if (!state || state.ref !== A.getRef()) return;
       if (A.actions.like && state.likeS === 'idle' && A.isLiked()) fireEngagement('like');
-      if (!A.actions.watch || !state.sessionId || state.watchDone) return;
+      if (!A.actions.watch) return;
+      // Seamless second watch: once the base watch is done and slots remain, keep a replay
+      // session alive (self-heals if the session start ever failed) until one is running.
+      if (state.watchDone && !state.replaying && !state.replayAllDone && replayAvailable()
+          && (state.replayUsed || 0) < (state.replayMax || 0) && !state.replayStarting) {
+        maybeStartReplay();
+      }
+      if (!state.sessionId) return;
+      // Pause accrual between the base watch finishing and a replay session being active
+      // (and forever once all replays are used up).
+      if (state.watchDone && !state.replaying) return;
       const v = A.getVideoEl();
       const live = v && !v.paused && !v.ended && v.currentTime > 0;
       const audible = !!(v && !v.muted && v.volume > 0); // must be watching with sound, not idling muted
@@ -263,7 +354,8 @@ self.EngageCore = (function () {
       // Claim once watched enough. If the reward is blocked on engagement, don't
       // re-hammer the server every 5s — only retry the claim once like AND comment land.
       if ((state.watched || 0) >= (state.target || 120)) {
-        if (!state.watchBlocked) claimWatch();
+        if (state.replaying) claimReplayWatch();
+        else if (!state.watchBlocked) claimWatch();
         else if (state.likeS === 'done' && state.commentS === 'done') claimWatch();
       }
     }, 5000);
