@@ -274,6 +274,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 // --- Notifications: Kick go-live + new YouTube upload + new TikTok/IG/X post ---
 // Polled on the 30s alarm against the public status feed (no login needed). Seeds
 // last-seen silently on first run so installing never spams old items.
+
+// Quiet window for the Kick go-live toast: never notify on weekends, or overnight
+// (8pm–8am America/New_York) any day. Go-live toast only — other notifications
+// (uploads, posts, earn targets) are unaffected.
+function inKickQuietWindow(now = new Date()) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', hour12: false }).formatToParts(now);
+  const wd = p.find((x) => x.type === 'weekday').value;
+  let hr = parseInt(p.find((x) => x.type === 'hour').value, 10);
+  if (hr === 24) hr = 0; // some engines emit '24' for midnight
+  const weekend = wd === 'Sat' || wd === 'Sun';
+  const night = hr >= 20 || hr < 8; // 8pm–8am ET
+  return weekend || night;
+}
+
+// Is this YouTube upload a Short? The public feed only gives /watch URLs, so probe
+// youtube.com/shorts/<id> (host permission granted): a real Short serves 200, a regular
+// video 3xx-redirects to /watch (status 0 / opaqueredirect under manual). Errors → treat
+// as a normal video. Body is cancelled so nothing large downloads.
+async function isYouTubeShort(videoId) {
+  try {
+    const res = await fetch(`https://www.youtube.com/shorts/${videoId}`, { redirect: 'manual' });
+    try { if (res.body) res.body.cancel(); } catch { /* ignore */ }
+    return res.status === 200;
+  } catch { return false; }
+}
+
 async function checkSignals() {
   const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   if (!r) return;
@@ -285,18 +311,19 @@ async function checkSignals() {
   (r.latestVideos || []).forEach((v) => { if (v.videoId) nowVideos[v.channelId] = v.videoId; });
 
   if (seen) {
-    if (r.streamLive && !seen.live && prefOn(prefs, 'kick')) {
+    if (r.streamLive && !seen.live && prefOn(prefs, 'kick') && !inKickQuietWindow()) {
       const id = `live-${Date.now()}`;
       notifUrls[id] = r.channelUrl;
       chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/kick.png', title: 'Mizkif is live on Kick', message: 'The stream just went live — tap to watch.', priority: 2 });
     }
-    (r.latestVideos || []).forEach((v) => {
+    for (const v of (r.latestVideos || [])) {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
         const id = `vid-${v.videoId}`;
         notifUrls[id] = homepageFor(v.url);
-        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube video — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : 'New upload — search for it on YouTube.', priority: 2 });
+        const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
+        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube ${kind} — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : `New ${kind} — search for it on YouTube.`, priority: 2 });
       }
-    });
+    }
     const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New Instagram — Mizkif', twitter: 'New X post — Mizkif' };
     const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
     (r.latestSocial || []).forEach((s) => {
