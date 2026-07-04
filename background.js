@@ -314,7 +314,7 @@ async function checkSignals() {
     if (r.streamLive && !seen.live && prefOn(prefs, 'kick') && !inKickQuietWindow()) {
       const id = `live-${Date.now()}`;
       notifUrls[id] = r.channelUrl;
-      chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/kick.png', title: 'Mizkif is live on Kick', message: 'The stream just went live — tap to watch.', priority: 2 });
+      chrome.notifications.create(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live — vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
     }
     for (const v of (r.latestVideos || [])) {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
@@ -345,6 +345,12 @@ chrome.notifications.onClicked.addListener(async (id) => {
   chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
   chrome.notifications.clear(id);
 });
+// Action buttons ("Watch now" / "Search & watch") open the same destination as the body.
+chrome.notifications.onButtonClicked.addListener(async (id) => {
+  const { notifUrls } = await chrome.storage.local.get('notifUrls');
+  chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
+  chrome.notifications.clear(id);
+});
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('poll', { periodInMinutes: 0.5 });
   updateBadge();
@@ -354,6 +360,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 // Fires once per new target ref when the admin adds a YouTube/TikTok/IG/X post.
 const TARGET_ICONS = { youtube: 'icons/youtube.png', tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', x: 'icons/x.png' };
 const TARGET_TITLES = { youtube: 'New YouTube target — earn tickets', tiktok: 'New TikTok target — earn tickets', instagram: 'New Instagram target — earn tickets', x: 'New X target — earn tickets' };
+const PLATFORM_NAME = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', x: 'X' };
 async function checkNewTargets() {
   const data = await s2Targets();
   const refs = (data.targets || []).map((t) => `${t.platform}:${t.ref}`);
@@ -377,11 +384,17 @@ async function checkNewTargets() {
     if (!prefOn(prefs, t.platform)) continue; // user muted this platform — seen, but no toast
     const id = `target-${key}`;
     notifUrls[id] = homepageFor(t.url || '');
+    // Exact ticket value comes from the server per target (watch payout). Fall back to a
+    // generic line if it's missing (older server).
+    const n = Number(t.reward) || 0;
+    const earn = n > 0 ? `Get ${n} ticket${n === 1 ? '' : 's'}` : 'Earn tickets';
     chrome.notifications.create(id, {
-      type: 'basic',
+      type: 'image',
       iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
-      title: TARGET_TITLES[t.platform] || 'New earn target',
-      message: t.label ? `${t.label} — search for it to earn tickets.` : 'Search for the new post to earn tickets.',
+      imageUrl: 'icons/notif-earn.png',
+      title: `🎟 ${earn} — ${PLATFORM_NAME[t.platform] || 'new post'}`,
+      message: t.label ? `${t.label} — search & watch to earn.` : `${earn}: search & watch the new post.`,
+      buttons: [{ title: 'Search & watch' }],
       priority: 2,
     });
   }
