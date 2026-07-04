@@ -300,6 +300,39 @@ async function isYouTubeShort(videoId) {
   } catch { return false; }
 }
 
+// Build a crop-safe toast image from a YouTube thumbnail. Chrome cover-crops notification
+// images to ~2:1, lopping the top/bottom off a 16:9 thumb — so we letterbox it onto the
+// brand background at 2:1 first (via OffscreenCanvas in the worker). Tries maxres→mq→hq.
+// Returns a JPEG data URL, or null on any failure so the caller can fall back to a banner.
+async function youtubeThumbCard(videoId) {
+  try {
+    let bmp = null;
+    for (const q of ['maxresdefault', 'mqdefault', 'hqdefault']) {
+      try {
+        const blob = await fetch(`https://i.ytimg.com/vi/${videoId}/${q}.jpg`).then((r) => (r.ok ? r.blob() : null));
+        if (blob && blob.size > 1024) { bmp = await createImageBitmap(blob); break; }
+      } catch { /* try next quality */ }
+    }
+    if (!bmp) return null;
+    const W = 960, H = 480, RULE = 6;
+    const c = new OffscreenCanvas(W, H), x = c.getContext('2d');
+    x.fillStyle = '#141414'; x.fillRect(0, 0, W, H);
+    const s = Math.min(W / bmp.width, (H - RULE) / bmp.height);
+    const w = bmp.width * s, h = bmp.height * s;
+    x.drawImage(bmp, (W - w) / 2, (H - RULE - h) / 2, w, h);
+    x.fillStyle = '#C9A766'; x.fillRect(0, H - RULE, W, RULE); // brand rule along the bottom
+    const out = await c.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+    return await new Promise((res) => { const f = new FileReader(); f.onload = () => res(f.result); f.onerror = () => res(null); f.readAsDataURL(out); });
+  } catch { return null; }
+}
+
+// Toast image for an earn target: YouTube → composited thumbnail; everything else → the
+// static gold banner (TikTok/IG/X have no clean thumbnail-by-id). Never throws.
+async function earnToastImage(platform, ref) {
+  if (platform === 'youtube') return (await youtubeThumbCard(ref)) || 'icons/notif-earn.png';
+  return 'icons/notif-earn.png';
+}
+
 async function checkSignals() {
   const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   if (!r) return;
@@ -321,7 +354,9 @@ async function checkSignals() {
         const id = `vid-${v.videoId}`;
         notifUrls[id] = homepageFor(v.url);
         const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
-        chrome.notifications.create(id, { type: 'basic', iconUrl: 'icons/youtube.png', title: `New YouTube ${kind} — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : `New ${kind} — search for it on YouTube.`, priority: 2 });
+        const img = await youtubeThumbCard(v.videoId);
+        const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind} — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : `New ${kind} — search for it on YouTube.`, priority: 2 };
+        chrome.notifications.create(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
       }
     }
     const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New Instagram — Mizkif', twitter: 'New X post — Mizkif' };
@@ -391,7 +426,7 @@ async function checkNewTargets() {
     chrome.notifications.create(id, {
       type: 'image',
       iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
-      imageUrl: 'icons/notif-earn.png',
+      imageUrl: await earnToastImage(t.platform, t.ref),
       title: `🎟 ${earn} — ${PLATFORM_NAME[t.platform] || 'new post'}`,
       message: t.label ? `${t.label} — search & watch to earn.` : `${earn}: search & watch the new post.`,
       buttons: [{ title: 'Search & watch' }],
