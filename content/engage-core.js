@@ -170,12 +170,17 @@ self.EngageCore = (function () {
         if (A.likeTarget && A.likeTarget(e.target)) return;
         if (A.commentSubmitTarget(e.target)) trySubmit();
       }, true);
-      // Keyboard path: Enter in the comment input box (TikTok & YouTube submit on Enter).
-      document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || e.shiftKey) return;
-        if (!A.commentInputTarget || !A.commentInputTarget(e.target)) return;
-        trySubmit();
-      }, true);
+      // Keyboard path: Enter in the comment input box. Only for platforms that actually
+      // submit on Enter (TikTok, Instagram). YouTube inserts a newline on Enter and posts
+      // only via the Comment button (submitOnEnter:false) — so crediting on Enter there
+      // would falsely mark a comment the moment the user starts a second line.
+      if (A.submitOnEnter !== false) {
+        document.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter' || e.shiftKey) return;
+          if (!A.commentInputTarget || !A.commentInputTarget(e.target)) return;
+          trySubmit();
+        }, true);
+      }
     }
 
     // GESTURE-TRUST: credit the like the instant the user clicks the like control from a

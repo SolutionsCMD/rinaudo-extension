@@ -30,6 +30,9 @@
   const adapter = {
     platform: 'youtube',
     actions: { watch: true, like: true, comment: true },
+    // YouTube's comment box inserts a newline on Enter; you must click "Comment" to post.
+    // So don't trust Enter as a submit here — only the Comment-button click credits it.
+    submitOnEnter: false,
     refFromUrl(href) {
       try {
         const u = new URL(href);
