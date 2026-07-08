@@ -159,7 +159,11 @@ self.EngageCore = (function () {
       function trySubmit() {
         if (!state || state.commentS !== 'idle') return;
         const text = (A.commentText() || '').trim();
-        if (text.length <= 5) return; // quality gate — must be MORE than 5 chars
+        // Quality gate. YouTube requires a real comment (MORE than 10 words); other
+        // platforms keep the lighter MORE-than-5-characters gate.
+        if (A.platform === 'youtube') {
+          if (text.split(/\s+/).filter(Boolean).length <= 10) return;
+        } else if (text.length <= 5) return;
         fireEngagement('comment');
       }
       // Click path: the post/submit button was pressed.
@@ -307,12 +311,19 @@ self.EngageCore = (function () {
       // Like: trust the server's per-user flag as authoritative. ORing the local cache
       // would let a stale local "done" (written by the old transient-error bug) keep
       // suppressing the like even after the server says it was never earned.
+      // All three flags are server-authoritative (bearer-scoped). ORing the local cache
+      // would let a stale local "done" keep suppressing an action the server says is NOT
+      // earned — which also breaks target RE-RUNS: when a video is re-opened, the server
+      // reports the new epoch's like/comment/watch as not-done, and the card must reset so
+      // the member can earn again. Local cache is only used to heal toward the server value.
       const likeDone = !!srv.like;
-      const commentDone = !!(srv.comment || local.comment);
-      const watchDone = !!(srv.watch || local.watch);
+      const commentDone = !!srv.comment;
+      const watchDone = !!srv.watch;
       if (!srv.like && local.like) setDone(ref, { like: false }); // heal a stale cached "done"
       if (srv.like && !local.like) setDone(ref, { like: true });
+      if (!srv.comment && local.comment) setDone(ref, { comment: false });
       if (srv.comment && !local.comment) setDone(ref, { comment: true });
+      if (!srv.watch && local.watch) setDone(ref, { watch: false });
       if (srv.watch && !local.watch) setDone(ref, { watch: true });
       // "Watch again" replay config for this target (server-gated: present only for eligible
       // TikTok / YouTube Shorts). Absent → the second-watch timer never shows.
