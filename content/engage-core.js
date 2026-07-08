@@ -126,7 +126,7 @@ self.EngageCore = (function () {
       if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
       if (A.actions.comment) {
         body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
-        if (state.commentS === 'idle') body.append(hint('Comment must be more than 5 characters'));
+        if (state.commentS === 'idle') body.append(hint(state.commentMinWords > 0 ? `Comment must be more than ${state.commentMinWords} words` : 'Comment must be more than 5 characters'));
       }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
       frame.setPill(earned ? `+${earned}` : '🎟');
@@ -159,10 +159,11 @@ self.EngageCore = (function () {
       function trySubmit() {
         if (!state || state.commentS !== 'idle') return;
         const text = (A.commentText() || '').trim();
-        // Quality gate. YouTube requires a real comment (MORE than 10 words); other
-        // platforms keep the lighter MORE-than-5-characters gate.
-        if (A.platform === 'youtube') {
-          if (text.split(/\s+/).filter(Boolean).length <= 10) return;
+        // Quality gate. A target can require a minimum word count (state.commentMinWords —
+        // e.g. 10 on the Emiru re-run); otherwise the default is more than 5 characters.
+        const minWords = (state && state.commentMinWords) || 0;
+        if (minWords > 0) {
+          if (text.split(/\s+/).filter(Boolean).length <= minWords) return;
         } else if (text.length <= 5) return;
         fireEngagement('comment');
       }
@@ -334,6 +335,7 @@ self.EngageCore = (function () {
         watchDone, awarded: local.awarded != null ? local.awarded : null,
         watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle',
+        commentMinWords: (typeof target.commentMinWords === 'number' ? target.commentMinWords : 0),
         replayEligible: !!(rep && rep.eligible), replayMax, replayUsed,
         replayReward: rep ? (rep.reward || 1) : 1,
         replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
