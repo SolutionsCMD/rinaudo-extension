@@ -19,8 +19,13 @@ async function refreshS2() {
 $('s2connect').addEventListener('click', async () => {
   const btn = $('s2connect');
   btn.disabled = true;
-  await chrome.runtime.sendMessage({ type: 's2Connect' });
+  const r = await chrome.runtime.sendMessage({ type: 's2Connect' }).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
   btn.disabled = false;
+  // Surface the real failure instead of silently doing nothing (esp. the Firefox connect flow).
+  if (r && !r.ok && r.error) {
+    const s = $('s2status');
+    if (s) { s.textContent = 'Connect failed: ' + r.error; s.style.color = '#C2452A'; }
+  }
   refreshS2();
 });
 

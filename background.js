@@ -40,9 +40,13 @@ chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' &
 if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(updateBadge);
 
 async function s2Connect() {
-  const redirect = chrome.identity.getRedirectURL(); // https://<id>.chromiumapp.org/
+  // Prefer Firefox's native browser.identity (its chrome.* alias for launchWebAuthFlow is
+  // flaky); fall back to chrome.identity on Chromium.
+  const identity = (globalThis.browser && globalThis.browser.identity) || chrome.identity;
+  if (!identity || !identity.launchWebAuthFlow) throw new Error('identity.launchWebAuthFlow unavailable in this browser');
+  const redirect = identity.getRedirectURL(); // Chrome: <id>.chromiumapp.org · Firefox: <id>.extensions.allizom.org
   const url = `${S2.CONNECT_PAGE}?ext_redirect=${encodeURIComponent(redirect)}`;
-  const done = await chrome.identity.launchWebAuthFlow({ url, interactive: true });
+  const done = await identity.launchWebAuthFlow({ url, interactive: true });
   const code = new URL(done).searchParams.get('code');
   if (!code) throw new Error('no code in redirect');
   const r = await fetch(S2.API + S2.EXCHANGE, {
@@ -252,7 +256,7 @@ async function checkPoll() {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
-    if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); reply({ ok: !e }); }
+    if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); if (e) console.error('[rgc] s2Connect failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
