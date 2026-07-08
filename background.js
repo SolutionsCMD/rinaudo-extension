@@ -9,6 +9,15 @@ const S2 = self.S2;   // engagement + polls
 
 const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Token || null;
 
+// Firefox for Android implements neither the `notifications` nor the `windows` API. Touching
+// them at the top level (addListener) would throw and abort the whole background script —
+// which unregisters the onMessage listener and makes "Connect" fail with
+// "Could not establish connection. Receiving end does not exist." Feature-detect once and
+// guard every use, so connect + polling still work on mobile (just without toasts / pop-out).
+const HAS_NOTIFICATIONS = !!(chrome.notifications && chrome.notifications.create);
+const HAS_WINDOWS = !!(chrome.windows && chrome.windows.create);
+function notify(id, opts) { try { if (HAS_NOTIFICATIONS) chrome.notifications.create(id, opts); } catch { /* unsupported */ } }
+
 // Post/video notifications open the PLATFORM HOMEPAGE, not the direct video URL, so
 // members search for it themselves — search demand + in-app discovery is a stronger
 // signal to the platform's algorithm than an external deep-link. Unknown hosts (e.g.
@@ -225,6 +234,7 @@ async function focusedOnKick() {
 
 // Pop the vote window, reusing one if already open.
 async function openVoteWindow() {
+  if (!HAS_WINDOWS) return; // no separate pop-out window on Firefox Android
   const { voteWin } = await chrome.storage.local.get('voteWin');
   if (voteWin != null) {
     try { await chrome.windows.update(voteWin, { focused: true, drawAttention: true }); return; } catch { /* gone */ }
@@ -232,7 +242,7 @@ async function openVoteWindow() {
   const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 360, height: 320, focused: true });
   await chrome.storage.local.set({ voteWin: w.id });
 }
-chrome.windows.onRemoved.addListener(async (id) => {
+if (HAS_WINDOWS) chrome.windows.onRemoved.addListener(async (id) => {
   const { voteWin } = await chrome.storage.local.get('voteWin');
   if (id === voteWin) await chrome.storage.local.remove('voteWin');
 });
@@ -349,7 +359,7 @@ async function checkSignals() {
     if (r.streamLive && !seen.live && prefOn(prefs, 'kick') && !inKickQuietWindow()) {
       const id = `live-${Date.now()}`;
       notifUrls[id] = r.channelUrl;
-      chrome.notifications.create(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live — vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
+      notify(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live — vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
     }
     for (const v of (r.latestVideos || [])) {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
@@ -358,7 +368,7 @@ async function checkSignals() {
         const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
         const img = await youtubeThumbCard(v.videoId);
         const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind} — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : `New ${kind} — search for it on YouTube.`, priority: 2 };
-        chrome.notifications.create(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
+        notify(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
       }
     }
     const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New Instagram — Mizkif', twitter: 'New X post — Mizkif' };
@@ -368,7 +378,7 @@ async function checkSignals() {
       if (s.url && prev && s.url !== prev && prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) {
         const id = `soc-${s.platform}-${Date.now()}`;
         notifUrls[id] = homepageFor(s.url);
-        chrome.notifications.create(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title} — open the app and search for it.` : 'New post — open the app and search for it.', priority: 2 });
+        notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title} — open the app and search for it.` : 'New post — open the app and search for it.', priority: 2 });
       }
     });
   }
@@ -377,17 +387,19 @@ async function checkSignals() {
   await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos, social: nowSocial }, notifUrls });
 }
 
-chrome.notifications.onClicked.addListener(async (id) => {
-  const { notifUrls } = await chrome.storage.local.get('notifUrls');
-  chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
-  chrome.notifications.clear(id);
-});
-// Action buttons ("Watch now" / "Search & watch") open the same destination as the body.
-chrome.notifications.onButtonClicked.addListener(async (id) => {
-  const { notifUrls } = await chrome.storage.local.get('notifUrls');
-  chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
-  chrome.notifications.clear(id);
-});
+if (HAS_NOTIFICATIONS) {
+  chrome.notifications.onClicked.addListener(async (id) => {
+    const { notifUrls } = await chrome.storage.local.get('notifUrls');
+    chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
+    chrome.notifications.clear(id);
+  });
+  // Action buttons ("Watch now" / "Search & watch") open the same destination as the body.
+  chrome.notifications.onButtonClicked.addListener(async (id) => {
+    const { notifUrls } = await chrome.storage.local.get('notifUrls');
+    chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
+    chrome.notifications.clear(id);
+  });
+}
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('poll', { periodInMinutes: 0.5 });
   updateBadge();
@@ -425,7 +437,7 @@ async function checkNewTargets() {
     // generic line if it's missing (older server).
     const n = Number(t.reward) || 0;
     const earn = n > 0 ? `Get ${n} ticket${n === 1 ? '' : 's'}` : 'Earn tickets';
-    chrome.notifications.create(id, {
+    notify(id, {
       type: 'image',
       iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
       imageUrl: await earnToastImage(t.platform, t.ref),
@@ -454,7 +466,7 @@ async function checkManualPush() {
   const urls = notifUrls || {};
   urls[id] = homepageFor(push.url);
 
-  chrome.notifications.create(id, {
+  notify(id, {
     type: 'basic',
     iconUrl: 'icons/youtube.png',
     title: push.title,
