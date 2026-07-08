@@ -39,16 +39,19 @@ async function updateBadge() {
 chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.s2Token) updateBadge(); });
 if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(updateBadge);
 
+// Tab-based connect: open the connect page in a normal browser tab. The user logs in with
+// Kick there; the page finishes the handshake and lands on ?code=<code>, which the injected
+// content-script (content/connect.js) posts back as an 's2ConnectCode' message. This works
+// everywhere — Chrome, Firefox, and mobile — with no chrome.identity / launchWebAuthFlow
+// (which is unsupported on Firefox Android and flaky on Firefox desktop).
 async function s2Connect() {
-  // Prefer Firefox's native browser.identity (its chrome.* alias for launchWebAuthFlow is
-  // flaky); fall back to chrome.identity on Chromium.
-  const identity = (globalThis.browser && globalThis.browser.identity) || chrome.identity;
-  if (!identity || !identity.launchWebAuthFlow) throw new Error('identity.launchWebAuthFlow unavailable in this browser');
-  const redirect = identity.getRedirectURL(); // Chrome: <id>.chromiumapp.org · Firefox: <id>.extensions.allizom.org
-  const url = `${S2.CONNECT_PAGE}?ext_redirect=${encodeURIComponent(redirect)}`;
-  const done = await identity.launchWebAuthFlow({ url, interactive: true });
-  const code = new URL(done).searchParams.get('code');
-  if (!code) throw new Error('no code in redirect');
+  await chrome.tabs.create({ url: S2.CONNECT_PAGE });
+}
+
+// Exchange the one-time code (from the connect tab) for a session token, store it (which
+// auto-clears the "!" badge via the storage listener), and close the tab.
+async function s2ExchangeCode(code, tabId) {
+  if (!code) throw new Error('no code');
   const r = await fetch(S2.API + S2.EXCHANGE, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
   });
@@ -56,6 +59,7 @@ async function s2Connect() {
   const { token } = await r.json();
   if (!token) throw new Error('no token in exchange response');
   await chrome.storage.local.set({ s2Token: token });
+  if (tabId != null) { try { await chrome.tabs.remove(tabId); } catch { /* already closed */ } }
 }
 
 // Opaque per-install device token — a random id WE generate (NOT a fingerprint, hardware
@@ -257,6 +261,7 @@ async function checkPoll() {
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
     if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); if (e) console.error('[rgc] s2Connect failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
+    else if (msg.type === 's2ConnectCode') { const e = await s2ExchangeCode(msg.code, _sender && _sender.tab && _sender.tab.id).then(() => null).catch((x) => x); if (e) console.error('[rgc] s2ExchangeCode failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
