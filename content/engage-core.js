@@ -186,6 +186,15 @@ self.EngageCore = (function () {
           trySubmit();
         }, true);
       }
+      // Ctrl/Cmd+Enter submit — X posts replies (including thread replies) this way, and
+      // plain Enter there is just a newline. Opt-in per adapter so it never misfires elsewhere.
+      if (A.submitOnCtrlEnter) {
+        document.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
+          if (A.commentInputTarget && !A.commentInputTarget(e.target)) return;
+          trySubmit();
+        }, true);
+      }
     }
 
     // GESTURE-TRUST: credit the like the instant the user clicks the like control from a

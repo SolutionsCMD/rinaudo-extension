@@ -15,6 +15,10 @@
     getRef() { return this.refFromPath(location.pathname); },
     isLiked() { return !!document.querySelector('[data-testid="unlike"]'); },
     commentSubmitTarget(t) { return t && t.closest ? t.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]') : null; },
+    // On X, plain Enter is a newline — replies post via the Reply button OR Cmd/Ctrl+Enter.
+    submitOnEnter: false,
+    submitOnCtrlEnter: true,
+    commentInputTarget(t) { return t && t.closest ? t.closest('[data-testid^="tweetTextarea_"], [role="textbox"]') : null; },
     commentText() {
       for (const el of document.querySelectorAll('[data-testid^="tweetTextarea_"]')) {
         const v = (el.textContent || '').trim();
@@ -94,13 +98,22 @@
     const reply = e.target.closest && e.target.closest('[data-testid="reply"]');
     if (reply) { replyRef = cardRef(reply); return; }
     const submit = e.target.closest && e.target.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
-    if (submit && replyRef) {
-      const text = (adapter.commentText() || '').trim();
-      const ref = replyRef; replyRef = '';
-      if (text.length <= 5) return; // quality gate — must be MORE than 5 chars
-      chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'comment', ref })
-        .then((r) => { if (r && r.credited && r.awarded) toast(`${rewardText(xr.comment)} — commented`); })
-        .catch(() => {});
-    }
+    if (submit && replyRef) fireTimelineComment();
   }, true);
+
+  // Same inline reply, submitted via Cmd/Ctrl+Enter instead of the button.
+  document.addEventListener('keydown', (e) => {
+    if (onStatusPage()) return;
+    if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || !replyRef) return;
+    fireTimelineComment();
+  }, true);
+
+  function fireTimelineComment() {
+    const text = (adapter.commentText() || '').trim();
+    const ref = replyRef; replyRef = '';
+    if (!ref || text.length <= 5) return; // quality gate — must be MORE than 5 chars
+    chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'comment', ref })
+      .then((r) => { if (r && r.credited && r.awarded) toast(`${rewardText(xr.comment)} — commented`); })
+      .catch(() => {});
+  }
 })();
