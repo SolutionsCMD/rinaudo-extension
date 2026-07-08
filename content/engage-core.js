@@ -287,9 +287,14 @@ self.EngageCore = (function () {
       if (!ref) return clearWidget();
       if (state && state.ref === ref) return; // same video — don't reset progress on minor URL tweaks
       const data = await chrome.runtime.sendMessage({ type: 's2Targets' }).catch(() => null);
+      // X has its own like/comment reward (falls back to global when the server omits it).
+      // Show the per-platform amount so an X post reads "+3 / +2", not "Required".
+      const isX = A.platform === 'x';
+      const likeR = isX && data && data.xLikeReward != null ? data.xLikeReward : (data && data.likeReward);
+      const commentR = isX && data && data.xCommentReward != null ? data.xCommentReward : (data && data.commentReward);
       rewards = {
-        likeReward: (data && data.likeReward) || 0,
-        commentReward: (data && data.commentReward) || 0,
+        likeReward: likeR || 0,
+        commentReward: commentR || 0,
         watchVideoReward: (data && data.watchVideoReward) || 0,
         watchFloor: (data && data.watchVideoFloor) || 5,
         watchPerMinute: (data && data.watchTicketsPerMinute) || 1,
