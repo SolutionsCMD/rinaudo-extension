@@ -48,17 +48,10 @@ async function s2Connect() {
   await chrome.tabs.create({ url: S2.CONNECT_PAGE });
 }
 
-// Exchange the one-time code (from the connect tab) for a session token, store it (which
-// auto-clears the "!" badge via the storage listener), and close the tab.
-async function s2ExchangeCode(code, tabId) {
-  if (!code) throw new Error('no code');
-  const r = await fetch(S2.API + S2.EXCHANGE, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
-  });
-  if (!r.ok) throw new Error(`exchange failed: ${r.status}`);
-  const { token } = await r.json();
-  if (!token) throw new Error('no token in exchange response');
-  await chrome.storage.local.set({ s2Token: token });
+// The connect tab's content script (content/connect.js) does the code→token exchange itself
+// and stores s2Token directly (shared storage), which auto-clears the "!" badge via the
+// storage listener. All we do here is close that tab once it signals completion.
+async function s2ConnectDone(tabId) {
   if (tabId != null) { try { await chrome.tabs.remove(tabId); } catch { /* already closed */ } }
 }
 
@@ -261,7 +254,7 @@ async function checkPoll() {
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
     if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); if (e) console.error('[rgc] s2Connect failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
-    else if (msg.type === 's2ConnectCode') { const e = await s2ExchangeCode(msg.code, _sender && _sender.tab && _sender.tab.id).then(() => null).catch((x) => x); if (e) console.error('[rgc] s2ExchangeCode failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
+    else if (msg.type === 's2ConnectDone') { await s2ConnectDone(_sender && _sender.tab && _sender.tab.id); reply({ ok: true }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
