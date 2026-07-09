@@ -236,6 +236,9 @@ self.EngageCore = (function () {
       if (!s || s.error || !s.sessionId) return; // backend not ready / not the active target / not connected — watchdog will retry
       state.sessionId = s.sessionId; state.hbInterval = s.heartbeatIntervalSec || 20;
       state.target = effectiveTarget(s.requiredWatchSeconds, s.requiredHeartbeats, state.hbInterval);
+      // Resume the timer where earlier sittings left off — watch time now accumulates across
+      // refreshes on the server, so the card should reflect the banked progress, not restart at 0.
+      if (s.priorSeconds) state.watched = Math.max(state.watched || 0, s.priorSeconds);
       drawWidget();
     }
     async function claimWatch() {
