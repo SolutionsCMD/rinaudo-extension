@@ -27,5 +27,4 @@ self.S2 = {
   KICK_CHECKIN: '/api/extension/kick/checkin',
   PUSH: '/api/extension/push',
   VERSION: '/api/extension/version',
-  DEBUG: '/api/extension/debug',
 };
