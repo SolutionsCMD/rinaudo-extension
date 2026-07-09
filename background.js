@@ -156,6 +156,16 @@ async function s2Targets() {
   return r && r.ok ? r.json().catch(() => ({ targets: [], likeReward: 0, commentReward: 0 })) : { targets: [], likeReward: 0, commentReward: 0 };
 }
 
+// Fire-and-forget client diagnostics → server (bearer-auth). No PII (testids + lengths only).
+async function s2Debug(kind, data) {
+  const token = await getS2Token();
+  if (!token) return;
+  fetch(S2.API + S2.DEBUG, {
+    method: 'POST', headers: await s2Headers(token, true),
+    body: JSON.stringify({ kind, data }),
+  }).catch(() => {});
+}
+
 async function s2Engagement(platform, action, ref) {
   const token = await getS2Token();
   if (!token) return { credited: false };
@@ -268,6 +278,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
+    else if (msg.type === 's2Debug') { s2Debug(msg.kind || 'x', msg.data); reply({ ok: true }); }
     else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.platform, msg.videoRef, msg.playerDuration)); }
     else if (msg.type === 's2WatchHeartbeat') { reply(await s2WatchHeartbeat(msg.sessionId)); }
     else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.platform, msg.videoRef, msg.mode)); }

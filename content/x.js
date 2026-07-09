@@ -73,6 +73,25 @@
   refreshRewards(); setInterval(refreshRewards, 5 * 60000);
   const rewardText = (n) => (n > 0 ? `🎟 +${n}` : '✓');
 
+  // ---- Auto diagnostics (temporary) ---------------------------------------
+  // While a reply is being composed, report what the user clicks/keys so we can see which
+  // control X uses to submit — element testids + lengths ONLY, never the comment text.
+  function dbg(data) { try { chrome.runtime.sendMessage({ type: 's2Debug', kind: 'xcomment', data }); } catch { /* ignore */ } }
+  document.addEventListener('click', (e) => {
+    const txt = (adapter.commentText() || '').trim();
+    if (!txt) return; // only while writing a reply
+    const el = e.target.closest && e.target.closest('[data-testid],[role="button"],button');
+    const testid = el && (el.getAttribute('data-testid') || el.getAttribute('role') || el.tagName);
+    dbg({ ev: 'click', onStatus: onStatusPage(), textLen: txt.length, clickedTestid: testid || null,
+          submitMatched: !!adapter.commentSubmitTarget(e.target) });
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const txt = (adapter.commentText() || '').trim();
+    if (!txt) return;
+    dbg({ ev: 'key', onStatus: onStatusPage(), textLen: txt.length, meta: !!e.metaKey, ctrl: !!e.ctrlKey, shift: !!e.shiftKey });
+  }, true);
+
   // Inline LIKE: clicking a not-yet-liked like button on any card credits that tweet. The
   // server ignores non-target tweets (returns an error with no `credited` field), so only
   // in-window posts toast + credit; everything else is silent. Dedup per page session.

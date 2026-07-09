@@ -156,16 +156,33 @@ self.EngageCore = (function () {
     // enforce the "more than 5 characters" quality gate.
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
+      // Quality gate: YouTube (or any target) may require a minimum word count; else >5 chars.
+      function passesGate(text) {
+        const minWords = (state && state.commentMinWords) || 0;
+        if (minWords > 0) return text.split(/\s+/).filter(Boolean).length > minWords;
+        return text.length > 5;
+      }
       function trySubmit() {
         if (!state || state.commentS !== 'idle') return;
-        const text = (A.commentText() || '').trim();
-        // Quality gate. A target can require a minimum word count (state.commentMinWords —
-        // e.g. 10 on the Emiru re-run); otherwise the default is more than 5 characters.
-        const minWords = (state && state.commentMinWords) || 0;
-        if (minWords > 0) {
-          if (text.split(/\s+/).filter(Boolean).length <= minWords) return;
-        } else if (text.length <= 5) return;
+        if (!passesGate((A.commentText() || '').trim())) return;
         fireEngagement('comment');
+      }
+      // Robust fallback: some reply/submit controls (esp. X's) aren't caught by the exact
+      // selectors below. So after any plausible submit gesture we CONFIRM the post by watching
+      // the composer clear — a successful submit empties it regardless of how it was triggered.
+      // Guarded: only arms when a gate-passing reply is already typed; gives up after ~4s.
+      let confirmIv = null;
+      function watchForPostedComment() {
+        if (confirmIv || !state || state.commentS !== 'idle') return;
+        if (!passesGate((A.commentText() || '').trim())) return; // only a real, qualifying reply
+        let ticks = 0;
+        confirmIv = setInterval(() => {
+          ticks++;
+          if (!state || state.commentS !== 'idle') { clearInterval(confirmIv); confirmIv = null; return; }
+          const now = (A.commentText() || '').trim();
+          if (now.length === 0) { clearInterval(confirmIv); confirmIv = null; fireEngagement('comment'); } // posted
+          else if (ticks > 16) { clearInterval(confirmIv); confirmIv = null; } // ~4s: not a submit
+        }, 250);
       }
       // Click path: the post/submit button was pressed.
       document.addEventListener('click', (e) => {
@@ -173,7 +190,8 @@ self.EngageCore = (function () {
         // on TikTok the like control shares the action bar with the comment box, so without
         // this guard clicking Like would auto-credit the comment too.
         if (A.likeTarget && A.likeTarget(e.target)) return;
-        if (A.commentSubmitTarget(e.target)) trySubmit();
+        if (A.commentSubmitTarget(e.target)) { trySubmit(); return; } // fast path (known button)
+        watchForPostedComment(); // fallback: this click may be an unrecognized submit control
       }, true);
       // Keyboard path: Enter in the comment input box. Only for platforms that actually
       // submit on Enter (TikTok, Instagram). YouTube inserts a newline on Enter and posts
@@ -195,6 +213,10 @@ self.EngageCore = (function () {
           trySubmit();
         }, true);
       }
+      // Fallback for ALL keyboard submit styles (plain Enter, ⌘/Ctrl+Enter): arm the
+      // composer-clear confirmation. Safe on plain Enter where it's a newline — the box won't
+      // clear, so nothing credits.
+      document.addEventListener('keydown', (e) => { if (e.key === 'Enter') watchForPostedComment(); }, true);
     }
 
     // GESTURE-TRUST: credit the like the instant the user clicks the like control from a
