@@ -116,6 +116,7 @@ self.EngageCore = (function () {
       if (A.actions.watch && (state.sessionId || state.watchDone)) {
         body.append(watchRow());
         if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough — like & comment on this post to collect its tickets'));
+        else if (state.watchError && !state.watchDone) body.append(hint(watchErrText(state.watchError)));
         else if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
         // Second-watch row: appears seamlessly once the base watch is collected.
         if (state.watchDone && replayAvailable()) {
@@ -263,8 +264,20 @@ self.EngageCore = (function () {
       if (s.priorSeconds) state.watched = Math.max(state.watched || 0, s.priorSeconds);
       drawWidget();
     }
+    // Why a claim was refused, in plain language. Without this the card just sits at
+    // "Watch 1:00 / 0:52" forever retrying — the timer is local, so a user whose heartbeats
+    // never reach the server sees a full bar and no explanation.
+    function watchErrText(reason) {
+      if (reason === 'not_qualified') return 'No watch time counted yet — keep this tab visible with the video playing and unmuted.';
+      if (reason === 'no_reward') return 'This video is too old to earn tickets.';
+      if (reason === 'no_target') return 'This video is not collectable right now.';
+      return 'Could not collect — check your connection, then reload the page.';
+    }
     async function claimWatch() {
       if (!state || state.watchDone || state.claiming) return;
+      // Back off after a failure instead of hammering the claim every 5s.
+      if (state.watchError && Date.now() - (state.lastClaimTry || 0) < 15000) return;
+      state.lastClaimTry = Date.now();
       state.claiming = true; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2WatchClaim', platform: A.platform, videoRef: state.ref }).catch(() => null);
       state.claiming = false;
@@ -272,6 +285,7 @@ self.EngageCore = (function () {
       if (r && (r.ok || r.reason === 'already_claimed')) {
         state.watchDone = true;
         state.watchBlocked = false;
+        state.watchError = null;
         state.awarded = r.ok ? (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)) : null;
         setDone(state.ref, { watch: true, awarded: state.awarded });
         // Seamlessly roll into the second-watch timer if this target offers replays.
@@ -280,6 +294,10 @@ self.EngageCore = (function () {
       } else if (r && r.reason === 'engagement_required') {
         // Watch time is satisfied; the reward is held until the user likes AND comments.
         state.watchBlocked = true;
+        state.watchError = null;
+      } else {
+        // not_qualified / no_reward / no_target / network — tell the user instead of stalling.
+        state.watchError = (r && r.reason) || 'network';
       }
       drawWidget();
     }
