@@ -18,6 +18,9 @@ self.S2 = {
   ENGAGEMENT: '/api/extension/engagement',
   POLL: '/api/extension/poll',
   POLL_VOTE: '/api/extension/poll-vote',
+  // Stake-on-a-ticker rounds: GET → {round, me, connected}, POST →
+  // {action:'nominate'|'stake'|'join', ticker?, amount?}.
+  ROUND: '/api/extension/round',
   POLL_FAST_MS: 5000,
   // YouTube watch-to-earn (backend system already on s2; needs to accept the
   // extension bearer — see the backend handoff).

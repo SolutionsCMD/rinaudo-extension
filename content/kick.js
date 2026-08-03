@@ -116,8 +116,31 @@ function drawWtWidget(status) {
 
 function ensureFrame() {
   if (frame) return;
-  // Bottom-right, lifted clear of Kick's chat input box.
-  frame = self.RGCFrame.mount({ key: 'kick', title: 'Live Vote', width: 300, pos: { bottom: 104, right: 16 }, css: POLL_CSS });
+  // Bottom-right, lifted clear of Kick's chat input box. Stake panel shares the
+  // frame, so its stylesheet rides along with the poll sheet.
+  frame = self.RGCFrame.mount({ key: 'kick', title: 'Live Vote', width: 300, pos: { bottom: 104, right: 16 }, css: POLL_CSS + (self.RGCStake ? self.RGCStake.CSS : '') });
+}
+
+// Round actions go through the SW (bearer lives there), then refresh.
+function roundAction(action, ticker, amount) {
+  chrome.runtime.sendMessage({ type: 's2RoundAction', action, ticker, amount }).catch(() => {});
+  tick();
+}
+
+// Stake round panel (the desk's stake UI 1:1 via shared vote/stake-panel.js).
+// Returns true when a round is open and the frame shows it.
+function drawRound(data) {
+  if (!self.RGCStake || !data || !data.round) return false;
+  ensureFrame();
+  const status = data.round.status;
+  if (frame.setTitle) frame.setTitle(status === 'nominating' ? 'Suggestions' : status === 'joining' ? 'Final Window' : 'Live Stake');
+  const shown = self.RGCStake.render(frame.body, data, {
+    nominate: (t) => roundAction('nominate', t),
+    stake: (t, n) => roundAction('stake', t, n),
+    join: (n) => roundAction('join', undefined, n),
+  });
+  if (shown) frame.setPill('🎟 Stake');
+  return shown;
 }
 
 function render(poll, tally, mine, connected) {
@@ -156,6 +179,9 @@ async function tick() {
     clear();
     return;
   }
+  // A live stake round takes the card over (it reverts to polls when it ends).
+  const rd = await chrome.runtime.sendMessage({ type: 's2Round' }).catch(() => null);
+  if (rd && drawRound(rd)) return;
   const data = await chrome.runtime.sendMessage({ type: 's2Poll' }).catch(() => null);
   const poll = data && data.poll;
   if (!poll) return clear();
@@ -163,6 +189,7 @@ async function tick() {
   const serverMine = data.myVote == null ? null : Number(data.myVote);
   if (optimisticIdx != null && serverMine === optimisticIdx) optimisticIdx = null;
   const mine = optimisticIdx != null ? optimisticIdx : serverMine;
+  if (frame.setTitle) frame.setTitle('Live Vote');
   render(poll, data.tally || [], mine, !!data.connected);
 }
 

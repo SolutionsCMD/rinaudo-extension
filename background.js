@@ -233,6 +233,26 @@ async function s2PollVote(pollId, optionIdx) {
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
 
+// --- Stake round module (the stake-on-a-ticker poll) ---
+async function s2Round() {
+  const token = await getS2Token();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const r = await fetch(S2.API + S2.ROUND, { headers }).catch(() => null);
+  const base = r && r.ok ? await r.json().catch(() => ({ round: null, me: null })) : { round: null, me: null };
+  return { ...base, connected: !!token };
+}
+
+async function s2RoundAction(action, ticker, amount) {
+  const token = await getS2Token();
+  if (!token) return { ok: false, reason: 'not_connected' };
+  const r = await fetch(S2.API + S2.ROUND, {
+    method: 'POST', headers: await s2Headers(token, true),
+    body: JSON.stringify({ action, ticker, amount }),
+  }).catch(() => null);
+  // 409s carry a useful {ok:false, reason} body too — surface it either way.
+  return r ? r.json().catch(() => ({ ok: false })) : { ok: false };
+}
+
 // Is the active tab Mizkif's Kick channel? (kick.com host permission makes
 // tab.url readable for that tab; other tabs read undefined → false.)
 async function focusedOnKick() {
@@ -259,16 +279,28 @@ if (HAS_WINDOWS) chrome.windows.onRemoved.addListener(async (id) => {
 
 // On the alarm: if a NEW poll is open AND the viewer isn't on the Kick tab, pop
 // the window (deduped per poll id). On the Kick tab, the on-page card handles it.
+// Same treatment for a stake round entering its staking/joining phase.
 async function checkPoll() {
   const data = await s2Poll();
   const poll = data && data.poll;
-  if (!poll) return;
-  const key = 'poll:' + poll.id;
-  const { lastPollKey } = await chrome.storage.local.get('lastPollKey');
-  if (key === lastPollKey) return;
-  await chrome.storage.local.set({ lastPollKey: key });
-  if (await focusedOnKick()) return;
-  await openVoteWindow();
+  if (poll) {
+    const key = 'poll:' + poll.id;
+    const { lastPollKey } = await chrome.storage.local.get('lastPollKey');
+    if (key !== lastPollKey) {
+      await chrome.storage.local.set({ lastPollKey: key });
+      if (!(await focusedOnKick())) await openVoteWindow();
+    }
+  }
+  const rd = await s2Round();
+  const round = rd && rd.round;
+  if (round && (round.status === 'staking' || round.status === 'joining')) {
+    const key = 'round:' + round.id + ':' + round.status;
+    const { lastRoundKey } = await chrome.storage.local.get('lastRoundKey');
+    if (key !== lastRoundKey) {
+      await chrome.storage.local.set({ lastRoundKey: key });
+      if (!(await focusedOnKick())) await openVoteWindow();
+    }
+  }
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
@@ -285,6 +317,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2KickCheckin') { reply(await s2KickCheckin()); }
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
+    else if (msg.type === 's2Round') { reply(await s2Round()); }
+    else if (msg.type === 's2RoundAction') { reply(await s2RoundAction(msg.action, msg.ticker, msg.amount)); }
     else if (msg.type === 'resize' && typeof msg.height === 'number') {
       const { voteWin } = await chrome.storage.local.get('voteWin');
       if (voteWin != null) { try { await chrome.windows.update(voteWin, { height: Math.round(msg.height) }); } catch { /* gone */ } }
