@@ -120,7 +120,7 @@ self.RGCStake = (function () {
       const overCap = showCap && v > capAt;
       thumb.classList.toggle('over', overCap);
       // 1:1 desk over-cap warning: the extra would come back as a refund
-      hint.textContent = overCap ? `past the cap — the extra ~${v - capAt} would come back as a refund` : ' ';
+      hint.textContent = overCap ? `past the cap, the extra ~${v - capAt} would come back as a refund` : ' ';
       renderPile(pile, v);
     };
     range.addEventListener('input', () => {
@@ -133,7 +133,7 @@ self.RGCStake = (function () {
       const tick = el('span', 'stkCapTick');
       tick.style.left = `calc(24px + (100% - 48px) * ${KNEE})`;
       const label = el('i', '', `5% cap · ${capAt}`);
-      label.title = `≈ the 5% pool cap right now — anything past ${capAt} is refunded once the buy goes through`;
+      label.title = `≈ the 5% pool cap right now. Anything past ${capAt} is refunded once the buy goes through`;
       tick.append(label);
       rangeWrap.append(tick);
     }
@@ -230,7 +230,7 @@ self.RGCStake = (function () {
       big.disabled = !connected || !me || maxT < 1 || !sel;
       big.addEventListener('click', () => { if (sel) actions.stake(sel, amount); });
       host.append(big);
-      if (mine) host.append(el('div', 'stkNote', `You have ${mine.amount.toLocaleString()} on ${mine.ticker} — staking moves it`));
+      if (mine) host.append(el('div', 'stkNote', `You have ${mine.amount.toLocaleString()} on ${mine.ticker}, staking moves it`));
       else if (me && maxT < 1) host.append(el('div', 'stkNote', 'You have no tickets to stake'));
       host.append(el('div', 'stkHint', 'Most-staked ticker becomes the desk’s pick'));
       return true;
@@ -238,7 +238,7 @@ self.RGCStake = (function () {
 
     // ── joining: the desk's pick is set — slide how many tickets to add ─────
     if (round.status === 'joining') {
-      const t0 = (round.tally || [])[0] || { ticker: round.winningTicker || '—', amount: 0 };
+      const t0 = (round.tally || [])[0] || { ticker: round.winningTicker || 'TBD', amount: 0 };
       const committed = t0.amount;
       const myCommitted = me ? me.committed : 0;
       host.append(el('div', 'stkTk', t0.ticker), el('div', 'stkCo', 'The desk’s pick'));
@@ -247,7 +247,7 @@ self.RGCStake = (function () {
       meta.append(img, document.createTextNode(`${committed.toLocaleString()} committed`));
       if (me) meta.append(el('b', '', ` · ${me.tickets.toLocaleString()} held`));
       host.append(meta, el('div', 'stkRule'));
-      host.append(el('div', 'stkQ', 'Step 2 — Slide how many tickets to add.'));
+      host.append(el('div', 'stkQ', 'Step 2: Slide how many tickets to add.'));
 
       const tickets = me ? me.tickets : 0;
       if (connected && me && tickets < 1) {

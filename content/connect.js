@@ -29,18 +29,18 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       });
-      if (!r.ok) { setStatus('Connection failed — reopen the extension and tap Connect again.', false); return; }
+      if (!r.ok) { setStatus('Connection failed. Reopen the extension and tap Connect again.', false); return; }
       const data = await r.json().catch(() => null);
-      if (!data || !data.token) { setStatus('Connection failed — please try again.', false); return; }
+      if (!data || !data.token) { setStatus('Connection failed. Please try again.', false); return; }
       await api.storage.local.set({ s2Token: data.token });
-      setStatus('Connected ✓ — you can close this tab.', true);
+      setStatus('Connected ✓. You can close this tab.', true);
       // Best-effort tab close via the background (content scripts can't close their own tab).
       try {
         const send = api.runtime.sendMessage({ type: 's2ConnectDone' });
         if (send && typeof send.catch === 'function') send.catch(() => {});
       } catch { /* fine — user closes the tab manually */ }
     } catch {
-      setStatus('Connection failed — check your connection and try again.', false);
+      setStatus('Connection failed. Check your connection and try again.', false);
     }
   })();
 })();

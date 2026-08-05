@@ -61,7 +61,7 @@ self.RGCFrame = (function () {
         if (u && u.available) {
           bver.textContent = 'v' + VER + ' · update ⬆';
           bver.classList.add('upd');
-          bver.title = 'A newer version (v' + u.latest + ') is available — reload the extension.';
+          bver.title = 'A newer version (v' + u.latest + ') is available. Reload the extension.';
         }
       }).catch(() => {});
     } catch { /* ignore */ }

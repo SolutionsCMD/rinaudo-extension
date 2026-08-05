@@ -73,7 +73,7 @@ self.EngageCore = (function () {
       if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchPotential()}`, 'done');
       // Watched enough, but the watch reward is gated behind like + comment on this post.
       if (state.watchBlocked) {
-        const r = rowEl('✓ Watched — like & comment to collect', `+${watchPotential()}`, 'idle');
+        const r = rowEl('✓ Watched. Like & comment to collect', `+${watchPotential()}`, 'idle');
         r.classList.add('blocked');
         return r;
       }
@@ -115,7 +115,7 @@ self.EngageCore = (function () {
       const body = frame.body; body.replaceChildren();
       if (A.actions.watch && (state.sessionId || state.watchDone)) {
         body.append(watchRow());
-        if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough — like & comment on this post to collect its tickets'));
+        if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough. Like & comment on this post to collect its tickets'));
         else if (state.watchError && !state.watchDone) body.append(hint(watchErrText(state.watchError)));
         else if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
         // Second-watch row: appears seamlessly once the base watch is collected.
@@ -132,7 +132,7 @@ self.EngageCore = (function () {
           const lenRule = state.commentMinWords > 0
             ? `Comment must be more than ${state.commentMinWords} words`
             : 'Comment must be more than 5 characters';
-          body.append(hint(banned.length ? `${lenRule} — and can't mention ${banned[0]}s` : lenRule));
+          body.append(hint(banned.length ? `${lenRule}, and can't mention ${banned[0]}s` : lenRule));
         }
       }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
@@ -284,10 +284,10 @@ self.EngageCore = (function () {
     // "Watch 1:00 / 0:52" forever retrying — the timer is local, so a user whose heartbeats
     // never reach the server sees a full bar and no explanation.
     function watchErrText(reason) {
-      if (reason === 'not_qualified') return 'No watch time counted yet — keep this tab visible with the video playing and unmuted.';
+      if (reason === 'not_qualified') return 'No watch time counted yet. Keep this tab visible with the video playing and unmuted.';
       if (reason === 'no_reward') return 'This video is too old to earn tickets.';
       if (reason === 'no_target') return 'This video is not collectable right now.';
-      return 'Could not collect — check your connection, then reload the page.';
+      return 'Could not collect. Check your connection, then reload the page.';
     }
     async function claimWatch() {
       if (!state || state.watchDone || state.claiming) return;

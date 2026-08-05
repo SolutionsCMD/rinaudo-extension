@@ -8,7 +8,7 @@ async function refresh() {
   status.replaceChildren();
   if (r && r.connected) {
     const ok = document.createElement('span'); ok.className = 'ok';
-    ok.textContent = "Connected ✓ — you're all set. You can close this tab.";
+    ok.textContent = "Connected ✓. You're all set. You can close this tab.";
     status.append(ok);
     btn.textContent = 'Connected'; btn.disabled = true;
   } else {

@@ -104,7 +104,7 @@
     if (!ref || firedLike.has(ref)) return;
     firedLike.add(ref);
     const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'like', ref }).catch(() => null);
-    if (r && ('credited' in r)) { if (r.credited && r.awarded) toast(`${rewardText(xr.like)} — liked`); }
+    if (r && ('credited' in r)) { if (r.credited && r.awarded) toast(`${rewardText(xr.like)} for liking`); }
     else firedLike.delete(ref); // error / not a target → allow a later retry
   }, true);
 
@@ -132,7 +132,7 @@
     const ref = replyRef; replyRef = '';
     if (!ref || text.length <= 5) return; // quality gate — must be MORE than 5 chars
     chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'comment', ref })
-      .then((r) => { if (r && r.credited && r.awarded) toast(`${rewardText(xr.comment)} — commented`); })
+      .then((r) => { if (r && r.credited && r.awarded) toast(`${rewardText(xr.comment)} for commenting`); })
       .catch(() => {});
   }
 })();

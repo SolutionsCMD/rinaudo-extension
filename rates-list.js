@@ -26,7 +26,7 @@
       },
       {
         t: 'Watch his videos', a: `${v.floor}+`,
-        d: `${v.floor} tickets for any video up to ${crossStr} minutes, then +${v.perMinute} for each extra minute — once per video.`,
+        d: `${v.floor} tickets for any video up to ${crossStr} minutes, then +${v.perMinute} for each extra minute, once per video.`,
         subs: [
           'YouTube: any video or short from the last 24h, plus his latest is always eligible.',
           'TikTok: any post from the last 24h.',
@@ -38,14 +38,14 @@
             { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
           ]
         : [
-            { t: 'Like & comment to earn', a: 'Required', d: 'Like AND comment on a post to collect its watchtime tickets — both are required on that post. Your comment must be more than 5 characters.' },
+            { t: 'Like & comment to earn', a: 'Required', d: 'Like AND comment on a post to collect its watchtime tickets. Both are required on that post. Your comment must be more than 5 characters.' },
           ]),
       { t: 'Vote in a poll', a: `+${r.vote}`, d: 'Each time you vote in a live poll.' },
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },
     ];
     el.replaceChildren();
     add(el, 'rates-h', 'How tickets work');
-    add(el, 'rates-intro', 'Connect with Kick first — nothing credits until you do.');
+    add(el, 'rates-intro', 'Connect with Kick first. Nothing credits until you do.');
     for (const it of items) {
       const item = add(el, 'rates-item');
       const row = add(item, 'rates-row');
@@ -56,8 +56,8 @@
       for (const s of (it.subs || [])) add(item, 'rates-sub', s);
     }
     add(el, 'rates-note', r.like > 0 || r.comment > 0
-      ? 'You earn on his recent posts only — a card appears on the post when it counts. Each like, comment, and watch credits once per post.'
-      : 'You earn on his recent posts only — a card appears on the post when it counts. Like AND comment on a post to collect that post\'s watchtime tickets. Each credits once per post.');
+      ? 'You earn on his recent posts only. A card appears on the post when it counts. Each like, comment, and watch credits once per post.'
+      : 'You earn on his recent posts only. A card appears on the post when it counts. Like AND comment on a post to collect that post\'s watchtime tickets. Each credits once per post.');
   }
 
   self.renderRates = renderRates;

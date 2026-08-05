@@ -37,7 +37,7 @@ async function refreshVersion() {
   const { extUpdate } = await chrome.storage.local.get('extUpdate').catch(() => ({}));
   if (extUpdate && extUpdate.available) {
     const u = $('update');
-    u.textContent = `Update available — v${extUpdate.latest}. Reload the extension to get the latest version.`;
+    u.textContent = `Update available: v${extUpdate.latest}. Reload the extension to get the latest version.`;
     u.style.display = 'block';
   }
 }

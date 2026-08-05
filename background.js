@@ -404,7 +404,7 @@ async function checkSignals() {
     if (r.streamLive && !seen.live && prefOn(prefs, 'kick') && !inKickQuietWindow()) {
       const id = `live-${Date.now()}`;
       notifUrls[id] = r.channelUrl;
-      notify(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live — vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
+      notify(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live. Vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
     }
     for (const v of (r.latestVideos || [])) {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
@@ -412,18 +412,18 @@ async function checkSignals() {
         notifUrls[id] = homepageFor(v.url);
         const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
         const img = await youtubeThumbCard(v.videoId);
-        const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind} — ${v.channelName}`, message: v.title ? `${v.title} — search for it on YouTube to watch.` : `New ${kind} — search for it on YouTube.`, priority: 2 };
+        const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Search for it on YouTube to watch.` : `New ${kind}. Search for it on YouTube.`, priority: 2 };
         notify(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
       }
     }
-    const SOCIAL_TITLES = { tiktok: 'New TikTok — Mizkif', instagram: 'New Instagram — Mizkif', twitter: 'New X post — Mizkif' };
+    const SOCIAL_TITLES = { tiktok: 'New TikTok: Mizkif', instagram: 'New Instagram: Mizkif', twitter: 'New X post: Mizkif' };
     const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
     (r.latestSocial || []).forEach((s) => {
       const prev = (seen.social || {})[s.platform];
       if (s.url && prev && s.url !== prev && prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) {
         const id = `soc-${s.platform}-${Date.now()}`;
         notifUrls[id] = homepageFor(s.url);
-        notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title} — open the app and search for it.` : 'New post — open the app and search for it.', priority: 2 });
+        notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title}. Open the app and search for it.` : 'New post. Open the app and search for it.', priority: 2 });
       }
     });
   }
@@ -463,7 +463,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 // --- New earn target notifications ---
 // Fires once per new target ref when the admin adds a YouTube/TikTok/IG/X post.
 const TARGET_ICONS = { youtube: 'icons/youtube.png', tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', x: 'icons/x.png' };
-const TARGET_TITLES = { youtube: 'New YouTube target — earn tickets', tiktok: 'New TikTok target — earn tickets', instagram: 'New Instagram target — earn tickets', x: 'New X target — earn tickets' };
+const TARGET_TITLES = { youtube: 'New YouTube target: earn tickets', tiktok: 'New TikTok target: earn tickets', instagram: 'New Instagram target: earn tickets', x: 'New X target: earn tickets' };
 const PLATFORM_NAME = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', x: 'X' };
 async function checkNewTargets() {
   const data = await s2Targets();
@@ -496,8 +496,8 @@ async function checkNewTargets() {
       type: 'image',
       iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
       imageUrl: await earnToastImage(t.platform, t.ref),
-      title: `🎟 ${earn} — ${PLATFORM_NAME[t.platform] || 'new post'}`,
-      message: t.label ? `${t.label} — search & watch to earn.` : `${earn}: search & watch the new post.`,
+      title: `🎟 ${earn}: ${PLATFORM_NAME[t.platform] || 'new post'}`,
+      message: t.label ? `${t.label}. Search & watch to earn.` : `${earn}: search & watch the new post.`,
       buttons: [{ title: 'Search & watch' }],
       priority: 2,
     });

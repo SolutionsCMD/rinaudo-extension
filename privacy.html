@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Privacy Policy — Mizkif Global (Browser Extension)</title>
+  <title>Privacy Policy: Mizkif Global (Browser Extension)</title>
   <meta name="robots" content="index,follow" />
   <style>
     :root { color-scheme: light dark; }
@@ -43,9 +43,9 @@
 
     <h2>What the extension does</h2>
     <p>
-      The extension lets you earn tickets in Mizkif's game by engaging with his content — liking,
+      The extension lets you earn tickets in Mizkif's game by engaging with his content: liking,
       commenting on, and watching his promoted posts and videos on YouTube, TikTok, and Instagram,
-      and voting on live polls from his Kick stream — and it notifies you when he goes live or posts.
+      and voting on live polls from his Kick stream. It also notifies you when he goes live or posts.
       Tickets are credited to the account you link once with "Connect with Kick."
     </p>
 
@@ -61,7 +61,7 @@
       <li>
         <strong>An anti-fraud device token.</strong> A random identifier the extension generates the
         first time it runs and stores locally (<code>chrome.storage.local</code>). It is <em>not</em>
-        derived from your hardware and contains no personal information — it simply lets the game tell
+        derived from your hardware and contains no personal information. It simply lets the game tell
         one browser install apart from another so a single person can't farm tickets across many
         accounts. You can reset it by clearing the extension's storage or reinstalling.
       </li>
@@ -84,10 +84,10 @@
       <li>
         <code>https://s2.jsolutions.dev</code> (the game API): to exchange your Connect-with-Kick login
         for an account token; to record when you <strong>like, comment on, or watch</strong> one of
-        Mizkif's promoted posts or videos (we send the platform, the post/video ID, and the action — for
-        watching, periodic "still watching" signals — so the tickets can be credited); to fetch the active
+        Mizkif's promoted posts or videos (we send the platform, the post/video ID, and the action; for
+        watching, periodic "still watching" signals, so the tickets can be credited); to fetch the active
         poll and submit your vote; and to fetch the public reward-rate list. We do <strong>not</strong>
-        send the text of your comments — only that you commented on a given post.
+        send the text of your comments, only that you commented on a given post.
       </li>
       <li>
         <code>https://rinaudoglobal.com</code> (public status feed): the extension periodically checks
@@ -102,7 +102,7 @@
       many fake accounts or bots. With each authenticated request to <code>s2.jsolutions.dev</code>, the
       extension includes the anti-fraud <strong>device token</strong> and <strong>device fingerprint</strong>
       described above. The server additionally records a <strong>one-way, salted hash of your IP
-      address</strong> (your actual IP address is never stored — only a hash that can be compared for a
+      address</strong> (your actual IP address is never stored, only a hash that can be compared for a
       match, not reversed). These signals are used <em>only</em> to group accounts that appear to share a
       device or network for manual review before payouts. They are never sold, shared with third parties,
       used for advertising, or used to track your browsing, and they are never shown to other users.
@@ -124,13 +124,13 @@
 
     <h2>Permissions, and why</h2>
     <ul>
-      <li><code>identity</code> — the one-time "Connect with Kick" sign-in.</li>
-      <li><code>storage</code> — to store your account token and local state.</li>
-      <li><code>alarms</code> — a periodic timer to check for open polls and new content.</li>
-      <li><code>notifications</code> — desktop alerts when a poll opens or Mizkif goes live or posts.</li>
-      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code> — to talk to the game API and the public notifications feed.</li>
-      <li><code>host access</code> to <code>kick.com</code> — to show the vote card on Mizkif's stream.</li>
-      <li><code>host access</code> to <code>youtube.com</code>, <code>tiktok.com</code>, and <code>instagram.com</code> — to detect and credit your likes, comments, and watches on Mizkif's promoted posts and videos there.</li>
+      <li><code>identity</code>: the one-time "Connect with Kick" sign-in.</li>
+      <li><code>storage</code>: to store your account token and local state.</li>
+      <li><code>alarms</code>: a periodic timer to check for open polls and new content.</li>
+      <li><code>notifications</code>: desktop alerts when a poll opens or Mizkif goes live or posts.</li>
+      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code>: to talk to the game API and the public notifications feed.</li>
+      <li><code>host access</code> to <code>kick.com</code>: to show the vote card on Mizkif's stream.</li>
+      <li><code>host access</code> to <code>youtube.com</code>, <code>tiktok.com</code>, and <code>instagram.com</code>: to detect and credit your likes, comments, and watches on Mizkif's promoted posts and videos there.</li>
     </ul>
 
     <h2>Your choices</h2>

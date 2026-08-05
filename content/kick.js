@@ -148,7 +148,7 @@ function drawWtWidget(status) {
   if (status === 'playing') {
     const sub = document.createElement('div'); sub.className = 'sub';
     sub.textContent = capped
-      ? `Hourly max earned (${wtPerHour}/hr) — resets next hour`
+      ? `Hourly max earned (${wtPerHour}/hr), resets next hour`
       : 'Keep tab open & unmuted';
     body.append(sub);
   }
@@ -173,6 +173,13 @@ function roundAction(action, ticker, amount) {
 // Returns true when a round is open and the frame shows it.
 function drawRound(data) {
   if (!self.RGCStake || !data || !data.round) return false;
+  // A round sits in 'nominating' for hours between stakes, so showing the suggestion
+  // box there put a card on the stream essentially all the time (and a "SUGGESTIONS /
+  // Stake" bar once minimised). The on-stream card is now reserved for when there's an
+  // actual wager to place; suggesting still works from the extension's toolbar popup.
+  // Bail BEFORE ensureFrame so the frame never mounts (mounting then clearing on the
+  // next tick would flash the card on and off every few seconds).
+  if (data.round.status === 'nominating') return false;
   ensureFrame();
   const status = data.round.status;
   if (frame.setTitle) frame.setTitle(status === 'nominating' ? 'Suggestions' : status === 'joining' ? 'Final Window' : 'Live Stake');
