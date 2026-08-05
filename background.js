@@ -432,6 +432,16 @@ async function checkSignals() {
   await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos, social: nowSocial }, notifUrls });
 }
 
+// Public S2 flag feed (no auth) — currently just the watchtime-widget
+// visibility switch. Content scripts read the stored value, so hiding the
+// widget propagates to every viewer within one alarm tick (30s). The flag is
+// flipped from the Office dashboard (mizkif.com/office).
+async function checkS2Status() {
+  const r = await fetch(S2.API + S2.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  if (!r) return;
+  await chrome.storage.local.set({ watchWidgetHidden: r.watchWidgetHidden === true });
+}
+
 if (HAS_NOTIFICATIONS) {
   chrome.notifications.onClicked.addListener(async (id) => {
     const { notifUrls } = await chrome.storage.local.get('notifUrls');
@@ -559,6 +569,8 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   await checkNewTargets();
   await checkManualPush();
   await checkLatestVersion();
+  await checkS2Status();
 });
 // Also check right away on SW startup, so the badge appears without waiting for the alarm.
 checkLatestVersion();
+checkS2Status();

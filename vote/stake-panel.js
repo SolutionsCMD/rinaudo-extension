@@ -1,6 +1,6 @@
 // Shared stake panel — the stake-on-a-ticker poll, mirrored 1:1 from the live
 // desk (DeskLive.tsx): ticker picks with live tallies, the ticket-pile slider,
-// and the 10% pool-cap tick with the over-cap refund warning during the join
+// and the 5% pool-cap tick with the over-cap refund warning during the join
 // window. Used by the vote popup (vote/vote.html) and the Kick on-page card
 // (content/kick.js). Exposes a single global:
 //   self.RGCStake.render(host, data, actions) -> bool (true when a round panel
@@ -132,8 +132,8 @@ self.RGCStake = (function () {
     if (showCap) {
       const tick = el('span', 'stkCapTick');
       tick.style.left = `calc(24px + (100% - 48px) * ${KNEE})`;
-      const label = el('i', '', `10% cap · ${capAt}`);
-      label.title = `≈ the 10% pool cap right now — anything past ${capAt} is refunded once the buy goes through`;
+      const label = el('i', '', `5% cap · ${capAt}`);
+      label.title = `≈ the 5% pool cap right now — anything past ${capAt} is refunded once the buy goes through`;
       tick.append(label);
       rangeWrap.append(tick);
     }
@@ -253,9 +253,9 @@ self.RGCStake = (function () {
       if (connected && me && tickets < 1) {
         host.append(el('div', 'stkNote', 'You have no tickets left to add.'));
       } else {
-        // 1:1 desk cap estimate: my slice can be at most 10% of the final pot,
-        // so cap = (committed so far − my committed) / 9.
-        const capAt = Math.floor(Math.max(0, committed - myCommitted) / 9);
+        // 1:1 desk cap estimate: my slice can be at most 5% of the final pot,
+        // so cap = (committed so far − my committed) / 19.
+        const capAt = Math.floor(Math.max(0, committed - myCommitted) / 19);
         let amount = Math.min(25, Math.max(1, tickets));
         const big = el('button', 'stkBig');
         const paintBig = () => { big.textContent = `Join with ${Math.min(amount, Math.max(1, tickets))} 🎟`; };

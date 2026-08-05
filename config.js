@@ -15,6 +15,7 @@ self.S2 = {
   CONNECT_PAGE: 'https://s2.jsolutions.dev/extension/connect',
   EXCHANGE: '/api/extension/connect',
   TARGETS: '/api/extension/targets',
+  STATUS: '/api/extension/status',
   ENGAGEMENT: '/api/extension/engagement',
   POLL: '/api/extension/poll',
   POLL_VOTE: '/api/extension/poll-vote',

@@ -21,10 +21,30 @@ chrome.runtime.onMessage.addListener((msg) => {
 let wtFrame = null;    // second RGCFrame, independent of the poll frame
 let wtHourEarned = 0;  // server-credited tickets this epoch-hour (chat + extension combined)
 let wtPerHour = 0;     // this user's hourly rate, from the server
+let wtSessionEarned = 0; // tickets THIS page session (sum of per-checkin awards)
 let wtOffline = false; // last checkin said stream_offline / watchtime_disabled
 let wtConnect = false; // last checkin said not_connected (show connect prompt)
 let wtPlaying = false;
 let wtMuted = false;
+// Anti-flicker: Kick's player momentarily reads paused/muted during buffering,
+// ad stitching and video-element swaps. A new player status must hold for two
+// consecutive 5s reads before the widget flips to it. Server states (offline/
+// connect/required) stay immediate — they only change on the 60s checkin.
+let wtShownStatus = null;
+let wtCandStatus = null, wtCandCount = 0;
+let wtRenderKey = '';  // skip DOM rebuilds when nothing visible changed
+// Admin "hide the widget" switch (server flag via the SW's 30s status poll).
+// Hiding NEVER stops earning — checkins still run, the card just isn't drawn.
+let wtHidden = false;
+chrome.storage.local.get('watchWidgetHidden').then(({ watchWidgetHidden }) => {
+  wtHidden = watchWidgetHidden === true;
+  if (wtHidden && wtFrame) { wtFrame.destroy(); wtFrame = null; wtRenderKey = ''; }
+}).catch(() => {});
+chrome.storage.onChanged.addListener((ch) => {
+  if (!ch.watchWidgetHidden) return;
+  wtHidden = ch.watchWidgetHidden.newValue === true;
+  if (wtHidden && wtFrame) { wtFrame.destroy(); wtFrame = null; wtRenderKey = ''; }
+});
 
 const WT_CSS = `
   .row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
@@ -59,10 +79,21 @@ function ensureWtFrame() {
 
 function drawWtWidget(status) {
   // status: 'playing' | 'paused' | 'muted' | 'offline' | 'required'
-  if (status === 'offline') {
+  if (wtHidden) {
     if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    wtRenderKey = '';
     return;
   }
+  if (status === 'offline') {
+    if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    wtRenderKey = '';
+    return;
+  }
+  // Nothing new to show → leave the DOM alone (kills the 5s visible rebuild).
+  const key = `${status}|${wtHourEarned}|${wtPerHour}|${wtSessionEarned}`;
+  if (key === wtRenderKey && wtFrame) return;
+  wtRenderKey = key;
+
   if (status === 'required' || status === 'connect') {
     ensureWtFrame();
     const body = wtFrame.body;
@@ -102,6 +133,17 @@ function drawWtWidget(status) {
 
   row.append(lbl, amt);
   body.append(row);
+
+  // Session total — everything this page session has banked, across hours.
+  if (wtSessionEarned > 0) {
+    const srow = document.createElement('div'); srow.className = 'row';
+    const slbl = document.createElement('span'); slbl.className = 'lbl';
+    slbl.textContent = '🎟 This session';
+    const samt = document.createElement('span'); samt.className = 'amt';
+    samt.textContent = `+${wtSessionEarned}`;
+    srow.append(slbl, samt);
+    body.append(srow);
+  }
 
   if (status === 'playing') {
     const sub = document.createElement('div'); sub.className = 'sub';
@@ -226,15 +268,34 @@ function wtStatus() {
   return wtPlaying ? 'playing' : wtMuted ? 'muted' : 'paused';
 }
 
+// Player-status changes must hold for 2 consecutive 5s reads before the widget
+// flips — a single buffering blip or element swap no longer flickers the card.
+// First paint adopts immediately so the widget never sits blank on load.
+function wtStableStatus(raw) {
+  if (wtShownStatus === null) {
+    wtShownStatus = raw; wtCandStatus = null; wtCandCount = 0;
+    return wtShownStatus;
+  }
+  if (raw === wtShownStatus) { wtCandStatus = null; wtCandCount = 0; return wtShownStatus; }
+  if (raw === wtCandStatus) {
+    wtCandCount += 1;
+    if (wtCandCount >= 2) { wtShownStatus = raw; wtCandStatus = null; wtCandCount = 0; }
+  } else {
+    wtCandStatus = raw; wtCandCount = 1;
+  }
+  return wtShownStatus;
+}
+
 // Fast UI-only refresh: redraw from local player state, no network.
 function wtUiTick() {
   if (!location.pathname.toLowerCase().startsWith('/mizkif')) {
     if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    wtShownStatus = null; wtRenderKey = '';
     return;
   }
   if (wtOffline) { drawWtWidget('offline'); return; }
   if (wtConnect) { drawWtWidget('connect'); return; }
-  drawWtWidget(wtStatus());
+  drawWtWidget(wtStableStatus(wtStatus()));
 }
 
 async function wtTick() {
@@ -242,12 +303,13 @@ async function wtTick() {
   // Guard so we only earn (and show the widget) while actually on Mizkif's channel.
   if (!location.pathname.toLowerCase().startsWith('/mizkif')) {
     if (wtFrame) { wtFrame.destroy(); wtFrame = null; }
+    wtShownStatus = null; wtRenderKey = '';
     return;
   }
 
   const status = wtStatus();
   if (!wtPlaying) {
-    if (!wtOffline && !wtConnect) drawWtWidget(status);
+    if (!wtOffline && !wtConnect) drawWtWidget(wtStableStatus(status));
     return;
   }
 
@@ -281,8 +343,12 @@ async function wtTick() {
   if (result.ok) {
     wtHourEarned = Number(result.totalEarned) || 0;
     wtPerHour = Number(result.perHour) || 0;
+    // Session total: bank whatever THIS checkin actually awarded. Using `awarded`
+    // (not the hour-total delta) means chat-earned tickets never double-count and
+    // the hour rollover needs no special case.
+    wtSessionEarned += Number(result.awarded) || 0;
   }
-  drawWtWidget('playing');
+  drawWtWidget(wtStableStatus(status));
 }
 
 setInterval(wtTick, 60_000);
