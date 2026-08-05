@@ -127,7 +127,13 @@ self.EngageCore = (function () {
       if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
       if (A.actions.comment) {
         body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
-        if (state.commentS === 'idle') body.append(hint(state.commentMinWords > 0 ? `Comment must be more than ${state.commentMinWords} words` : 'Comment must be more than 5 characters'));
+        if (state.commentS === 'idle') {
+          const banned = (state.commentBannedWords || []);
+          const lenRule = state.commentMinWords > 0
+            ? `Comment must be more than ${state.commentMinWords} words`
+            : 'Comment must be more than 5 characters';
+          body.append(hint(banned.length ? `${lenRule} — and can't mention ${banned[0]}s` : lenRule));
+        }
       }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
       frame.setPill(earned ? `+${earned}` : '🎟');
@@ -158,7 +164,17 @@ self.EngageCore = (function () {
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
       // Quality gate: YouTube (or any target) may require a minimum word count; else >5 chars.
+      // A target can also ban words outright (YouTube comments must never mention tickets).
+      // Matched whole-word and case-insensitively, with an optional trailing "s", so
+      // "ticket" / "Tickets" are blocked while a longer word like "ticketing" is not.
+      function bannedHit(text) {
+        const banned = (state && state.commentBannedWords) || [];
+        if (!banned.length) return null;
+        const lower = text.toLowerCase();
+        return banned.find((w) => new RegExp(`\\b${String(w).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?\\b`).test(lower)) || null;
+      }
       function passesGate(text) {
+        if (bannedHit(text)) return false;
         const minWords = (state && state.commentMinWords) || 0;
         if (minWords > 0) return text.split(/\s+/).filter(Boolean).length > minWords;
         return text.length > 5;
@@ -388,6 +404,7 @@ self.EngageCore = (function () {
         watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle',
         commentMinWords: (typeof target.commentMinWords === 'number' ? target.commentMinWords : 0),
+        commentBannedWords: Array.isArray(target.commentBannedWords) ? target.commentBannedWords : [],
         replayEligible: !!(rep && rep.eligible), replayMax, replayUsed,
         replayReward: rep ? (rep.reward || 1) : 1,
         replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
