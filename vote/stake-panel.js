@@ -153,6 +153,21 @@ self.RGCStake = (function () {
     return b;
   }
 
+  // The caller re-renders this panel on every poll tick (~5s) and render() starts by
+  // wiping `host`, so the slider is rebuilt from scratch each time. Seeding it from a
+  // constant meant a viewer's chosen amount snapped back to 25 a few seconds after they
+  // set it. Remember their pick here instead, keyed to the round AND phase so it survives
+  // the rebuilds but resets on a new round or when staking moves to the final window.
+  let picked = { key: null, amount: 0 };
+  const pickKey = (round) => `${round.id}:${round.status}`;
+  // Their remembered amount, clamped to what they can actually afford now (their ticket
+  // balance can drop between rebuilds), or `fallback` if they haven't touched it yet.
+  function seedAmount(round, fallback, max) {
+    const remembered = picked.key === pickKey(round) ? picked.amount : 0;
+    return remembered > 0 ? Math.max(1, Math.min(remembered, max)) : fallback;
+  }
+  function remember(round, n) { picked = { key: pickKey(round), amount: n }; }
+
   // data: {round, me, connected}; actions: {nominate, stake, join}. Returns
   // true when a round panel rendered (caller should skip its poll UI).
   function render(host, data, actions) {
@@ -217,13 +232,13 @@ self.RGCStake = (function () {
       // Replacing a stake refunds the old one first (engine setStake), so the
       // slideable pile is current tickets + whatever is already staked.
       const maxT = (me ? me.tickets : 0) + (mine ? mine.amount : 0);
-      let amount = Math.min(25, Math.max(1, maxT));
+      let amount = seedAmount(round, Math.min(25, Math.max(1, maxT)), Math.max(1, maxT));
       const big = el('button', 'stkBig');
       const paintBig = () => { big.textContent = sel ? `Stake ${amount} 🎟 on ${sel}` : 'Pick a ticker'; };
       const sl = slider({
         max: Math.max(1, maxT), value: amount, capAt: null,
         disabled: !connected || !me || maxT < 1,
-        onInput: (n) => { amount = n; paintBig(); },
+        onInput: (n) => { amount = n; remember(round, n); paintBig(); },
       });
       host.append(sl.wrap);
       paintBig();
@@ -256,13 +271,13 @@ self.RGCStake = (function () {
         // 1:1 desk cap estimate: my slice can be at most 5% of the final pot,
         // so cap = (committed so far − my committed) / 19.
         const capAt = Math.floor(Math.max(0, committed - myCommitted) / 19);
-        let amount = Math.min(25, Math.max(1, tickets));
+        let amount = seedAmount(round, Math.min(25, Math.max(1, tickets)), Math.max(1, tickets));
         const big = el('button', 'stkBig');
         const paintBig = () => { big.textContent = `Join with ${Math.min(amount, Math.max(1, tickets))} 🎟`; };
         const sl = slider({
           max: Math.max(1, tickets), value: amount, capAt,
           disabled: !connected || !me,
-          onInput: (n) => { amount = n; paintBig(); },
+          onInput: (n) => { amount = n; remember(round, n); paintBig(); },
         });
         host.append(sl.wrap);
         paintBig();
