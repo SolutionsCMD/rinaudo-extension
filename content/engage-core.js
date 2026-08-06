@@ -125,7 +125,13 @@ self.EngageCore = (function () {
         }
       }
       if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
-      if (A.actions.comment) {
+      // The server can switch commenting off per platform (targets route sends
+      // commentEnabled:false). Show it as off rather than dangling a reward nobody can
+      // collect. Undefined means an older server, so default to enabled.
+      if (A.actions.comment && state.commentEnabled === false) {
+        body.append(rowEl('Comment', 'off', 'idle'));
+        body.append(hint('Comments are switched off for this platform right now'));
+      } else if (A.actions.comment) {
         body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
         if (state.commentS === 'idle') {
           const banned = (state.commentBannedWords || []);
@@ -181,6 +187,7 @@ self.EngageCore = (function () {
       }
       function trySubmit() {
         if (!state || state.commentS !== 'idle') return;
+        if (state.commentEnabled === false) return; // switched off server-side
         if (!passesGate((A.commentText() || '').trim())) return;
         fireEngagement('comment');
       }
@@ -404,6 +411,7 @@ self.EngageCore = (function () {
         watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle',
         commentMinWords: (typeof target.commentMinWords === 'number' ? target.commentMinWords : 0),
+        commentEnabled: target.commentEnabled !== false,
         commentBannedWords: Array.isArray(target.commentBannedWords) ? target.commentBannedWords : [],
         replayEligible: !!(rep && rep.eligible), replayMax, replayUsed,
         replayReward: rep ? (rep.reward || 1) : 1,
