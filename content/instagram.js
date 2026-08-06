@@ -1,6 +1,17 @@
 // Instagram adapter for engage-core. Selectors are best-effort and may need live tuning.
 // Photo posts have no <video> so the watch row simply never appears (getVideoEl null).
 (function () {
+  // Every element Instagram might use for the comment composer, most specific first.
+  const COMPOSER_SEL = [
+    'textarea[aria-label*="comment" i]',
+    'textarea[placeholder*="comment" i]',
+    '[contenteditable="true"][aria-label*="comment" i]',
+    '[role="textbox"][aria-label*="comment" i]',
+    '[contenteditable="true"][role="textbox"]',
+    'div[contenteditable="true"]',
+    'textarea',
+  ].join(', ');
+
   const adapter = {
     platform: 'instagram',
     actions: { watch: true, like: true, comment: true },
@@ -21,20 +32,29 @@
     commentSubmitTarget(t) {
       const b = t && t.closest ? t.closest('[role="button"], button') : null;
       if (!b) return null;
-      // Confirm the button shares a container with a textarea (language-agnostic).
-      // Instagram doesn't use <form> or class="comment", so walk up ~8 levels.
+      // Confirm the button shares a container with the composer (language-agnostic).
+      // Instagram doesn't use <form> or class="comment", so walk up ~8 levels. The
+      // composer is a contenteditable box on current Instagram, a <textarea> on older
+      // markup, so accept either or the button is never recognised.
       let el = b;
       for (let i = 0; i < 8; i++) {
         el = el.parentElement;
         if (!el) break;
-        if (el.querySelector('textarea')) return b;
+        if (el.querySelector(COMPOSER_SEL)) return b;
       }
       return null;
     },
-    commentInputTarget(t) { return t && t.closest ? t.closest('textarea, [contenteditable="true"]') : null; },
+    commentInputTarget(t) { return t && t.closest ? t.closest(COMPOSER_SEL) : null; },
     commentText() {
-      const el = document.querySelector('textarea[aria-label*="comment" i], textarea[placeholder*="comment" i], textarea');
-      return el ? (el.value || el.textContent || '') : '';
+      // Instagram now renders the comment box as a contenteditable div (role="textbox"),
+      // not a <textarea>. Reading only textarea returned '' forever, so the >5-char gate
+      // never passed and a comment could not credit. Prefer a labelled composer, fall
+      // back to any contenteditable textbox, then to legacy textarea markup.
+      for (const el of document.querySelectorAll(COMPOSER_SEL)) {
+        const v = (el.value || el.textContent || el.innerText || '').trim();
+        if (v) return v;
+      }
+      return '';
     },
     getVideoEl() { return document.querySelector('video'); },
   };
