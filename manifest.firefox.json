@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.0.55",
+  "version": "1.0.56",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "browser_specific_settings": {
     "gecko": {
@@ -9,40 +9,107 @@
       "strict_min_version": "142.0"
     }
   },
-  "permissions": ["storage", "alarms", "notifications"],
-  "host_permissions": ["https://rinaudoglobal.com/*", "https://s2.jsolutions.dev/*", "https://kick.com/*", "https://www.youtube.com/*", "https://www.tiktok.com/*", "https://www.instagram.com/*", "https://x.com/*", "https://twitter.com/*"],
-  "background": { "scripts": ["config.js", "background.js"] },
-  "action": { "default_popup": "popup/popup.html", "default_title": "Mizkif Global" },
-  "icons": { "128": "icons/icon128.png" },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://rinaudoglobal.com/*",
+    "https://s2.jsolutions.dev/*",
+    "https://kick.com/*",
+    "https://www.youtube.com/*",
+    "https://www.tiktok.com/*",
+    "https://www.instagram.com/*",
+    "https://instagr.am/*",
+    "https://instagram.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "config.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Mizkif Global"
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
-      "matches": ["https://s2.jsolutions.dev/extension/connect*"],
-      "js": ["content/connect.js"],
+      "matches": [
+        "https://s2.jsolutions.dev/extension/connect*"
+      ],
+      "js": [
+        "content/connect.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://kick.com/mizkif*"],
-      "js": ["config.js", "content/widget-frame.js", "vote/stake-panel.js", "content/kick.js"],
+      "matches": [
+        "https://kick.com/mizkif*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "vote/stake-panel.js",
+        "content/kick.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["config.js", "content/widget-frame.js", "content/engage-core.js", "content/youtube.js"],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "content/engage-core.js",
+        "content/youtube.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.tiktok.com/*"],
-      "js": ["config.js", "content/widget-frame.js", "content/engage-core.js", "content/tiktok.js"],
+      "matches": [
+        "https://www.tiktok.com/*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "content/engage-core.js",
+        "content/tiktok.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.instagram.com/*"],
-      "js": ["config.js", "content/widget-frame.js", "content/engage-core.js", "content/instagram.js"],
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*",
+        "https://instagr.am/*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "content/engage-core.js",
+        "content/instagram.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["config.js", "content/widget-frame.js", "content/engage-core.js", "content/x.js"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "content/engage-core.js",
+        "content/x.js"
+      ],
       "run_at": "document_idle"
     }
   ]
