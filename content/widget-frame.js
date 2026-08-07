@@ -65,7 +65,7 @@ self.RGCFrame = (function () {
         }
       }).catch(() => {});
     } catch { /* ignore */ }
-    const minBtn = document.createElement('button'); minBtn.className = 'min'; minBtn.type = 'button'; minBtn.textContent = '–'; minBtn.title = 'Minimize';
+    const minBtn = document.createElement('button'); minBtn.className = 'min'; minBtn.type = 'button'; minBtn.textContent = '−'; minBtn.title = 'Minimize';
     bar.append(bdot, bttl, bver, minBtn);
     const body = document.createElement('div'); body.className = 'body';
     card.append(bar, body);

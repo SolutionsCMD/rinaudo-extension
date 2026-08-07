@@ -27,6 +27,28 @@
     return document.querySelector('ytd-watch-metadata button[aria-pressed]')
       || document.querySelector('#top-level-buttons-computed button[aria-pressed]') || null;
   }
+  // Every element YouTube might use for the comment composer, most specific first
+  // (same pattern as content/instagram.js). TWO layouts must both match: the /watch
+  // page renders the composer under ytd-comments in the main column, while /shorts
+  // renders it inside the engagement side panel with entirely different ancestry —
+  // the old ytd-commentbox-scoped selector missed the shorts panel, so typed comments
+  // read back as empty and could never credit there. Structural selectors only:
+  // aria-label words and visible text localize and must never be matched.
+  const COMPOSER_SEL = [
+    // /watch page: classic commentbox markup.
+    'ytd-commentbox #contenteditable-root[contenteditable="true"]',
+    'ytd-comment-simplebox-renderer #contenteditable-root[contenteditable="true"]',
+    // /shorts: the composer lives in the engagement side panel (comments section).
+    'ytd-engagement-panel-section-list-renderer #contenteditable-root[contenteditable="true"]',
+    'ytd-engagement-panel-section-list-renderer ytd-commentbox [contenteditable="true"]',
+    'ytd-engagement-panel-section-list-renderer [contenteditable="true"][role="textbox"]',
+    'ytd-shorts [contenteditable="true"][role="textbox"]',
+    // Ancestry we did not predict: the id tends to survive renderer swaps, and any
+    // contenteditable inside a commentbox is the composer whatever wraps it.
+    '#contenteditable-root[contenteditable="true"]',
+    '#contenteditable-root',
+    'ytd-commentbox [contenteditable="true"]',
+  ].join(', ');
   const adapter = {
     platform: 'youtube',
     actions: { watch: true, like: true, comment: true },
@@ -49,16 +71,33 @@
       return t && t.closest ? t.closest('like-button-view-model, segmented-like-dislike-button-view-model, #segmented-like-button, #like-button, ytd-like-button-renderer, ytd-reel-player-overlay-renderer') : null;
     },
     commentSubmitTarget(t) {
-      return t && t.closest ? t.closest('#submit-button, ytd-commentbox #submit-button, ytd-comment-simplebox-renderer #submit-button') : null;
+      if (!t || !t.closest) return null;
+      // Fast path: on both layouts the submit control keeps id submit-button (watch
+      // page commentbox and the shorts engagement panel commentbox alike).
+      const direct = t.closest('#submit-button');
+      if (direct) return direct;
+      // No broad fallback on purpose: matching any commentbox button here would credit
+      // instantly on emoji-picker or toolbar clicks (a real reviewer-found scenario).
+      // Clicks that are not the #submit-button fall through to engage-core's
+      // composer-clear confirmation, which only credits when the composer empties,
+      // i.e. when a comment was genuinely posted. Slightly slower, cannot mis-credit.
+      return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest('#contenteditable-root, [contenteditable="true"]') : null; },
     commentText() {
-      for (const el of document.querySelectorAll('ytd-commentbox #contenteditable-root')) {
-        const v = (el.textContent || '').trim();
+      // Scan every candidate composer and return the first with text (instagram.js
+      // pattern). Covers the /watch composer, /shorts side-panel composer, and open
+      // reply boxes, whichever the member actually typed into.
+      for (const el of document.querySelectorAll(COMPOSER_SEL)) {
+        const v = (el.textContent || el.innerText || '').trim();
         if (v) return v;
       }
       return '';
     },
+    // Selector-health probes for engage-core's telemetry sample: can the adapter
+    // currently see a comment composer / a like control on this page at all?
+    composerPresent() { try { return !!document.querySelector(COMPOSER_SEL); } catch { return false; } },
+    likePresent() { try { return !!likeControl(); } catch { return false; } },
     getVideoEl() {
       const vids = Array.from(document.querySelectorAll('video'));
       if (vids.length <= 1) return vids[0] || null;

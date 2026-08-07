@@ -557,6 +557,33 @@ async function checkLatestVersion() {
   await chrome.storage.local.set({ extUpdate: { latest, available: isNewerVersion(latest, current) } });
 }
 
+// --- Selector health telemetry (fail-soft) ---
+// Content scripts append failed-selector samples to storage under selHealth (see
+// engage-core). Ship them to the backend at most once per 10 minutes so a platform
+// DOM change surfaces in our telemetry the day it happens, not via user reports.
+// Any failure keeps the data for a later window and moves on silently.
+const SEL_HEALTH_SEND_MS = 10 * 60 * 1000;
+async function sendSelectorHealth() {
+  try {
+    const store = await chrome.storage.local.get(['selHealth', 'selHealthSentAt']);
+    const reports = store.selHealth;
+    if (!Array.isArray(reports) || reports.length === 0) return;
+    if (Date.now() - (Number(store.selHealthSentAt) || 0) < SEL_HEALTH_SEND_MS) return;
+    const token = await getS2Token();
+    if (!token) return;
+    // Stamp before the request so a hung or failing send can't retry faster than
+    // the window; the data itself is only cleared on a confirmed 2xx.
+    await chrome.storage.local.set({ selHealthSentAt: Date.now() });
+    let version = '';
+    try { version = chrome.runtime.getManifest().version || ''; } catch { /* ignore */ }
+    const r = await fetch(S2.API + S2.TELEMETRY, {
+      method: 'POST', headers: await s2Headers(token, true),
+      body: JSON.stringify({ version, reports }),
+    }).catch(() => null);
+    if (r && r.ok) await chrome.storage.local.remove('selHealth');
+  } catch { /* fail-soft: telemetry must never break polling or earning */ }
+}
+
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== 'poll') return;
   // Run sequentially, NOT concurrently: checkSignals and checkNewTargets both
@@ -570,6 +597,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   await checkManualPush();
   await checkLatestVersion();
   await checkS2Status();
+  await sendSelectorHealth();
 });
 // Also check right away on SW startup, so the badge appears without waiting for the alarm.
 checkLatestVersion();

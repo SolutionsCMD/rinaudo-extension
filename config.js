@@ -32,4 +32,6 @@ self.S2 = {
   PUSH: '/api/extension/push',
   VERSION: '/api/extension/version',
   DEBUG: '/api/extension/debug',
+  // Selector-health reports (which adapter selectors failed to resolve on real pages).
+  TELEMETRY: '/api/extension/telemetry',
 };

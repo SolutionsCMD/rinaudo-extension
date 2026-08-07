@@ -363,6 +363,55 @@ self.EngageCore = (function () {
       drawWidget();
     }
 
+    // --- Selector health telemetry (fail-soft, one sample per page load) ---
+    // ~15s after an active target's card is set up, record which adapter capabilities
+    // could NOT resolve on this page, so the day a platform changes its DOM it shows
+    // up in OUR telemetry instead of user reports. Samples land in storage under
+    // selHealth; the background worker ships them on its poll cadence. Every step is
+    // wrapped: a telemetry bug must never break earning.
+    let healthSampled = false;
+    function scheduleHealthSample() {
+      if (healthSampled) return;
+      healthSampled = true;
+      setTimeout(() => { sampleSelectorHealth().catch(() => { /* fail-soft */ }); }, 15000);
+    }
+    async function sampleSelectorHealth() {
+      try {
+        if (!state || !state.ref) return; // target went away while we waited
+        const ref = state.ref;
+        const failures = [];
+        // watch: the page should have a findable <video> when the watch action applies.
+        // Instagram is exempt: photo posts legitimately have no video (the watch row
+        // simply never appears there), so a missing video is normal, not selector
+        // drift, and would otherwise flood the table with permanent noise.
+        if (A.actions.watch && A.platform !== 'instagram') {
+          let v = null; try { v = A.getVideoEl(); } catch { v = null; }
+          if (!v) failures.push('video');
+        }
+        // composer: does the adapter's composer selector find any element? Only
+        // adapters exposing composerPresent() can answer (commentText() cannot tell
+        // "no composer on the page" apart from "composer present but empty").
+        // Note: a lazily rendered comments section (unopened shorts panel, unscrolled
+        // watch page) reports as a miss too; the backend reads rates, not single hits.
+        if (A.actions.comment && state.commentEnabled !== false && typeof A.composerPresent === 'function') {
+          let ok = false; try { ok = !!A.composerPresent(); } catch { ok = false; }
+          if (!ok) failures.push('composer');
+        }
+        // like: is there a like control to observe? Same optional-probe contract;
+        // isLiked() alone cannot tell "not liked" apart from "control not found".
+        if (A.actions.like && typeof A.likePresent === 'function') {
+          let ok = false; try { ok = !!A.likePresent(); } catch { ok = false; }
+          if (!ok) failures.push('like');
+        }
+        if (!failures.length) return;
+        const cur = (await chrome.storage.local.get('selHealth')).selHealth;
+        const arr = Array.isArray(cur) ? cur : [];
+        for (const kind of failures) arr.push({ platform: A.platform, kind, ref });
+        while (arr.length > 50) arr.shift(); // cap at 50, drop oldest
+        await chrome.storage.local.set({ selHealth: arr });
+      } catch { /* fail-soft: telemetry must never break earning */ }
+    }
+
     async function start(ref) {
       if (!ref) return clearWidget();
       if (state && state.ref === ref) return; // same video — don't reset progress on minor URL tweaks
@@ -418,6 +467,7 @@ self.EngageCore = (function () {
         replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
         baseTarget: 0 };
       lastHb = 0; hookComment(); hookLike(); drawWidget();
+      scheduleHealthSample(); // target is ACTIVE here; take the one health sample soon
       if (!state.watchDone) startWatch();
     }
 
