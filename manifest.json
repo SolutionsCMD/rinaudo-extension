@@ -2,7 +2,7 @@
   "update_url": "https://clients2.google.com/service/update2/crx",
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.0.58",
+  "version": "1.0.59",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "permissions": [
     "storage",
@@ -14,7 +14,9 @@
     "https://s2.jsolutions.dev/*",
     "https://kick.com/*",
     "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
     "https://www.tiktok.com/*",
+    "https://m.tiktok.com/*",
     "https://www.instagram.com/*",
     "https://instagr.am/*",
     "https://instagram.com/*",
@@ -55,7 +57,8 @@
     },
     {
       "matches": [
-        "https://www.youtube.com/*"
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
       ],
       "js": [
         "config.js",
@@ -67,7 +70,8 @@
     },
     {
       "matches": [
-        "https://www.tiktok.com/*"
+        "https://www.tiktok.com/*",
+        "https://m.tiktok.com/*"
       ],
       "js": [
         "config.js",

@@ -189,6 +189,10 @@ const REQUIRED_PATTERNS = [
   'https://www.instagram.com/*',
   'https://instagram.com/*',
   'https://instagr.am/*',
+  // Firefox is mostly mobile: the mobile YouTube host MUST stay covered, or Android
+  // members silently earn nothing (the desktop-mode workaround era).
+  'https://m.youtube.com/*',
+  'https://m.tiktok.com/*',
 ];
 
 function contentMatches(manifest) {

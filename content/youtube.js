@@ -14,6 +14,9 @@
       'segmented-like-dislike-button-view-model button[aria-pressed]',
       '#segmented-like-button button[aria-pressed]',
       '#like-button button[aria-pressed]',
+      // m.youtube.com: mobile action bar keeps aria-pressed on the like button.
+      'ytm-like-button-renderer button[aria-pressed]',
+      'ytm-slim-video-action-bar-renderer button[aria-pressed]',
       'ytd-segmented-like-dislike-button-renderer button[aria-pressed]',
       // Shorts player: like button lives in ytd-like-button-renderer inside the overlay
       'ytd-like-button-renderer button[aria-pressed]',
@@ -48,6 +51,13 @@
     '#contenteditable-root[contenteditable="true"]',
     '#contenteditable-root',
     'ytd-commentbox [contenteditable="true"]',
+    // m.youtube.com (Firefox on Android is mostly mobile web): ytm-* markup, and the
+    // composer is a plain textarea or contenteditable inside the comment dialog.
+    'ytm-commentbox textarea',
+    'ytm-comment-simplebox-renderer textarea',
+    'ytm-commentbox [contenteditable="true"]',
+    'ytm-comment-dialog-renderer textarea',
+    'ytm-comment-dialog-renderer [contenteditable="true"]',
   ].join(', ');
   const adapter = {
     platform: 'youtube',
@@ -68,7 +78,7 @@
       return !!(b && b.getAttribute('aria-pressed') === 'true');
     },
     likeTarget(t) {
-      return t && t.closest ? t.closest('like-button-view-model, segmented-like-dislike-button-view-model, #segmented-like-button, #like-button, ytd-like-button-renderer, ytd-reel-player-overlay-renderer') : null;
+      return t && t.closest ? t.closest('like-button-view-model, segmented-like-dislike-button-view-model, #segmented-like-button, #like-button, ytd-like-button-renderer, ytd-reel-player-overlay-renderer, ytm-like-button-renderer, ytm-slim-video-action-bar-renderer button') : null;
     },
     commentSubmitTarget(t) {
       if (!t || !t.closest) return null;
