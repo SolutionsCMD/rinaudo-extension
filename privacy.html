@@ -33,7 +33,7 @@
 <body>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="meta">Mizkif Global (browser extension) · Last updated 27 June 2026</p>
+    <p class="meta">Mizkif Global (browser extension) · Last updated 8 August 2026</p>
 
     <p>
       This policy explains what the <strong>Mizkif Global</strong> browser extension ("the extension")
@@ -44,9 +44,54 @@
     <h2>What the extension does</h2>
     <p>
       The extension lets you earn tickets in Mizkif's game by engaging with his content: liking,
-      commenting on, and watching his promoted posts and videos on YouTube, TikTok, and Instagram,
-      and voting on live polls from his Kick stream. It also notifies you when he goes live or posts.
-      Tickets are credited to the account you link once with "Connect with Kick."
+      commenting on, watching, and reposting his promoted posts and videos on YouTube, TikTok,
+      Instagram, and X (the site at x.com, which also answers to twitter.com), and voting on live
+      polls from his Kick stream. It also notifies you when he goes live or posts. Tickets are
+      credited to the account you link once with "Connect with Kick."
+    </p>
+
+    <h2>Which sites it runs on</h2>
+    <p>The extension loads on these sites and nowhere else:</p>
+    <ul>
+      <li><code>kick.com</code>, on Mizkif's channel page: to show the live poll and vote card.</li>
+      <li><code>youtube.com</code> and <code>m.youtube.com</code>: to spot your like, comment, or watch on one of his promoted videos.</li>
+      <li><code>tiktok.com</code> and <code>m.tiktok.com</code>: the same, for his promoted posts.</li>
+      <li><code>instagram.com</code> (and <code>instagr.am</code>): the same, for his promoted posts.</li>
+      <li><code>x.com</code> and <code>twitter.com</code>: to spot your like, reply, or repost on one of his promoted posts. The next section covers exactly how the repost check works.</li>
+      <li><code>s2.jsolutions.dev/extension/connect</code>: the single page where "Connect with Kick" finishes and hands the extension your account token.</li>
+    </ul>
+    <p>
+      On every other site the extension is not loaded at all, so it cannot see the page.
+    </p>
+
+    <h2>How the repost check works on X</h2>
+    <p>
+      A repost earns tickets only when X itself confirms the repost happened. A button click on its
+      own is not proof, so on <code>x.com</code> and <code>twitter.com</code> the extension watches
+      the requests the X page sends while you use it. Here is the whole of what that means:
+    </p>
+    <ul>
+      <li>
+        It checks the <strong>web address</strong> of each request. Nearly every request X makes is
+        left alone at that point and never looked at again.
+      </li>
+      <li>
+        Only when the address is X's own "create repost" call does the extension look any further,
+        and the only thing it takes from that request is the <strong>id of the post</strong> you
+        reposted.
+      </li>
+      <li>
+        It notes whether X <strong>accepted</strong> the request. That is a yes or no, not content.
+      </li>
+      <li>
+        It never reads what X sends back. The reply is handed straight to the page untouched: the
+        extension does not open it, change it, delay it, or block it.
+      </li>
+    </ul>
+    <p>
+      It does not read your timeline, your posts, your drafts, your direct messages, or your
+      followers, and it does not read the words you type. This check runs on X only. It does not run
+      on Kick, YouTube, TikTok, or Instagram, and it does not run on any other site.
     </p>
 
     <h2>What we store</h2>
@@ -83,11 +128,11 @@
     <ul>
       <li>
         <code>https://s2.jsolutions.dev</code> (the game API): to exchange your Connect-with-Kick login
-        for an account token; to record when you <strong>like, comment on, or watch</strong> one of
-        Mizkif's promoted posts or videos (we send the platform, the post/video ID, and the action; for
-        watching, periodic "still watching" signals, so the tickets can be credited); to fetch the active
-        poll and submit your vote; and to fetch the public reward-rate list. We do <strong>not</strong>
-        send the text of your comments, only that you commented on a given post.
+        for an account token; to record when you <strong>like, comment on, watch, or repost</strong>
+        one of Mizkif's promoted posts or videos; to fetch the active poll and submit your vote; to
+        fetch the public reward-rate list; and, when a reply on X does not register, a short
+        troubleshooting note (which button was clicked and how many characters your draft was, never
+        the words themselves) so the bug can be found and fixed.
       </li>
       <li>
         <code>https://rinaudoglobal.com</code> (public status feed): the extension periodically checks
@@ -95,6 +140,20 @@
         none of your data.
       </li>
     </ul>
+    <p>
+      When an engagement is credited, three things go out: <strong>which site and which post</strong>
+      (its id, the same one you can read in the post's public web address), <strong>which action</strong>
+      it was (like, comment, watch, or repost), and <strong>your account token</strong>, so the
+      tickets land on your account. While a video plays, the extension also sends periodic "still
+      watching" signals. Every one of these requests carries the anti-fraud device token and
+      fingerprint described in the next section.
+    </p>
+    <p>
+      What never leaves your browser: the contents of the pages you visit, the text of your comments
+      (we send only that you commented on a given post, never what you wrote), your direct messages,
+      your passwords, your browsing history, and anything at all from a site the extension does not
+      run on.
+    </p>
 
     <h2>Preventing duplicate accounts and bots</h2>
     <p>
@@ -110,28 +169,39 @@
 
     <h2>What we do <em>not</em> do</h2>
     <ul>
-      <li>No analytics, advertising, or behavioral tracking. The only device and network signals we
-        collect are the anti-fraud identifiers described above, used solely to keep the ticket economy fair.</li>
+      <li>No analytics or behavioral tracking of how you use the web. The only device and network signals
+        we collect are the anti-fraud identifiers described above, used solely to keep the ticket economy
+        fair.</li>
       <li>No advertising, and no selling or sharing of data with third parties.</li>
       <li>
-        No tracking of your general browsing. The extension runs only on Mizkif's Kick channel and on X,
-        YouTube, TikTok, and Instagram post pages, and only to detect your deliberate engagement with his
-        promoted posts and to show its own on-page card. It does not read or collect the contents of those
-        pages (your comment draft is checked locally for length only, and is never transmitted).
+        No tracking of your general browsing. The extension runs only on the sites listed above, and only
+        to detect your deliberate engagement with Mizkif's promoted posts and to show its own on-page card.
+        It does not collect the contents of those pages. The one place it looks inside anything is the X
+        repost check described above, which takes a post id out of a request the X page was already
+        sending. The words you type in a comment stay on your device and are never transmitted; only
+        the character count is, and only in the troubleshooting note described above.
       </li>
       <li>No collection of names, emails, payment details, or other personal information by the extension itself.</li>
     </ul>
 
     <h2>Permissions, and why</h2>
     <ul>
-      <li><code>identity</code>: the one-time "Connect with Kick" sign-in.</li>
       <li><code>storage</code>: to store your account token and local state.</li>
       <li><code>alarms</code>: a periodic timer to check for open polls and new content.</li>
       <li><code>notifications</code>: desktop alerts when a poll opens or Mizkif goes live or posts.</li>
-      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code>: to talk to the game API and the public notifications feed.</li>
+      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code>: to talk to the game API and the public notifications feed, and to finish the "Connect with Kick" sign-in.</li>
       <li><code>host access</code> to <code>kick.com</code>: to show the vote card on Mizkif's stream.</li>
-      <li><code>host access</code> to <code>youtube.com</code>, <code>tiktok.com</code>, and <code>instagram.com</code>: to detect and credit your likes, comments, and watches on Mizkif's promoted posts and videos there.</li>
+      <li><code>host access</code> to <code>youtube.com</code>, <code>tiktok.com</code>, and <code>instagram.com</code>, including their mobile addresses: to detect and credit your likes, comments, and watches on Mizkif's promoted posts and videos there.</li>
+      <li><code>host access</code> to <code>x.com</code> and <code>twitter.com</code>: to detect and credit your likes, replies, and reposts on his promoted posts there, including the repost check described above.</li>
     </ul>
+
+    <h2>Open source</h2>
+    <p>
+      You do not have to take any of this on trust. The extension's code is public and you can read
+      every line of it at
+      <a href="https://github.com/SolutionsCMD/rinaudo-extension">github.com/SolutionsCMD/rinaudo-extension</a>.
+      The X repost check is the file <code>content/observe.js</code>.
+    </p>
 
     <h2>Your choices</h2>
     <p>
