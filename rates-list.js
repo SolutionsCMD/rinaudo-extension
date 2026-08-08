@@ -32,11 +32,12 @@
           'TikTok: any post from the last 24h.',
         ],
       },
+      // Each row gates on ITS OWN reward: comments were switched off everywhere
+      // (owner, 2026-08-08), and a lone zero must not render as "+0".
+      ...(r.like > 0 ? [{ t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on his recent posts.' }] : []),
+      ...(r.comment > 0 ? [{ t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' }] : []),
       ...(r.like > 0 || r.comment > 0
-        ? [
-            { t: 'Like a post', a: `+${r.like}`, d: 'Once per post, on YouTube & TikTok.' },
-            { t: 'Comment on a post', a: `+${r.comment}`, d: 'Once per post. Must be more than 5 characters.' },
-          ]
+        ? []
         : [
             { t: 'Like & comment to earn', a: 'Required', d: 'Like AND comment on a post to collect its watchtime tickets. Both are required on that post. Your comment must be more than 5 characters.' },
           ]),
