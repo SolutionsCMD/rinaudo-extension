@@ -47,6 +47,17 @@
         return !!scope.querySelector('[data-testid="unretweet"]');
       } catch { return false; }
     },
+    // Strict variant for the self-heal poll: reports the flip ONLY when the focal card for
+    // this page's own post can be resolved. Null means "cannot judge, do not self-heal":
+    // on a thread page the document-wide fallback would read a reposted REPLY as the focal
+    // post, and self-heal has no click intent or confirmed ref to correct that. The
+    // confirmation path keeps the wider isReposted(): it already requires a matching
+    // confirmed ref, so the fallback cannot mis-attribute there.
+    isRepostedFocal() {
+      const card = articleForRef(this.getRef());
+      if (!card) return null;
+      try { return !!card.querySelector('[data-testid="unretweet"]'); } catch { return null; }
+    },
     repostPresent() { try { return !!document.querySelector('[data-testid="retweet"], [data-testid="unretweet"]'); } catch { return false; } },
     getVideoEl() { return null; },
   };

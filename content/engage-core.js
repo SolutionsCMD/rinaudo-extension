@@ -11,12 +11,15 @@
 //     getVideoEl()->HTMLVideoElement|null }
 // Optional, for the three-signal repost / in-platform send (engagement v2):
 //   { repostTarget(eventTarget)->Element|null, sendTarget(eventTarget)->Element|null,
-//     isReposted()->bool, repostPresent()->bool, sendPresent()->bool }
+//     isReposted()->bool, isRepostedFocal()->bool|null, repostPresent()->bool,
+//     sendPresent()->bool }
 // An adapter that omits repostTarget/sendTarget simply never offers that row and never
 // credits it, which is how a platform whose controls have not been mapped yet degrades.
 // isReposted() is just as mandatory for a repost: it is the signal that proves the
 // platform really did it (see the repost section below), so an adapter without it is
-// treated as unable to repost at all.
+// treated as unable to repost at all. isRepostedFocal() is the optional strict variant
+// used only by the self-heal poll: bool when it can resolve the card for this page's own
+// post, null when it cannot judge. Adapters that omit it keep the wider isReposted().
 self.EngageCore = (function () {
   const ROW_CSS = `
     .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
@@ -272,7 +275,14 @@ self.EngageCore = (function () {
     // runs first), so the other surface must not send a second credit for the same post.
     // False means engage-core will never take it, which is exactly the /status/ case where
     // the targets fetch has not resolved or failed, and the other surface must credit it
-    // or the repost is lost. Exactly one of the two paths ever fires.
+    // or the repost is lost. So exactly one of the two paths credits a CONFIRMATION.
+    // The 5s self-heal poll below sits outside that guarantee: it reads the flipped
+    // control instead of a confirmation, so it can still re-send a repost the other
+    // surface already credited (its state arrived after the hand-off was answered).
+    // That duplicate is made harmless, not impossible: the server looks the credit up in
+    // the ledger before writing, and a unique index on (season, user, ref) catches the
+    // race, so the second request pays no second ticket. It answers credited:true with
+    // awarded:false, which this client already reads as "done, nothing new".
     function ownsConfirmation(kind, ref) {
       try {
         if (!ref) return false;
@@ -676,7 +686,13 @@ self.EngageCore = (function () {
       // before this card finished setting up. Same idea as the like poll above, and the
       // reason a failed repost is no longer unrecoverable. Cooldown so a credit that keeps
       // failing is retried on the minute instead of every tick.
-      if (repostCapable() && state.repostS === 'idle' && Date.now() >= (state.repostHealAt || 0) && adapterReposted()) {
+      // The DOM read here is the STRICT one where the adapter offers it: with no click
+      // intent and no confirmed ref behind it, self-heal must not credit off a control it
+      // cannot attribute to this post (isRepostedFocal returns null for "cannot judge",
+      // which is not true and so heals nothing). The confirmation path above keeps the
+      // wider adapterReposted(); tightening it there would drop legitimate credits.
+      if (repostCapable() && state.repostS === 'idle' && Date.now() >= (state.repostHealAt || 0)
+          && (typeof A.isRepostedFocal === 'function' ? A.isRepostedFocal() === true : adapterReposted())) {
         state.repostHealAt = Date.now() + 60000;
         fireEngagement('repost');
       }
