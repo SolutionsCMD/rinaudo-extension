@@ -133,7 +133,8 @@
     </ul>
 
     <h2>What we send, and to whom</h2>
-    <p>The extension communicates with <strong>only two servers</strong>:</p>
+    <p>The extension sends your account data to <strong>only two servers</strong>. It also makes a few
+      read-only requests to YouTube, listed last, which carry nothing about you:</p>
     <ul>
       <li>
         <code>https://s2.jsolutions.dev</code> (the game API): to exchange your Connect-with-Kick login
@@ -151,7 +152,13 @@
         whether Mizkif is live or has posted, to power notifications. This requires no login and sends
         none of your data.
       </li>
-    </ul>
+          <li>
+        <code>https://www.youtube.com</code> and <code>https://i.ytimg.com</code>: when Mizkif uploads a new
+        video, the extension asks YouTube whether it is a Short and fetches the video's thumbnail so the
+        notification can show it. Both are ordinary public requests about a video that was just published.
+        Neither carries your account token, and neither says anything about you.
+      </li>
+</ul>
     <p>
       When an engagement is credited, three things go out: <strong>which site and which post</strong>
       (its id, the same one you can read in the post's public web address), <strong>which action</strong>
