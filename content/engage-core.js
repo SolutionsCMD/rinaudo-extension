@@ -123,6 +123,15 @@ self.EngageCore = (function () {
       && typeof A.repostTarget === 'function' && typeof A.isReposted === 'function';
     const sendCapable = () => !!(state && state.canSend) && typeof A.sendTarget === 'function';
     // Read the adapter's repost state without ever letting selector drift throw.
+    // Strict focal read for the self-heal, wrapped like every other adapter DOM call so
+    // selector drift cannot throw out of the 5s tick and take watch accrual down with it.
+    // The adapter's null ("cannot judge this page") must never self-heal.
+    const focalReposted = () => {
+      try {
+        if (typeof A.isRepostedFocal !== 'function') return adapterReposted();
+        return A.isRepostedFocal() === true;
+      } catch { return false; }
+    };
     const adapterReposted = () => { try { return typeof A.isReposted === 'function' && !!A.isReposted(); } catch { return false; } };
     // The all-done bonus pays only for the COMPLETE set, so the row may only appear when
     // every action the server counts on this platform is reachable in this build. TikTok
@@ -289,12 +298,17 @@ self.EngageCore = (function () {
         if (lastTaken && lastTaken.kind === kind && lastTaken.ref === ref
             && Date.now() - lastTaken.at < TAKEN_MEMORY_MS) return true;
         if (!state || state.ref !== ref) return false;
-        // Repost: this card owns any confirmation for its own post as long as it is able
-        // to credit one, whether through the click intent below or, when no intent was
-        // armed because the click landed before setup finished, through the self-heal in
-        // the 5s poll. Either way the other surface must stay out or both would credit the
-        // same repost and the second request would hit the server's unique index.
-        if (kind === 'repost') return repostCapable();
+        // Repost: only claim a confirmation this card can actually act on. A live click
+        // intent is one route; the 5s self-heal is the other, but the heal now requires the
+        // adapter to resolve THIS post's own card, and where it cannot (isRepostedFocal
+        // returns null) it declines forever. Claiming on repostCapable() alone would drop
+        // the repost twice over: this surface never credits it, and the timeline surface
+        // stood down because we said we had it.
+        if (kind === 'repost') {
+          if (!repostCapable()) return false;
+          if (Date.now() < pendingRepostUntil) return true;
+          return typeof A.isRepostedFocal !== 'function' || A.isRepostedFocal() !== null;
+        }
         // Send leaves no state behind to self-heal from, so ownership needs a live intent.
         if (kind === 'send') return sendCapable() && Date.now() < pendingSendUntil;
         return false;
@@ -692,7 +706,7 @@ self.EngageCore = (function () {
       // which is not true and so heals nothing). The confirmation path above keeps the
       // wider adapterReposted(); tightening it there would drop legitimate credits.
       if (repostCapable() && state.repostS === 'idle' && Date.now() >= (state.repostHealAt || 0)
-          && (typeof A.isRepostedFocal === 'function' ? A.isRepostedFocal() === true : adapterReposted())) {
+          && focalReposted()) {
         state.repostHealAt = Date.now() + 60000;
         fireEngagement('repost');
       }

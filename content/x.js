@@ -245,7 +245,10 @@
       // here. When it says no, this path credits, which is the /status/ case where its
       // targets fetch has not resolved or failed: previously the intent was dropped before
       // asking, and since X never re-sends a confirmation the repost was simply lost.
-      // Exactly one of the two paths fires, so the server never sees a duplicate.
+      // Exactly one path fires for a click-driven repost. The
+    // self-heal poll in engage-core sits outside that hand-off; a duplicate it produces is
+    // deduped by the server (ledger lookup plus the repost unique index) rather than
+    // prevented, and answers credited:true with awarded:false.
       const engage = self.RGCEngage;
       if (engage && typeof engage.ownsConfirmation === 'function' && engage.ownsConfirmation('repost', ref)) {
         pendingRepost = null;
