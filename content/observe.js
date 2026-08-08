@@ -18,8 +18,16 @@
 // backstop. What this makes impossible is UI level faking: opening the repost menu and
 // clicking nothing, which is the cheat that matters here.
 //
-// HARD RULES. This code runs on x.com, tiktok.com and instagram.com for real users, so a
-// bug here does not merely fail to credit, it breaks THEIR web:
+// WHERE THIS RUNS: x.com and twitter.com only. Both manifests declare it on exactly the
+// hosts a signature below already covers, because patching fetch and XHR on a host we have
+// no signature for is pure blast radius for zero credit (and the hardest thing in this diff
+// for a store reviewer to justify). The Task 11 discovery session widens the manifest match
+// lists back to the TikTok and Instagram hosts in the SAME change that adds their entries to
+// SIGS, never before. Manifests are strict JSON here (the release gate parses them), which
+// is why that note lives in this file.
+//
+// HARD RULES. This code runs on x.com for real users, so a bug here does not merely fail to
+// credit, it breaks THEIR web:
 //   1. Always call through and return the original value untouched, on every path.
 //   2. Never await, never delay, never modify a request or a response, never read a
 //      response body (that would consume the stream and break the page).
@@ -59,7 +67,10 @@
       // never a broken page and never a credit nobody earned.
       // Whoever adds those entries: a test() must match ONE mutation endpoint exactly,
       // never a path prefix. Every request it matches gets its promise observed, and the
-      // undo endpoint (un-repost) must not match at all.
+      // undo endpoint (un-repost) must not match at all. Add the matching hosts to the
+      // observer's content_scripts entry in BOTH manifests in that same change (they were
+      // narrowed to x.com and twitter.com precisely because no signature covers them yet),
+      // and keep the two match lists identical or the release gate fails.
     ];
 
     // Give a wrapper the same name and arity as the function it replaces. Pages do read

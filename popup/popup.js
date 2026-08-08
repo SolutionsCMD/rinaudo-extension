@@ -72,29 +72,52 @@ function truncate(s, n) {
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
 }
 
-// One chip per action the platform offers, ticked when this member has already collected it.
-// Actions the server does not report are not drawn: a missing capability is never a promise.
-function earnTicks(t) {
+// What one action pays on one target, read from the same targets payload the in-page card
+// reads, so both surfaces quote one tariff. X has its own like amount and falls back to the
+// global one; repost is a single global amount; a watch is priced per target by video
+// length, so the target's own `reward` wins, with the global amount and then the floor
+// (5, the same default the card uses) behind it. A watch therefore always pays something,
+// which is why the card never hides that row either.
+function earnAmounts(t, data) {
+  const d = data || {};
+  const n = (v) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : 0; };
+  return {
+    like: t.platform === 'x' && d.xLikeReward != null ? n(d.xLikeReward) : n(d.likeReward),
+    repost: n(d.repostReward),
+    watch: n(t.reward) || n(d.watchVideoReward) || n(d.watchVideoFloor) || 5,
+  };
+}
+
+// One chip per action the platform offers AND pays for, ticked when this member has already
+// collected it. Two gates, both required, the same pair the in-page card applies: a
+// capability the server does not report is never a promise, and an action the tariff prices
+// at 0 is not earning yet, so it must not be advertised here either (repost is exactly that
+// today). The one case a 0 is still worth showing is a like on a target that pays for a
+// watch: there the like is the gate that unlocks the watch payout, which is what the card
+// labels 'Required', so the chip stays and says so.
+function earnTicks(t, data) {
   const acts = t.actions || {};
   const done = t.done || {};
+  const amt = earnAmounts(t, data);
+  const likeGatesWatch = acts.watch === true && amt.watch > 0;
   const rows = [
-    ['Like', acts.like === true, done.like === true],
-    ['Repost', acts.repost === true, done.repost === true],
-    ['Watch', acts.watch === true, done.watch === true],
-  ].filter(([, available]) => available);
+    ['Like', acts.like === true && (amt.like > 0 || likeGatesWatch), done.like === true, amt.like === 0],
+    ['Repost', acts.repost === true && amt.repost > 0, done.repost === true, false],
+    ['Watch', acts.watch === true && amt.watch > 0, done.watch === true, false],
+  ].filter(([, worthDrawing]) => worthDrawing);
   if (!rows.length) return null;
   const wrap = document.createElement('div');
   wrap.className = 'earn-ticks';
-  for (const [name, , isDone] of rows) {
+  for (const [name, , isDone, required] of rows) {
     const chip = document.createElement('span');
     chip.className = isDone ? 'earn-tick done' : 'earn-tick';
-    chip.textContent = isDone ? name + ' ✓' : name;
+    chip.textContent = isDone ? name + ' ✓' : (required ? name + ' (required)' : name);
     wrap.append(chip);
   }
   return wrap;
 }
 
-function earnRow(t) {
+function earnRow(t, data) {
   const li = document.createElement('li');
   li.className = 'earn-item';
   const head = document.createElement('div');
@@ -116,7 +139,7 @@ function earnRow(t) {
     p.textContent = label;
     li.append(p);
   }
-  const ticks = earnTicks(t);
+  const ticks = earnTicks(t, data);
   if (ticks) li.append(ticks);
   return li;
 }
@@ -130,7 +153,7 @@ async function initEarnNow() {
   if (!listed.length) return;
   const list = $('earnlist');
   list.replaceChildren();
-  for (const t of listed.slice(0, EARN_MAX_ROWS)) list.append(earnRow(t));
+  for (const t of listed.slice(0, EARN_MAX_ROWS)) list.append(earnRow(t, data));
   const extra = listed.length - EARN_MAX_ROWS;
   if (extra > 0) {
     const more = $('earnmore');

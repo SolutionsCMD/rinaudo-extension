@@ -508,6 +508,13 @@ async function checkNewTargets() {
     if (seen.has(key)) continue;
     const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
     if (!t) continue;
+    // Only targets the server marks `listed` may be advertised, the same filter the
+    // popup's Earn now list uses. Unlisted means hidden or honeypot, and a honeypot is
+    // bait for scripted claimers: a toast with a working "Open post" button would walk an
+    // honest member straight into one. A payload with no `listed` field counts as
+    // unlisted, so an older or partial response stays quiet instead of exposing a target.
+    // Not marked seen, so a target that is listed later can still announce itself then.
+    if (t.listed !== true) continue;
     // Staggered TikTok rollout: the server gates `notify` per-user so toasts spread out.
     // A not-yet-eligible target is NOT marked seen, so it can still fire at this user's
     // slot on a later poll. (Earning is unaffected — the target is live regardless.)
