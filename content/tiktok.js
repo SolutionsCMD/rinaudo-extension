@@ -39,6 +39,32 @@
       return el ? (el.textContent || el.value || el.innerText || '') : '';
     },
     getVideoEl() { return document.querySelector('video'); },
+
+    // --- Repost ---------------------------------------------------------------
+    // TikTok's repost lives inside the share panel, and the control that gets clicked is
+    // a bare <svg> with no data-e2e, no testid and no label (recorded live 2026-08-08), so
+    // there is nothing stable to anchor a tight selector on. That is survivable here in a
+    // way it would not be elsewhere: the network confirmation carries the video id in
+    // item_id, and engage-core only credits when that id equals the post this card is for.
+    // So the click's job is just to prove a human did something on this page inside the
+    // last 90 seconds; the id match does the real work. Anything clicked in the modal or
+    // the action bar arms it.
+    repostTarget(t) {
+      if (!t || !t.closest) return null;
+      return t.closest('[role="dialog"], [data-e2e*="share"], [data-e2e*="video-share"], button, [role="button"], svg');
+    },
+    // The share control is always present on a video page, which is the honest answer to
+    // "could this build repost here": it is what the telemetry probe reports on.
+    repostPresent() {
+      try { return !!document.querySelector('[data-e2e*="share"], [data-e2e*="video-share"], video'); }
+      catch (e) { return false; }
+    },
+    // NOTE: no isReposted()/isRepostedFocal() yet. TikTok gives the reposted state no
+    // marked element we could find, so the flip check X uses is not available here and the
+    // 5s self-heal deliberately stays off for TikTok (engage-core treats a missing
+    // isRepostedFocal as "cannot judge" only when the method exists; with neither method
+    // present it falls back to the click plus confirmation path, which is what we want).
+    // A 200 on /upvote/publish with a matching item_id is the whole proof on this platform.
   };
   self.RGC_TIKTOK_ADAPTER = adapter;
   if (self.EngageCore) self.EngageCore.init(adapter);

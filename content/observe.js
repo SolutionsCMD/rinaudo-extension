@@ -59,12 +59,30 @@
         test: function (url) { return /\/i\/api\/graphql\/[^/]+\/CreateRetweet(\b|$)/.test(String(url)); },
         ref: function (url, body) { var m = /"tweet_id"\s*:\s*"(\d+)"/.exec(String(body || '')); return m ? m[1] : null; },
       },
-      // TODO(Task 11): TikTok repost + "send to friends", and Instagram repost or the
-      // paper plane media_share send, land here once the live discovery session records
-      // their real endpoints. Until an entry exists, the matching action simply does not
+      {
+        platform: 'tiktok', kind: 'repost',
+        // POST https://www.tiktok.com/tiktok/v1/upvote/publish?...&item_id=<video id>
+        // TikTok calls a repost an "upvote" internally, and puts the video id in the QUERY
+        // string rather than the body. Recorded live 2026-08-08. The undo is a different
+        // endpoint entirely (/upvote/delete), so it cannot match here: anchored on
+        // /publish with an end boundary precisely so it never does.
+        test: function (url) { return /\/tiktok\/v1\/upvote\/publish(\?|$)/.test(String(url)); },
+        ref: function (url) {
+          try { return new URL(String(url), location.origin).searchParams.get('item_id') || null; }
+          catch (e) { return null; }
+        },
+      },
+      // TODO(Instagram): repost or the paper plane media_share send, pending the live
+      // discovery session. Until an entry exists, the matching action simply does not
       // credit on that platform: the isolated world never sees a confirmation, so the
       // widget row stays un-ticked and no request is sent. Absence is a missing feature,
       // never a broken page and never a credit nobody earned.
+      //
+      // DELIBERATELY ABSENT: TikTok's "send to friends". Recorded live 2026-08-08, the
+      // send fires TikTok's own share_video_to_chat event but NO observable request
+      // carries it: it goes out through their signed IM packet layer. Crediting it would
+      // mean paying on a click alone, which is the exact hole the observer exists to
+      // close, so sends do not earn on TikTok.
       // Whoever adds those entries: a test() must match ONE mutation endpoint exactly,
       // never a path prefix. Every request it matches gets its promise observed, and the
       // undo endpoint (un-repost) must not match at all. Add the matching hosts to the
