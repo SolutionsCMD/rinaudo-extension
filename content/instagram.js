@@ -57,6 +57,20 @@
       return '';
     },
     getVideoEl() { return document.querySelector('video'); },
+
+    // --- Repost ---------------------------------------------------------------
+    // The repost control is svg[aria-label="Repost"] (role="img"), recorded live 2026-08-08.
+    // repostTarget stays lenient so the clickable wrapper around that svg arms the click
+    // intent too, same spirit as the TikTok repostTarget.
+    repostTarget(t) { return t && t.closest ? t.closest('svg[aria-label="Repost"], [role="button"]') : null; },
+    repostPresent() {
+      try { return !!document.querySelector('svg[aria-label="Repost"]'); }
+      catch (e) { return false; }
+    },
+    // NO isReposted / isRepostedFocal by choice: the owner declined a reposted-state DOM
+    // marker to keep maintenance low, so Instagram credits on two signals (the click intent
+    // plus the confirmed usePolarisCreateMediaRepostMutation). engage-core now treats the
+    // isReposted flip as optional, so omitting it is supported: no third signal, no self-heal.
   };
   self.RGC_IG_ADAPTER = adapter;
   if (self.EngageCore) self.EngageCore.init(adapter);

@@ -15,11 +15,14 @@
 //     sendPresent()->bool }
 // An adapter that omits repostTarget/sendTarget simply never offers that row and never
 // credits it, which is how a platform whose controls have not been mapped yet degrades.
-// isReposted() is just as mandatory for a repost: it is the signal that proves the
-// platform really did it (see the repost section below), so an adapter without it is
-// treated as unable to repost at all. isRepostedFocal() is the optional strict variant
-// used only by the self-heal poll: bool when it can resolve the card for this page's own
-// post, null when it cannot judge. Adapters that omit it keep the wider isReposted().
+// isReposted() is OPTIONAL hardening for a repost: where an adapter exposes it (X, TikTok),
+// crediting waits for the platform's own control to flip to its undo state, which proves the
+// platform really did it (see the repost section below). Where it is absent (Instagram, by
+// owner decision) a repost credits on two signals, the click intent plus the confirmed
+// network mutation, the same way a send does. isRepostedFocal() is the optional strict
+// variant used only by the self-heal poll: bool when it can resolve the card for this page's
+// own post, null when it cannot judge. Adapters that omit it keep the wider isReposted(), and
+// adapters that omit both (Instagram) have no self-heal.
 self.EngageCore = (function () {
   const ROW_CSS = `
     .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
@@ -114,13 +117,15 @@ self.EngageCore = (function () {
       return !!(state && state.replayEligible && (state.replayMax || 0) > 0);
     }
     function hint(text) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = text; return h; }
-    // Can THIS build actually perform AND prove the action on this platform? The server's
-    // capability matrix (state.canRepost / state.canSend) says the platform offers it;
-    // these say the adapter in front of us can see the control that starts it and, for a
-    // repost, read the state it leaves behind. An adapter missing either half can never
-    // credit, so nothing that depends on it may be advertised.
+    // Can THIS build actually perform the action on this platform? The server's capability
+    // matrix (state.canRepost / state.canSend) says the platform offers it; these say the
+    // adapter in front of us can see the control that starts it. For a repost, isReposted()
+    // is optional extra proof (the flipped control), NOT a gate: adapters that expose it (X,
+    // TikTok) wait for the flip before paying, adapters that do not (Instagram) credit on the
+    // click intent plus the confirmed network mutation. An adapter that cannot see the control
+    // can never credit, so nothing that depends on it may be advertised.
     const repostCapable = () => !!(state && state.canRepost)
-      && typeof A.repostTarget === 'function' && typeof A.isReposted === 'function';
+      && typeof A.repostTarget === 'function';
     const sendCapable = () => !!(state && state.canSend) && typeof A.sendTarget === 'function';
     // Read the adapter's repost state without ever letting selector drift throw.
     // Strict focal read for the self-heal, wrapped like every other adapter DOM call so
@@ -324,18 +329,32 @@ self.EngageCore = (function () {
         const d = e.data;
         if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== A.platform) return;
         if (!state || !state.ref) return; // no active target on this page
-        // A confirmation we cannot attribute is DROPPED, never guessed onto whatever this
-        // surface happens to have bound. A null ref means observe.js could not read the
-        // post id out of the request, and accepting it would dissolve the whole
-        // click/confirm binding: any unparsed confirmation would land on the current post.
-        const ref = d.ref == null ? '' : String(d.ref);
+        // Attribute the confirmation to a post. Normally observe.js read the post id out of
+        // the request and it must equal this card's target, or the message is DROPPED (an
+        // unattributable confirmation must never be guessed onto whatever this surface has
+        // bound). Some mutations carry only an id we cannot map to our shortcode target
+        // (Instagram's numeric media_id), so they arrive ref-less; for an adapter with no
+        // isReposted flip to lean on (Instagram, owner decision) a ref-less confirmation is
+        // attributed to the post on screen through the armed click intent alone, which is
+        // page-scoped and expires in 90s. Adapters that DO parse a ref (X, TikTok) are
+        // unchanged: a present ref must match, and a ref-less confirmation there is still
+        // dropped.
+        let ref = d.ref == null ? '' : String(d.ref);
+        if (!ref && typeof A.isReposted !== 'function') ref = state.ref;
         if (!ref || ref !== state.ref) return;
         const now = Date.now();
         if (d.kind === 'repost' && repostCapable() && now < pendingRepostUntil) {
           pendingRepostUntil = 0;
           lastTaken = { kind: 'repost', ref, at: now };
-          // Signal three: credit only once the control has actually flipped.
-          whenFlipped(() => !!state && state.ref === ref && adapterReposted(), () => fireEngagement('repost'));
+          // Signal three, repost only and only where the adapter exposes isReposted (X,
+          // TikTok): credit once the platform's own control has actually flipped to its undo
+          // state. Adapters without it (Instagram) have no flip to wait on, so the click
+          // intent plus this confirmed mutation are the two signals and the credit fires here.
+          if (typeof A.isReposted === 'function') {
+            whenFlipped(() => !!state && state.ref === ref && adapterReposted(), () => fireEngagement('repost'));
+          } else {
+            fireEngagement('repost');
+          }
         } else if (d.kind === 'send' && sendCapable() && now < pendingSendUntil) {
           pendingSendUntil = 0;
           lastTaken = { kind: 'send', ref, at: now };

@@ -44,6 +44,6 @@ self.S2 = {
 self.BUILD_CAPS = {
   x:         { repost: true,  send: false },
   tiktok:    { repost: true,  send: false },
-  instagram: { repost: false, send: false },
+  instagram: { repost: true,  send: false },
   youtube:   { repost: false, send: false },
 };

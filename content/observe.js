@@ -18,13 +18,14 @@
 // backstop. What this makes impossible is UI level faking: opening the repost menu and
 // clicking nothing, which is the cheat that matters here.
 //
-// WHERE THIS RUNS: x.com and twitter.com only. Both manifests declare it on exactly the
-// hosts a signature below already covers, because patching fetch and XHR on a host we have
-// no signature for is pure blast radius for zero credit (and the hardest thing in this diff
-// for a store reviewer to justify). The Task 11 discovery session widens the manifest match
-// lists back to the TikTok and Instagram hosts in the SAME change that adds their entries to
-// SIGS, never before. Manifests are strict JSON here (the release gate parses them), which
-// is why that note lives in this file.
+// WHERE THIS RUNS: exactly the hosts a signature below already covers, currently x.com,
+// twitter.com, the TikTok hosts and the Instagram hosts. Both manifests declare it on those
+// and no others, because patching fetch and XHR on a host we have no signature for is pure
+// blast radius for zero credit (and the hardest thing in this diff for a store reviewer to
+// justify). A new platform's hosts join the observer's content_scripts match lists in the
+// SAME change that adds its entry to SIGS, never before, and the two manifests stay identical.
+// Manifests are strict JSON here (the release gate parses them), which is why that note lives
+// in this file.
 //
 // HARD RULES. This code runs on x.com for real users, so a bug here does not merely fail to
 // credit, it breaks THEIR web:
@@ -72,23 +73,38 @@
           catch (e) { return null; }
         },
       },
-      // TODO(Instagram): repost or the paper plane media_share send, pending the live
-      // discovery session. Until an entry exists, the matching action simply does not
-      // credit on that platform: the isolated world never sees a confirmation, so the
-      // widget row stays un-ticked and no request is sent. Absence is a missing feature,
-      // never a broken page and never a credit nobody earned.
+      {
+        platform: 'instagram', kind: 'repost',
+        // POST to /graphql/query (and the confirm to /api/graphql) whose form-encoded body
+        // carries fb_api_req_friendly_name=usePolarisCreateMediaRepostMutation. Recorded live
+        // 2026-08-08. Anchored on the friendly-name in the BODY, not the path (it fires on
+        // BOTH endpoints) and not the rotating doc_id. The un-repost is a DIFFERENT mutation
+        // (usePolarisDeleteMediaRepostMutation), so it cannot match here.
+        test: function (url, body) {
+          return /(?:^|&)fb_api_req_friendly_name=usePolarisCreateMediaRepostMutation(?:&|$)/.test(String(body || ''));
+        },
+        // The mutation identifies the post by a NUMERIC media_id, not the instagram:<shortcode>
+        // our targets use, and the two cannot be reconciled here. Return null: the isolated
+        // world credits the post on screen via the armed click intent, the same null-ref path
+        // the design already documents (see the ref() note above).
+        ref: function () { return null; },
+      },
+      // TODO(Instagram send): the paper plane media_share send, pending its own live
+      // discovery session. Until an entry exists that action simply does not credit: the
+      // isolated world never sees a confirmation, so the widget row stays un-ticked and no
+      // request is sent. Absence is a missing feature, never a broken page and never a credit
+      // nobody earned.
       //
       // DELIBERATELY ABSENT: TikTok's "send to friends". Recorded live 2026-08-08, the
       // send fires TikTok's own share_video_to_chat event but NO observable request
       // carries it: it goes out through their signed IM packet layer. Crediting it would
       // mean paying on a click alone, which is the exact hole the observer exists to
       // close, so sends do not earn on TikTok.
-      // Whoever adds those entries: a test() must match ONE mutation endpoint exactly,
-      // never a path prefix. Every request it matches gets its promise observed, and the
-      // undo endpoint (un-repost) must not match at all. Add the matching hosts to the
-      // observer's content_scripts entry in BOTH manifests in that same change (they were
-      // narrowed to x.com and twitter.com precisely because no signature covers them yet),
-      // and keep the two match lists identical or the release gate fails.
+      // Whoever adds those entries: a test() must match ONE mutation exactly (a friendly-name
+      // in the body or one endpoint), never a path prefix. Every request it matches gets its
+      // promise observed, and the undo mutation (un-repost) must not match at all. Add the
+      // matching hosts to the observer's content_scripts entry in BOTH manifests in that same
+      // change, and keep the two match lists identical or the release gate fails.
     ];
 
     // Give a wrapper the same name and arity as the function it replaces. Pages do read
