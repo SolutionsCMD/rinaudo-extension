@@ -26,6 +26,13 @@
       }
       return '';
     },
+    // Repost, click half of the two-signal proof. BOTH testids arm the window: the action
+    // bar button opens X's menu and "retweetConfirm" is the item inside it, and either
+    // click is the member reaching for the control. "unretweet" is deliberately absent,
+    // that one is the undo. Nothing credits until content/observe.js sees X's own
+    // CreateRetweet request come back 2xx.
+    repostTarget(t) { return t && t.closest ? t.closest('[data-testid="retweet"], [data-testid="retweetConfirm"]') : null; },
+    repostPresent() { try { return !!document.querySelector('[data-testid="retweet"], [data-testid="unretweet"]'); } catch { return false; } },
     getVideoEl() { return null; },
   };
   self.RGC_X_ADAPTER = adapter;
@@ -59,14 +66,16 @@
     toastTimer = setTimeout(() => { if (toastEl) toastEl.style.opacity = '0'; }, 2500);
   }
 
-  // Cache the X like/comment reward for the toast text (falls back to global).
-  const xr = { like: 0, comment: 0 };
+  // Cache the X like/comment/repost reward for the toast text (like and comment fall back
+  // to the global amount; a repost has one global amount and no per-platform override).
+  const xr = { like: 0, comment: 0, repost: 0 };
   async function refreshRewards() {
     try {
       const d = await chrome.runtime.sendMessage({ type: 's2Targets' });
       if (d) {
         xr.like = (d.xLikeReward != null ? d.xLikeReward : d.likeReward) || 0;
         xr.comment = (d.xCommentReward != null ? d.xCommentReward : d.commentReward) || 0;
+        xr.repost = d.repostReward || 0;
       }
     } catch { /* keep last */ }
   }
@@ -135,4 +144,43 @@
       .then((r) => { if (r && r.credited && r.awarded) toast(`${rewardText(xr.comment)} for commenting`); })
       .catch(() => {});
   }
+
+  // Inline REPOST. engage-core runs the same two-signal rule but only has state on a
+  // /status/ page whose id is an active target, and the feed is where most reposting
+  // actually happens — so the timeline needs its own copy of both halves. Click half:
+  // bind the card's tweet id when the action-bar repost control is pressed. Confirm half:
+  // the message content/observe.js posts once X's own CreateRetweet request succeeds.
+  const firedRepost = new Set();
+  let pendingRepost = null;
+  const REPOST_WINDOW_MS = 90000;
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('[data-testid="retweet"]'); // "unretweet" is the undo
+    if (!btn) return;
+    const ref = cardRef(btn);
+    // X renders the confirm menu OUTSIDE the card, so its click has no article to read an
+    // id from. The id therefore has to be bound here, at the action-bar click, and left
+    // alone afterwards, which is why an empty read never overwrites a good one.
+    if (ref) pendingRepost = { ref, until: Date.now() + REPOST_WINDOW_MS };
+  }, true);
+
+  window.addEventListener('message', (e) => {
+    try {
+      if (e.source !== window || e.origin !== location.origin) return;
+      const d = e.data;
+      if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== 'x' || d.kind !== 'repost') return;
+      if (!pendingRepost || Date.now() >= pendingRepost.until) return; // no click, no credit
+      const ref = d.ref ? String(d.ref) : pendingRepost.ref;
+      if (ref !== pendingRepost.ref) return; // confirmed a different tweet than the one clicked
+      pendingRepost = null;
+      if (ref === adapter.getRef()) return; // the post in the URL belongs to engage-core
+      if (firedRepost.has(ref)) return;
+      firedRepost.add(ref);
+      chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'repost', ref })
+        .then((r) => {
+          if (r && ('credited' in r)) { if (r.credited && r.awarded) toast(`${rewardText(xr.repost)} for reposting`); }
+          else firedRepost.delete(ref); // error / not a target: allow a later retry
+        })
+        .catch(() => { firedRepost.delete(ref); });
+    } catch { /* a malformed page message must never break the timeline */ }
+  });
 })();

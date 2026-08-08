@@ -9,6 +9,11 @@
 //   { platform, actions:{watch,like,comment}, getRef()->string, isLiked()->bool,
 //     commentSubmitTarget(eventTarget)->Element|null, commentText()->string,
 //     getVideoEl()->HTMLVideoElement|null }
+// Optional, for the two-signal repost / in-platform send (engagement v2):
+//   { repostTarget(eventTarget)->Element|null, sendTarget(eventTarget)->Element|null,
+//     repostPresent()->bool, sendPresent()->bool }
+// An adapter that omits repostTarget/sendTarget simply never offers that row and never
+// credits it, which is how a platform whose controls have not been mapped yet degrades.
 self.EngageCore = (function () {
   const ROW_CSS = `
     .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
@@ -18,8 +23,6 @@ self.EngageCore = (function () {
     .done{color:#86D6A4}
     .row.pending .lbl,.row.pending .amt{color:#8A8678}
     .row.paused .lbl{color:#8A8678}
-    .row.blocked .lbl{color:#E8B339}
-    .row.blocked .amt{color:#E8B339}
     .amt.req{color:#E8B339}
     .hint{font-size:11px;color:#6B6960;margin:2px 0 6px;line-height:1.3}`;
 
@@ -33,10 +36,12 @@ self.EngageCore = (function () {
 
   function init(A) {
     let frame = null, state = null, commentHooked = false, likeHooked = false, lastHb = 0;
-    let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1 };
+    let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1,
+      repostReward: 0, shareSendReward: 0, engageBonusReward: 0 };
 
     // Locally remember what's already credited per (platform, post) so the ✓ state
     // survives a refresh (the server is idempotent; this is purely the display).
+    // Shape: { like, comment, watch, awarded, repost, send, bonus }.
     const doneKey = (ref) => `rgcDone:${A.platform}:${ref}`;
     async function getDone(ref) { try { const k = doneKey(ref); return (await chrome.storage.local.get(k))[k] || {}; } catch { return {}; } }
     async function setDone(ref, patch) { try { const k = doneKey(ref); const cur = (await chrome.storage.local.get(k))[k] || {}; await chrome.storage.local.set({ [k]: { ...cur, ...patch } }); } catch { /* ignore */ } }
@@ -71,12 +76,6 @@ self.EngageCore = (function () {
     }
     function watchRow() {
       if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchPotential()}`, 'done');
-      // Watched enough, but the watch reward is gated behind like + comment on this post.
-      if (state.watchBlocked) {
-        const r = rowEl('✓ Watched. Like & comment to collect', `+${watchPotential()}`, 'idle');
-        r.classList.add('blocked');
-        return r;
-      }
       if (state.claiming) return rowEl(`Watch ${fmt(state.watched)} / ${fmt(state.target)}`, '', 'pending');
       const playing = state.watchPlaying;
       const suffix = playing ? '' : (state.watchMuted ? ' · unmute to earn' : ' · paused');
@@ -115,8 +114,7 @@ self.EngageCore = (function () {
       const body = frame.body; body.replaceChildren();
       if (A.actions.watch && (state.sessionId || state.watchDone)) {
         body.append(watchRow());
-        if (state.watchBlocked && !state.watchDone) body.append(hint('You watched enough. Like & comment on this post to collect its tickets'));
-        else if (state.watchError && !state.watchDone) body.append(hint(watchErrText(state.watchError)));
+        if (state.watchError && !state.watchDone) body.append(hint(watchErrText(state.watchError)));
         else if (!state.watchDone) body.append(hint('Keep tab open & unmuted while watching'));
         // Second-watch row: appears seamlessly once the base watch is collected.
         if (state.watchDone && replayAvailable()) {
@@ -141,18 +139,40 @@ self.EngageCore = (function () {
           body.append(hint(banned.length ? `${lenRule}, and can't mention ${banned[0]}s` : lenRule));
         }
       }
-      const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0) + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
+      // Repost / send. THREE gates, all required, and the reward gate is the dark-ship
+      // contract: the server says the platform offers the action, the tariff pays more
+      // than 0 for it, and THIS adapter can see the control. A reward of 0 means the
+      // action is not earning yet, so the row must not render at all; an adapter with no
+      // repostTarget cannot produce the click half of the two-signal proof, so promising
+      // the row there would be a promise we could never keep.
+      if (state.canRepost && rewards.repostReward > 0 && typeof A.repostTarget === 'function') {
+        body.append(rowEl('Repost it', `+${rewards.repostReward}`, state.repostS));
+      }
+      if (state.canSend && rewards.shareSendReward > 0 && typeof A.sendTarget === 'function') {
+        body.append(rowEl('Send it to a friend', `+${rewards.shareSendReward}`, state.sendS));
+      }
+      // All-done bonus. The server computes and pays it; this row only reports it.
+      if (rewards.engageBonusReward > 0) {
+        body.append(rowEl('Do it all', `+${rewards.engageBonusReward}`, state.bonusDone ? 'done' : 'idle'));
+      }
+      const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0)
+        + (state.repostS === 'done' ? rewards.repostReward : 0) + (state.sendS === 'done' ? rewards.shareSendReward : 0)
+        + (state.bonusDone ? rewards.engageBonusReward : 0)
+        + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
       frame.setPill(earned ? `+${earned}` : '🎟');
     }
     function clearWidget() { if (frame) { frame.destroy(); frame = null; } state = null; }
 
+    // Server action name -> widget state key and local-cache flag.
+    const ACTION_KEY = { like: 'likeS', comment: 'commentS', repost: 'repostS', share_send: 'sendS' };
+    const ACTION_FLAG = { like: 'like', comment: 'comment', repost: 'repost', share_send: 'send' };
     async function fireEngagement(action) {
       const ref = state && state.ref; if (!ref) return;
-      const key = action === 'like' ? 'likeS' : 'commentS';
+      const key = ACTION_KEY[action]; if (!key) return;
       if (state[key] !== 'idle') return; // already pending or done
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
-      if (r && r.credited) { state[key] = 'done'; setDone(ref, action === 'like' ? { like: true } : { comment: true }); }
+      if (r && r.credited) { state[key] = 'done'; setDone(ref, { [ACTION_FLAG[action]]: true }); }
       // A genuine already-earned response (HTTP 200, credited:false) on a like → show done.
       // Must distinguish from an ERROR object (e.g. {error:'http_409'} when the post isn't an
       // active target yet, or an auth blip): error objects have no `credited` field, so fall
@@ -160,8 +180,47 @@ self.EngageCore = (function () {
       // forever in local storage and the like could never credit later.
       else if (r && action === 'like' && 'credited' in r) { state[key] = 'done'; setDone(ref, { like: true }); }
       else state[key] = 'idle';
+      // The all-done bonus is computed and paid by the server on whichever credit
+      // completed the set, and reported back here, so the row can tick in the same draw.
+      if (r && r.bonus && r.bonus.credited) { state.bonusDone = true; setDone(ref, { bonus: true }); }
       drawWidget();
     }
+
+    // --- Two-signal repost / in-platform send ---------------------------------------
+    // Signal one, here: the member clicked the platform's own repost or send control,
+    // which opens a 90 second window. Signal two: content/observe.js watches the PAGE's
+    // own request for that action succeed and posts the confirmation back. Neither
+    // credits alone, so a menu opened and abandoned earns nothing, and a forged message
+    // with no preceding click earns nothing either.
+    const CONFIRM_WINDOW_MS = 90000;
+    let pendingRepostUntil = 0, pendingSendUntil = 0, intentHooked = false;
+    function hookIntent() {
+      if (intentHooked) return; intentHooked = true;
+      if (typeof A.repostTarget !== 'function' && typeof A.sendTarget !== 'function') return;
+      document.addEventListener('click', (e) => {
+        try { if (typeof A.repostTarget === 'function' && A.repostTarget(e.target)) pendingRepostUntil = Date.now() + CONFIRM_WINDOW_MS; } catch { /* selector drift must never throw */ }
+        try { if (typeof A.sendTarget === 'function' && A.sendTarget(e.target)) pendingSendUntil = Date.now() + CONFIRM_WINDOW_MS; } catch { /* same */ }
+      }, true);
+    }
+    // The confirmation half. Validated strictly: same window, same origin, our marker,
+    // our platform, and the platform's own request must have SUCCEEDED. Whole body inside
+    // try/catch because this runs for every message the page posts to itself.
+    window.addEventListener('message', (e) => {
+      try {
+        if (e.source !== window || e.origin !== location.origin) return;
+        const d = e.data;
+        if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== A.platform) return;
+        if (!state || !state.ref) return; // no active target on this page
+        const ref = d.ref == null ? null : String(d.ref);
+        if (ref && ref !== state.ref) return; // a different post on the same page
+        const now = Date.now();
+        if (d.kind === 'repost' && state.canRepost && now < pendingRepostUntil) {
+          pendingRepostUntil = 0; fireEngagement('repost');
+        } else if (d.kind === 'send' && state.canSend && now < pendingSendUntil) {
+          pendingSendUntil = 0; fireEngagement('share_send');
+        }
+      } catch { /* a malformed page message must never break earning */ }
+    });
 
     // GESTURE-TRUST: credit the comment when the user SUBMITS one with 6+ characters typed.
     // We no longer wait to confirm the box cleared (that re-derivation of platform state was
@@ -307,17 +366,15 @@ self.EngageCore = (function () {
       // Credit on a successful claim OR if it was already claimed earlier (don't blink forever).
       if (r && (r.ok || r.reason === 'already_claimed')) {
         state.watchDone = true;
-        state.watchBlocked = false;
         state.watchError = null;
         state.awarded = r.ok ? (r.awarded != null ? r.awarded : (r.tickets != null ? r.tickets : null)) : null;
         setDone(state.ref, { watch: true, awarded: state.awarded });
         // Seamlessly roll into the second-watch timer if this target offers replays.
         if (replayAvailable() && (state.replayUsed || 0) < (state.replayMax || 0)) maybeStartReplay();
         else if (replayAvailable()) state.replayAllDone = true;
-      } else if (r && r.reason === 'engagement_required') {
-        // Watch time is satisfied; the reward is held until the user likes AND comments.
-        state.watchBlocked = true;
-        state.watchError = null;
+        // The watch paths pay the all-done bonus too (a double watch can be the action
+        // that completes a set), so tick the row when the claim reports one.
+        if (r.bonus && r.bonus.credited) { state.bonusDone = true; setDone(state.ref, { bonus: true }); }
       } else {
         // not_qualified / no_reward / no_target / network — tell the user instead of stalling.
         state.watchError = (r && r.reason) || 'network';
@@ -358,6 +415,8 @@ self.EngageCore = (function () {
         state.replayUsed = r.ok ? (r.used != null ? r.used : (state.replayUsed || 0) + 1) : (state.replayMax || 0);
         if ((state.replayUsed || 0) >= (state.replayMax || 0)) state.replayAllDone = true;
         else maybeStartReplay(); // more slots left — roll straight into the next pass
+        // The double watch is part of the all-done set on TikTok, Instagram and Shorts.
+        if (r.bonus && r.bonus.credited) { state.bonusDone = true; setDone(state.ref, { bonus: true }); }
       }
       // not_qualified / transient: keep accruing; the 5s loop retries the claim.
       drawWidget();
@@ -403,6 +462,18 @@ self.EngageCore = (function () {
           let ok = false; try { ok = !!A.likePresent(); } catch { ok = false; }
           if (!ok) failures.push('like');
         }
+        // repost / in-platform send: same optional-probe contract. Sampled only when the
+        // server says this platform offers the action AND the adapter can answer, so a
+        // platform whose controls are not mapped yet reports nothing instead of flooding
+        // the table with a permanent miss.
+        if (state.canRepost && typeof A.repostPresent === 'function') {
+          let ok = false; try { ok = !!A.repostPresent(); } catch { ok = false; }
+          if (!ok) failures.push('repost');
+        }
+        if (state.canSend && typeof A.sendPresent === 'function') {
+          let ok = false; try { ok = !!A.sendPresent(); } catch { ok = false; }
+          if (!ok) failures.push('share');
+        }
         if (!failures.length) return;
         const cur = (await chrome.storage.local.get('selHealth')).selHealth;
         const arr = Array.isArray(cur) ? cur : [];
@@ -427,6 +498,11 @@ self.EngageCore = (function () {
         watchVideoReward: (data && data.watchVideoReward) || 0,
         watchFloor: (data && data.watchVideoFloor) || 5,
         watchPerMinute: (data && data.watchTicketsPerMinute) || 1,
+        // One global amount each, no per-platform override. All three are 0 until the
+        // tariff flip, and every row that reads 0 stays off the card.
+        repostReward: (data && data.repostReward) || 0,
+        shareSendReward: (data && data.shareSendReward) || 0,
+        engageBonusReward: (data && data.engageBonusReward) || 0,
       };
       const target = data && (data.targets || []).find((t) => t.platform === A.platform && t.ref === ref);
       if (!target) return clearWidget();
@@ -444,21 +520,40 @@ self.EngageCore = (function () {
       const likeDone = !!srv.like;
       const commentDone = !!srv.comment;
       const watchDone = !!srv.watch;
+      const repostDone = !!srv.repost;
+      const sendDone = !!srv.shareSend;
       if (!srv.like && local.like) setDone(ref, { like: false }); // heal a stale cached "done"
       if (srv.like && !local.like) setDone(ref, { like: true });
       if (!srv.comment && local.comment) setDone(ref, { comment: false });
       if (srv.comment && !local.comment) setDone(ref, { comment: true });
       if (!srv.watch && local.watch) setDone(ref, { watch: false });
       if (srv.watch && !local.watch) setDone(ref, { watch: true });
+      if (!srv.repost && local.repost) setDone(ref, { repost: false });
+      if (srv.repost && !local.repost) setDone(ref, { repost: true });
+      if (!srv.shareSend && local.send) setDone(ref, { send: false });
+      if (srv.shareSend && !local.send) setDone(ref, { send: true });
+      if (!srv.bonus && local.bonus) setDone(ref, { bonus: false });
+      if (srv.bonus && !local.bonus) setDone(ref, { bonus: true });
+      // Which rows this platform may show at all, straight from the server's capability
+      // matrix. Absent (an older server) means no repost and no send, which is the safe
+      // direction: nothing is advertised and nothing is sent that would be refused.
+      const acts = target.actions || {};
       // "Watch again" replay config for this target (server-gated: present only for eligible
       // TikTok / YouTube Shorts). Absent → the second-watch timer never shows.
       const rep = srv.replay || null;
       const replayUsed = rep ? (rep.used || 0) : 0;
       const replayMax = rep ? (rep.max || 0) : 0;
+      // A click intent belongs to the post that was on screen when it happened. Moving to
+      // a different post retires it, so a confirmation that arrives late (or without a
+      // readable post id) can never land on the post the member has since navigated to.
+      pendingRepostUntil = 0; pendingSendUntil = 0;
       state = { ref, watched: 0, target: 0, sessionId: null,
         watchDone, awarded: local.awarded != null ? local.awarded : null,
-        watchPlaying: false, watchMuted: false, claiming: false, watchBlocked: false,
+        watchPlaying: false, watchMuted: false, claiming: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle',
+        repostS: repostDone ? 'done' : 'idle', sendS: sendDone ? 'done' : 'idle',
+        bonusDone: !!srv.bonus,
+        canRepost: acts.repost === true, canSend: acts.shareSend === true,
         commentMinWords: (typeof target.commentMinWords === 'number' ? target.commentMinWords : 0),
         commentEnabled: target.commentEnabled !== false,
         commentBannedWords: Array.isArray(target.commentBannedWords) ? target.commentBannedWords : [],
@@ -466,7 +561,7 @@ self.EngageCore = (function () {
         replayReward: rep ? (rep.reward || 1) : 1,
         replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
         baseTarget: 0 };
-      lastHb = 0; hookComment(); hookLike(); drawWidget();
+      lastHb = 0; hookComment(); hookLike(); hookIntent(); drawWidget();
       scheduleHealthSample(); // target is ACTIVE here; take the one health sample soon
       if (!state.watchDone) startWatch();
     }
@@ -501,12 +596,12 @@ self.EngageCore = (function () {
       } else if (wasPlaying) {
         drawWidget(); // playing -> paused: redraw once
       }
-      // Claim once watched enough. If the reward is blocked on engagement, don't
-      // re-hammer the server every 5s — only retry the claim once like AND comment land.
+      // Claim once watched enough. The server's like-and-comment gate on the watch reward
+      // died with engagement v2 (owner call, 2026-08-08), so a claim is never held back:
+      // watching now pays on its own and the all-done bonus is the incentive to do the rest.
       if ((state.watched || 0) >= (state.target || 120)) {
         if (state.replaying) claimReplayWatch();
-        else if (!state.watchBlocked) claimWatch();
-        else if (state.likeS === 'done' && state.commentS === 'done') claimWatch();
+        else claimWatch();
       }
     }, 5000);
 
@@ -530,7 +625,7 @@ self.EngageCore = (function () {
       if (ref !== wdRef) { wdRef = ref; wdTries = 0; wdNextAt = 0; } // a fresh ref to settle
       // Established = we have state for this ref and (no watch, or a session/terminal state).
       const established = state && state.ref === ref &&
-        (!A.actions.watch || state.sessionId || state.watchDone || state.watchBlocked);
+        (!A.actions.watch || state.sessionId || state.watchDone);
       if (established || wdTries >= 6 || now < wdNextAt) return;
       wdTries++; wdNextAt = now + 2000 * wdTries; // 2s, 4s, 6s … backoff
       if (!state || state.ref !== ref) start(ref);          // setup never took — redo it
