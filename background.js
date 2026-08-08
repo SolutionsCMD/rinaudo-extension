@@ -18,10 +18,10 @@ const HAS_NOTIFICATIONS = !!(chrome.notifications && chrome.notifications.create
 const HAS_WINDOWS = !!(chrome.windows && chrome.windows.create);
 function notify(id, opts) { try { if (HAS_NOTIFICATIONS) chrome.notifications.create(id, opts); } catch { /* unsupported */ } }
 
-// Post/video notifications open the PLATFORM HOMEPAGE, not the direct video URL, so
-// members search for it themselves — search demand + in-app discovery is a stronger
-// signal to the platform's algorithm than an external deep-link. Unknown hosts (e.g.
-// a Kick stream or a custom link) are left as-is so go-live still opens the stream.
+// Strips a post link down to the PLATFORM HOMEPAGE so the member searches for the post
+// themselves. Only the owner's manual push still does this; the earn toasts below carry
+// the direct link (see postLink). Unknown hosts (e.g. a Kick stream or a custom link) are
+// left as-is so go-live still opens the stream.
 function homepageFor(url) {
   let host = '';
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
@@ -31,6 +31,19 @@ function homepageFor(url) {
   if (host.endsWith('x.com') || host.endsWith('twitter.com')) return 'https://x.com';
   return url;
 }
+
+// New-post toasts (soc-*, vid-*, target-*) open the POST ITSELF: every one of them is an
+// earnable action, and a homepage landing costs the member the like/repost/watch they came
+// for. A payload with no url falls back to the platform homepage, and an empty result falls
+// back again to the Kick channel in the click handlers.
+const PLATFORM_HOME = {
+  youtube: 'https://www.youtube.com',
+  tiktok: 'https://www.tiktok.com',
+  instagram: 'https://www.instagram.com',
+  twitter: 'https://x.com',
+  x: 'https://x.com',
+};
+const postLink = (url, platform) => url || PLATFORM_HOME[platform] || '';
 
 // Per-platform toast-notification toggles (set in the popup). Opt-OUT: a platform is on
 // unless its pref is explicitly false. Keys: kick, youtube, tiktok, instagram, x.
@@ -409,10 +422,10 @@ async function checkSignals() {
     for (const v of (r.latestVideos || [])) {
       if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
         const id = `vid-${v.videoId}`;
-        notifUrls[id] = homepageFor(v.url);
+        notifUrls[id] = postLink(v.url, 'youtube');
         const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
         const img = await youtubeThumbCard(v.videoId);
-        const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Search for it on YouTube to watch.` : `New ${kind}. Search for it on YouTube.`, priority: 2 };
+        const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Click to watch it.` : `New ${kind}. Click to watch it.`, priority: 2 };
         notify(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
       }
     }
@@ -422,8 +435,8 @@ async function checkSignals() {
       const prev = (seen.social || {})[s.platform];
       if (s.url && prev && s.url !== prev && prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) {
         const id = `soc-${s.platform}-${Date.now()}`;
-        notifUrls[id] = homepageFor(s.url);
-        notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title}. Open the app and search for it.` : 'New post. Open the app and search for it.', priority: 2 });
+        notifUrls[id] = postLink(s.url, s.platform);
+        notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title}. Click to open the post.` : 'New post. Click to open it.', priority: 2 });
       }
     });
   }
@@ -448,7 +461,7 @@ if (HAS_NOTIFICATIONS) {
     chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
     chrome.notifications.clear(id);
   });
-  // Action buttons ("Watch now" / "Search & watch") open the same destination as the body.
+  // Action buttons ("Watch now" / "Open post") open the same destination as the body.
   chrome.notifications.onButtonClicked.addListener(async (id) => {
     const { notifUrls } = await chrome.storage.local.get('notifUrls');
     chrome.tabs.create({ url: (notifUrls && notifUrls[id]) || C.CHANNEL_URL });
@@ -487,7 +500,7 @@ async function checkNewTargets() {
     seen.add(key); // only mark seen once we've decided to notify
     if (!prefOn(prefs, t.platform)) continue; // user muted this platform — seen, but no toast
     const id = `target-${key}`;
-    notifUrls[id] = homepageFor(t.url || '');
+    notifUrls[id] = postLink(t.url, t.platform);
     // Exact ticket value comes from the server per target (watch payout). Fall back to a
     // generic line if it's missing (older server).
     const n = Number(t.reward) || 0;
@@ -497,8 +510,8 @@ async function checkNewTargets() {
       iconUrl: TARGET_ICONS[t.platform] || 'icons/icon128.png',
       imageUrl: await earnToastImage(t.platform, t.ref),
       title: `🎟 ${earn}: ${PLATFORM_NAME[t.platform] || 'new post'}`,
-      message: t.label ? `${t.label}. Search & watch to earn.` : `${earn}: search & watch the new post.`,
-      buttons: [{ title: 'Search & watch' }],
+      message: t.label ? `${t.label}. Click to open the post and earn.` : `${earn}. Click to open the new post.`,
+      buttons: [{ title: 'Open post' }],
       priority: 2,
     });
   }

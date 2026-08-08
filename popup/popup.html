@@ -23,6 +23,18 @@
     .rates-note { font-size: 11px; color: #8A8678; line-height: 1.5; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(201,167,102,.12); }
     #update { display: none; font-size: 12px; line-height: 1.45; margin: 0 0 12px; padding: 9px 11px; border-radius: 8px; background: rgba(232,179,57,.12); border: 1px solid rgba(232,179,57,.45); color: #E8B339; }
     #ver { font-size: 10px; color: #6B6960; font-family: ui-monospace, monospace; margin-top: 14px; text-align: right; }
+    #earnnow { margin-top: 14px; border-top: 1px solid rgba(201,167,102,.18); padding-top: 12px; }
+    #earnlist { list-style: none; margin: 0; padding: 0; }
+    .earn-item { padding: 9px 0; border-bottom: 1px solid rgba(201,167,102,.10); }
+    .earn-item:last-child { border-bottom: 0; }
+    .earn-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .earn-plat { font-size: 12px; font-weight: 600; color: #F4EFE3; }
+    .earn-open { width: auto; flex: none; padding: 5px 12px; font-size: 11px; background: rgba(201,167,102,.16); border: 1px solid rgba(201,167,102,.45); color: #C9A766; border-radius: 6px; }
+    .earn-label { font-size: 11px; color: #A9A697; line-height: 1.45; margin-top: 3px; }
+    .earn-ticks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+    .earn-tick { font-size: 10px; letter-spacing: .04em; color: #8A8678; }
+    .earn-tick.done { color: #7FB791; }
+    .earn-more { font-size: 11px; color: #8A8678; line-height: 1.45; margin: 8px 0 0; }
     #notifs { margin-top: 14px; border-top: 1px solid rgba(201,167,102,.18); padding-top: 12px; }
     .notif-h { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #C9A766; margin-bottom: 4px; }
     .notif-sub { font-size: 11px; color: #8A8678; line-height: 1.45; margin-bottom: 10px; }
@@ -36,6 +48,12 @@
   <p id="intro">Connect with Kick to earn tickets for liking &amp; commenting on posts. You'll also get pinged when Mizkif goes live or posts.</p>
   <button id="s2connect" class="connect">Connect with Kick</button>
   <p id="s2status">…</p>
+  <div id="earnnow" hidden>
+    <div class="notif-h">Earn now</div>
+    <p class="notif-sub">Open a post to earn tickets on it.</p>
+    <ul id="earnlist"></ul>
+    <p id="earnmore" class="earn-more" hidden></p>
+  </div>
   <div id="notifs">
     <div class="notif-h">Notifications</div>
     <p class="notif-sub">Choose which alerts pop up on your desktop.</p>
