@@ -215,6 +215,13 @@ self.EngageCore = (function () {
       // The all-done bonus is computed and paid by the server on whichever credit
       // completed the set, and reported back here, so the row can tick in the same draw.
       if (r && r.bonus && r.bonus.credited) { state.bonusDone = true; setDone(ref, { bonus: true }); }
+      // The watch gate is like-only (comments stopped earning 2026-08-08). If a claim
+      // already bounced off the gate, the like that just landed is exactly what it was
+      // waiting for: clear the error and retry now rather than sitting out the backoff.
+      if (state[key] === 'done' && action === 'like' && state.watchError === 'engagement_required') {
+        state.watchError = null;
+        claimWatch();
+      }
       drawWidget();
     }
 
@@ -442,6 +449,7 @@ self.EngageCore = (function () {
     // "Watch 1:00 / 0:52" forever retrying — the timer is local, so a user whose heartbeats
     // never reach the server sees a full bar and no explanation.
     function watchErrText(reason) {
+      if (reason === 'engagement_required') return 'Like this post to collect its watch tickets.';
       if (reason === 'not_qualified') return 'No watch time counted yet. Keep this tab visible with the video playing and unmuted.';
       if (reason === 'no_reward') return 'This video is too old to earn tickets.';
       if (reason === 'no_target') return 'This video is not collectable right now.';
@@ -698,9 +706,9 @@ self.EngageCore = (function () {
       } else if (wasPlaying) {
         drawWidget(); // playing -> paused: redraw once
       }
-      // Claim once watched enough. The server's like-and-comment gate on the watch reward
-      // died with engagement v2 (owner call, 2026-08-08), so a claim is never held back:
-      // watching now pays on its own and the all-done bonus is the incentive to do the rest.
+      // Claim once watched enough. The server gate is LIKE-ONLY (comments stopped earning
+      // everywhere on 2026-08-08): a claim before the like bounces with engagement_required,
+      // shows "Like this post to collect", and the like's success handler retries it.
       if ((state.watched || 0) >= (state.target || 120)) {
         if (state.replaying) claimReplayWatch();
         else claimWatch();
