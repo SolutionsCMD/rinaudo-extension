@@ -143,7 +143,12 @@
         // object could throw, and that must not stop the page's own call from happening.
         try {
           url = typeof input === 'string' ? input : (input && input.url) || '';
-          body = (init && typeof init.body === 'string') ? init.body : '';
+          // URLSearchParams is stringified too, so a page that serializes a matched mutation
+          // that way still matches; FormData/Blob stay unread (not our case).
+          body = init && init.body != null
+            ? (typeof init.body === 'string' ? init.body
+               : (init.body instanceof URLSearchParams ? init.body.toString() : ''))
+            : '';
         } catch (e) { url = ''; body = ''; }
         // Call through first and return this exact promise, untouched, no matter what.
         var p = oFetch.apply(this, arguments);
@@ -184,7 +189,12 @@
             try {
               var u = '';
               try { u = xhrUrls.get(xhr) || ''; } catch (e) { u = ''; }
-              var b = (typeof body === 'string') ? body : '';
+              // URLSearchParams is stringified too, so a page that serializes a matched
+              // mutation that way still matches; FormData/Blob stay unread (not our case).
+              var b = body != null
+                ? (typeof body === 'string' ? body
+                   : (body instanceof URLSearchParams ? body.toString() : ''))
+                : '';
               var sig = u ? matchSig(u, b) : null;
               // A listener is attached only to a matched request, and only reads status,
               // never responseText. Same meaning as the fetch path: 2xx says the platform

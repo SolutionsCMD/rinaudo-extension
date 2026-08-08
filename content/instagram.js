@@ -60,9 +60,20 @@
 
     // --- Repost ---------------------------------------------------------------
     // The repost control is svg[aria-label="Repost"] (role="img"), recorded live 2026-08-08.
-    // repostTarget stays lenient so the clickable wrapper around that svg arms the click
-    // intent too, same spirit as the TikTok repostTarget.
-    repostTarget(t) { return t && t.closest ? t.closest('svg[aria-label="Repost"], [role="button"]') : null; },
+    // The intent must arm ONLY on the repost control (its svg, or the wrapper button that
+    // contains that svg), never on an arbitrary role=button, so a delayed confirmation from
+    // an earlier post cannot be absorbed by a like/comment/menu click and credit the wrong post.
+    repostTarget(t) {
+      if (!t || !t.closest) return null;
+      // The svg itself, if the click landed on it.
+      const svg = t.closest('svg[aria-label="Repost"]');
+      if (svg) return svg;
+      // Otherwise the clickable wrapper, but ONLY when it actually contains the repost icon,
+      // so a click on like/comment/menu (also role=button) never arms a repost intent and
+      // cannot absorb a stray confirmation.
+      const btn = t.closest('[role="button"], button');
+      return btn && btn.querySelector('svg[aria-label="Repost"]') ? btn : null;
+    },
     repostPresent() {
       try { return !!document.querySelector('svg[aria-label="Repost"]'); }
       catch (e) { return false; }
