@@ -88,13 +88,23 @@ function earnAmounts(t, data) {
   };
 }
 
+// Can THIS build perform a repost on that platform? The in-page card asks the adapter in
+// front of it (repostCapable()); the popup runs off the platform pages with no adapter in
+// reach, so it reads the static map in config.js instead. A platform the map does not list
+// gets no chip: an unknown build capability is never a promise.
+function buildCanRepost(platform) {
+  const caps = self.BUILD_CAPS && self.BUILD_CAPS[platform];
+  return !!(caps && caps.repost);
+}
+
 // One chip per action the platform offers AND pays for, ticked when this member has already
-// collected it. Two gates, both required, the same pair the in-page card applies: a
-// capability the server does not report is never a promise, and an action the tariff prices
-// at 0 is not earning yet, so it must not be advertised here either (repost is exactly that
-// today). The one case a 0 is still worth showing is a like on a target that pays for a
-// watch: there the like is the gate that unlocks the watch payout, which is what the card
-// labels 'Required', so the chip stays and says so.
+// collected it. Gates the card applies too, all required: a capability the server does not
+// report is never a promise, and an action the tariff prices at 0 is not earning yet, so it
+// must not be advertised here either (repost is exactly that today). Repost carries a third
+// gate, buildCanRepost, because the server's matrix offers it on platforms whose adapters
+// cannot yet do it. The one case a 0 is still worth showing is a like on a target that pays
+// for a watch: there the like is the gate that unlocks the watch payout, which is what the
+// card labels 'Required', so the chip stays and says so.
 function earnTicks(t, data) {
   const acts = t.actions || {};
   const done = t.done || {};
@@ -102,7 +112,7 @@ function earnTicks(t, data) {
   const likeGatesWatch = acts.watch === true && amt.watch > 0;
   const rows = [
     ['Like', acts.like === true && (amt.like > 0 || likeGatesWatch), done.like === true, amt.like === 0],
-    ['Repost', acts.repost === true && amt.repost > 0, done.repost === true, false],
+    ['Repost', acts.repost === true && amt.repost > 0 && buildCanRepost(t.platform), done.repost === true, false],
     ['Watch', acts.watch === true && amt.watch > 0, done.watch === true, false],
   ].filter(([, worthDrawing]) => worthDrawing);
   if (!rows.length) return null;

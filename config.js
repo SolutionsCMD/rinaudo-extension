@@ -35,3 +35,15 @@ self.S2 = {
   // Selector-health reports (which adapter selectors failed to resolve on real pages).
   TELEMETRY: '/api/extension/telemetry',
 };
+
+// What THIS BUILD can actually do and prove, per platform. The server's actions matrix
+// says what the platform offers; this says what our adapters implement. TikTok and
+// Instagram flip to true only when their live discovery lands the control signatures and
+// selectors. The popup reads this because it runs off-page and cannot probe the adapter
+// the way the in-page widget's repostCapable() does.
+self.BUILD_CAPS = {
+  x:         { repost: true,  send: false },
+  tiktok:    { repost: false, send: false },
+  instagram: { repost: false, send: false },
+  youtube:   { repost: false, send: false },
+};
