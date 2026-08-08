@@ -112,7 +112,9 @@
     {
       "matches": [
         "https://x.com/*",
-        "https://twitter.com/*"
+        "https://twitter.com/*",
+        "https://www.tiktok.com/*",
+        "https://m.tiktok.com/*"
       ],
       "js": [
         "content/observe.js"

@@ -43,7 +43,7 @@ self.S2 = {
 // the way the in-page widget's repostCapable() does.
 self.BUILD_CAPS = {
   x:         { repost: true,  send: false },
-  tiktok:    { repost: false, send: false },
+  tiktok:    { repost: true,  send: false },
   instagram: { repost: false, send: false },
   youtube:   { repost: false, send: false },
 };

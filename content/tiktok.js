@@ -59,12 +59,25 @@
       try { return !!document.querySelector('[data-e2e*="share"], [data-e2e*="video-share"], video'); }
       catch (e) { return false; }
     },
-    // NOTE: no isReposted()/isRepostedFocal() yet. TikTok gives the reposted state no
-    // marked element we could find, so the flip check X uses is not available here and the
-    // 5s self-heal deliberately stays off for TikTok (engage-core treats a missing
-    // isRepostedFocal as "cannot judge" only when the method exists; with neither method
-    // present it falls back to the click plus confirmation path, which is what we want).
-    // A 200 on /upvote/publish with a matching item_id is the whole proof on this platform.
+    // The third signal. Recorded live 2026-08-08: reposting makes TikTok insert
+    // [data-e2e="repost-tag"] and [data-e2e="repost-action-tag"] (with the words "You
+    // reposted"), and nothing is removed. This matters because /upvote/publish answers
+    // HTTP 200 even when TikTok refuses the action, so status alone would pay for a
+    // repost that never happened; the tag only appears when it really did.
+    isReposted() {
+      try { return !!document.querySelector('[data-e2e="repost-tag"], [data-e2e="repost-action-tag"]'); }
+      catch (e) { return false; }
+    },
+    // Strict variant for the self-heal, which has no click intent or confirmed id to
+    // correct a mis-read. The tags are page-level, not per-card, so they are only
+    // trustworthy while the URL IS the post in question: on a feed or profile they could
+    // belong to any video on screen. null means "cannot judge here, do not self-heal".
+    isRepostedFocal() {
+      try {
+        if (this.refFromPath(location.pathname) !== this.getRef() || !this.getRef()) return null;
+        return !!document.querySelector('[data-e2e="repost-tag"], [data-e2e="repost-action-tag"]');
+      } catch (e) { return null; }
+    },
   };
   self.RGC_TIKTOK_ADAPTER = adapter;
   if (self.EngageCore) self.EngageCore.init(adapter);
