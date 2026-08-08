@@ -26,12 +26,27 @@
       }
       return '';
     },
-    // Repost, click half of the two-signal proof. BOTH testids arm the window: the action
-    // bar button opens X's menu and "retweetConfirm" is the item inside it, and either
-    // click is the member reaching for the control. "unretweet" is deliberately absent,
-    // that one is the undo. Nothing credits until content/observe.js sees X's own
-    // CreateRetweet request come back 2xx.
+    // Repost, click half of the proof. BOTH testids arm the window: the action bar button
+    // opens X's menu and "retweetConfirm" is the item inside it, and either click is the
+    // member reaching for the control. "unretweet" is deliberately absent, that one is the
+    // undo. Nothing credits until content/observe.js sees X's own CreateRetweet request
+    // come back 2xx AND isReposted() below says the control flipped.
     repostTarget(t) { return t && t.closest ? t.closest('[data-testid="retweet"], [data-testid="retweetConfirm"]') : null; },
+    // Did the repost actually land? X swaps the action bar's "retweet" control for
+    // "unretweet" once it did, exactly as it swaps "like" for "unlike", so this reads the
+    // same way isLiked() does. This is the signal a 2xx cannot give: X answers a refused
+    // retweet with HTTP 200 and an errors[] array in a body we are not allowed to read.
+    // `root` narrows the read to a single timeline card. With no root (engage-core, which
+    // only ever runs on a /status/ page) it scopes itself to the card for the tweet in the
+    // URL, so a reposted REPLY further down the conversation is not mistaken for the post
+    // itself; if that card cannot be identified it falls back to the whole document, the
+    // same scope isLiked() has always used.
+    isReposted(root) {
+      try {
+        const scope = root || articleForRef(this.getRef()) || document;
+        return !!scope.querySelector('[data-testid="unretweet"]');
+      } catch { return false; }
+    },
     repostPresent() { try { return !!document.querySelector('[data-testid="retweet"], [data-testid="unretweet"]'); } catch { return false; } },
     getVideoEl() { return null; },
   };
@@ -102,8 +117,9 @@
   }, true);
 
   // Inline LIKE: clicking a not-yet-liked like button on any card credits that tweet. The
-  // server ignores non-target tweets (returns an error with no `credited` field), so only
-  // in-window posts toast + credit; everything else is silent. Dedup per page session.
+  // server ignores non-target tweets, which comes back as an `error` (see the response
+  // contract on background.js s2Engagement), so only in-window posts toast + credit;
+  // everything else is silent and stays retryable. Dedup per page session.
   const firedLike = new Set();
   document.addEventListener('click', async (e) => {
     if (onStatusPage()) return; // engage-core owns the single-post page
@@ -113,7 +129,8 @@
     if (!ref || firedLike.has(ref)) return;
     firedLike.add(ref);
     const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'like', ref }).catch(() => null);
-    if (r && ('credited' in r)) { if (r.credited && r.awarded) toast(`${rewardText(xr.like)} for liking`); }
+    // A failure always carries `error`; a success always carries `credited`.
+    if (r && !r.error) { if (r.credited && r.awarded) toast(`${rewardText(xr.like)} for liking`); }
     else firedLike.delete(ref); // error / not a target → allow a later retry
   }, true);
 
@@ -145,14 +162,18 @@
       .catch(() => {});
   }
 
-  // Inline REPOST. engage-core runs the same two-signal rule but only has state on a
+  // Inline REPOST. engage-core runs the same three-signal rule but only has state on a
   // /status/ page whose id is an active target, and the feed is where most reposting
-  // actually happens — so the timeline needs its own copy of both halves. Click half:
-  // bind the card's tweet id when the action-bar repost control is pressed. Confirm half:
-  // the message content/observe.js posts once X's own CreateRetweet request succeeds.
+  // actually happens — so the timeline needs its own copy of all three. Click: bind the
+  // card's tweet id when the action-bar repost control is pressed. Confirm: the message
+  // content/observe.js posts once X's own CreateRetweet request comes back 2xx. Flip: the
+  // card's control has actually become "unretweet" (a 2xx only proves X accepted the
+  // request; a refusal arrives as HTTP 200 with an errors[] array in a body nobody here is
+  // allowed to read).
   const firedRepost = new Set();
   let pendingRepost = null;
   const REPOST_WINDOW_MS = 90000;
+  const FLIP_TRIES = 10, FLIP_INTERVAL_MS = 400; // ~4s of grace for the control to flip
   document.addEventListener('click', (e) => {
     const btn = e.target.closest && e.target.closest('[data-testid="retweet"]'); // "unretweet" is the undo
     if (!btn) return;
@@ -163,24 +184,77 @@
     if (ref) pendingRepost = { ref, until: Date.now() + REPOST_WINDOW_MS };
   }, true);
 
+  // The card for one tweet id, so the flip is read on THAT tweet and not on any reposted
+  // tweet that happens to share the page.
+  function articleForRef(ref) {
+    try {
+      if (!/^\d+$/.test(ref)) return null;
+      const link = document.querySelector(`a[href*="/status/${ref}"]`);
+      const near = link && link.closest ? link.closest('article') : null;
+      if (near && cardRef(near) === ref) return near;
+      for (const art of document.querySelectorAll('article')) if (cardRef(art) === ref) return art;
+    } catch { /* selector drift must never throw */ }
+    return null;
+  }
+  function repostedFor(ref) {
+    const art = articleForRef(ref);
+    if (art) return adapter.isReposted(art);
+    // No card on screen for that id. On a /status/ page the tweet in the URL is the page
+    // itself, so the document-wide read is the right one (and the only one available);
+    // anywhere else the control cannot be attributed, so it does not count.
+    if (adapter.refFromPath(location.pathname) === ref) return adapter.isReposted();
+    return false;
+  }
+  function whenReposted(ref, onFlipped) {
+    let tries = 0;
+    (function tick() {
+      let flipped = false;
+      try { flipped = !!repostedFor(ref); } catch { flipped = false; }
+      if (flipped) { try { onFlipped(); } catch { /* never throw out of a timer */ } return; }
+      if (++tries >= FLIP_TRIES) return; // never flipped: X refused the repost
+      setTimeout(tick, FLIP_INTERVAL_MS);
+    })();
+  }
+
   window.addEventListener('message', (e) => {
     try {
       if (e.source !== window || e.origin !== location.origin) return;
       const d = e.data;
       if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== 'x' || d.kind !== 'repost') return;
       if (!pendingRepost || Date.now() >= pendingRepost.until) return; // no click, no credit
-      const ref = d.ref ? String(d.ref) : pendingRepost.ref;
-      if (ref !== pendingRepost.ref) return; // confirmed a different tweet than the one clicked
-      pendingRepost = null;
-      if (ref === adapter.getRef()) return; // the post in the URL belongs to engage-core
+      // A confirmation we cannot attribute is DROPPED, never guessed onto whatever this
+      // surface last bound: a missing id means observe.js could not read one out of the
+      // request, and taking it on trust would dissolve the click/confirm binding entirely.
+      const ref = d.ref == null ? '' : String(d.ref);
+      if (!ref || ref !== pendingRepost.ref) return; // unattributable, or a different tweet
+      // Deterministic hand-off with engage-core, which shares this page during an SPA
+      // navigation. It answers whether it is taking this confirmation: yes when it has an
+      // active target for this exact id and can credit a repost for it, either from its own
+      // click intent or from the self-heal in its poll. Only then is the intent retired
+      // here. When it says no, this path credits, which is the /status/ case where its
+      // targets fetch has not resolved or failed: previously the intent was dropped before
+      // asking, and since X never re-sends a confirmation the repost was simply lost.
+      // Exactly one of the two paths fires, so the server never sees a duplicate.
+      const engage = self.RGCEngage;
+      if (engage && typeof engage.ownsConfirmation === 'function' && engage.ownsConfirmation('repost', ref)) {
+        pendingRepost = null;
+        return;
+      }
       if (firedRepost.has(ref)) return;
-      firedRepost.add(ref);
-      chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'repost', ref })
-        .then((r) => {
-          if (r && ('credited' in r)) { if (r.credited && r.awarded) toast(`${rewardText(xr.repost)} for reposting`); }
-          else firedRepost.delete(ref); // error / not a target: allow a later retry
-        })
-        .catch(() => { firedRepost.delete(ref); });
+      // Third signal: credit only once X's own control has flipped for this tweet. The
+      // intent deliberately stays armed until then, so nothing is lost if it never does.
+      whenReposted(ref, () => {
+        if (firedRepost.has(ref)) return;
+        firedRepost.add(ref);
+        if (pendingRepost && pendingRepost.ref === ref) pendingRepost = null;
+        chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'repost', ref })
+          .then((r) => {
+            // A failure always carries `error`; a success always carries `credited`.
+            if (r && !r.error) { if (r.credited && r.awarded) toast(`${rewardText(xr.repost)} for reposting`); }
+            else firedRepost.delete(ref); // error / not a target: allow a later retry
+          })
+          .catch(() => { firedRepost.delete(ref); });
+      });
     } catch { /* a malformed page message must never break the timeline */ }
   });
 })();

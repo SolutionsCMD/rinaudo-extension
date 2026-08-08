@@ -9,11 +9,14 @@
 //   { platform, actions:{watch,like,comment}, getRef()->string, isLiked()->bool,
 //     commentSubmitTarget(eventTarget)->Element|null, commentText()->string,
 //     getVideoEl()->HTMLVideoElement|null }
-// Optional, for the two-signal repost / in-platform send (engagement v2):
+// Optional, for the three-signal repost / in-platform send (engagement v2):
 //   { repostTarget(eventTarget)->Element|null, sendTarget(eventTarget)->Element|null,
-//     repostPresent()->bool, sendPresent()->bool }
+//     isReposted()->bool, repostPresent()->bool, sendPresent()->bool }
 // An adapter that omits repostTarget/sendTarget simply never offers that row and never
 // credits it, which is how a platform whose controls have not been mapped yet degrades.
+// isReposted() is just as mandatory for a repost: it is the signal that proves the
+// platform really did it (see the repost section below), so an adapter without it is
+// treated as unable to repost at all.
 self.EngageCore = (function () {
   const ROW_CSS = `
     .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:8px 0}
@@ -108,6 +111,27 @@ self.EngageCore = (function () {
       return !!(state && state.replayEligible && (state.replayMax || 0) > 0);
     }
     function hint(text) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = text; return h; }
+    // Can THIS build actually perform AND prove the action on this platform? The server's
+    // capability matrix (state.canRepost / state.canSend) says the platform offers it;
+    // these say the adapter in front of us can see the control that starts it and, for a
+    // repost, read the state it leaves behind. An adapter missing either half can never
+    // credit, so nothing that depends on it may be advertised.
+    const repostCapable = () => !!(state && state.canRepost)
+      && typeof A.repostTarget === 'function' && typeof A.isReposted === 'function';
+    const sendCapable = () => !!(state && state.canSend) && typeof A.sendTarget === 'function';
+    // Read the adapter's repost state without ever letting selector drift throw.
+    const adapterReposted = () => { try { return typeof A.isReposted === 'function' && !!A.isReposted(); } catch { return false; } };
+    // The all-done bonus pays only for the COMPLETE set, so the row may only appear when
+    // every action the server counts on this platform is reachable in this build. TikTok
+    // and Instagram advertise repost / send in their capability matrix, but their adapters
+    // have no such controls mapped yet, so the set cannot be finished there and the row
+    // would be advertising a bonus nobody could collect.
+    function bonusReachable() {
+      if (!state) return false;
+      if (state.canRepost && !repostCapable()) return false;
+      if (state.canSend && !sendCapable()) return false;
+      return true;
+    }
     function drawWidget() {
       if (!state) return;
       ensureFrame();
@@ -139,20 +163,21 @@ self.EngageCore = (function () {
           body.append(hint(banned.length ? `${lenRule}, and can't mention ${banned[0]}s` : lenRule));
         }
       }
-      // Repost / send. THREE gates, all required, and the reward gate is the dark-ship
-      // contract: the server says the platform offers the action, the tariff pays more
-      // than 0 for it, and THIS adapter can see the control. A reward of 0 means the
-      // action is not earning yet, so the row must not render at all; an adapter with no
-      // repostTarget cannot produce the click half of the two-signal proof, so promising
-      // the row there would be a promise we could never keep.
-      if (state.canRepost && rewards.repostReward > 0 && typeof A.repostTarget === 'function') {
+      // Repost / send. Two gates, both required, and the reward gate is the dark-ship
+      // contract: the server says the platform offers the action AND this adapter can do
+      // and prove it (repostCapable / sendCapable), and the tariff pays more than 0 for
+      // it. A reward of 0 means the action is not earning yet, so the row must not render
+      // at all; an adapter that cannot see the control could never keep the promise.
+      if (repostCapable() && rewards.repostReward > 0) {
         body.append(rowEl('Repost it', `+${rewards.repostReward}`, state.repostS));
       }
-      if (state.canSend && rewards.shareSendReward > 0 && typeof A.sendTarget === 'function') {
+      if (sendCapable() && rewards.shareSendReward > 0) {
         body.append(rowEl('Send it to a friend', `+${rewards.shareSendReward}`, state.sendS));
       }
-      // All-done bonus. The server computes and pays it; this row only reports it.
-      if (rewards.engageBonusReward > 0) {
+      // All-done bonus. The server computes and pays it; this row only reports it. Shown
+      // only when the whole set is actually reachable here (or has already been earned,
+      // in which case it plainly was).
+      if (rewards.engageBonusReward > 0 && (state.bonusDone || bonusReachable())) {
         body.append(rowEl('Do it all', `+${rewards.engageBonusReward}`, state.bonusDone ? 'done' : 'idle'));
       }
       const earned = (state.likeS === 'done' ? rewards.likeReward : 0) + (state.commentS === 'done' ? rewards.commentReward : 0)
@@ -172,13 +197,20 @@ self.EngageCore = (function () {
       if (state[key] !== 'idle') return; // already pending or done
       state[key] = 'pending'; drawWidget();
       const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
-      if (r && r.credited) { state[key] = 'done'; setDone(ref, { [ACTION_FLAG[action]]: true }); }
-      // A genuine already-earned response (HTTP 200, credited:false) on a like → show done.
-      // Must distinguish from an ERROR object (e.g. {error:'http_409'} when the post isn't an
-      // active target yet, or an auth blip): error objects have no `credited` field, so fall
-      // through to idle and retry. Marking the like done on an error would stick it "done"
-      // forever in local storage and the like could never credit later.
-      else if (r && action === 'like' && 'credited' in r) { state[key] = 'done'; setDone(ref, { like: true }); }
+      // Response contract (background.js s2Engagement): a FAILURE always carries `error`
+      // and never `credited`; a success is the server's own JSON and always carries
+      // `credited`. So an error means "we do not know" and must stay idle and retryable,
+      // while credited:false means the server already has this one.
+      const failed = !r || !!r.error;
+      if (!failed && r.credited) { state[key] = 'done'; setDone(ref, { [ACTION_FLAG[action]]: true }); }
+      // Already-earned (HTTP 200, credited:false) on a like or a repost → show done.
+      // Repost needs this as much as like does: without it the repost self-heal in the
+      // poll below would re-fire forever at a server that already recorded the credit.
+      // Marking done on an ERROR instead would stick the action "done" in local storage
+      // and it could never credit later, which is exactly what the old
+      // `'credited' in r` test did once background.js started answering every failure
+      // with { credited: false }.
+      else if (!failed && (action === 'like' || action === 'repost')) { state[key] = 'done'; setDone(ref, { [ACTION_FLAG[action]]: true }); }
       else state[key] = 'idle';
       // The all-done bonus is computed and paid by the server on whichever credit
       // completed the set, and reported back here, so the row can tick in the same draw.
@@ -186,13 +218,35 @@ self.EngageCore = (function () {
       drawWidget();
     }
 
-    // --- Two-signal repost / in-platform send ---------------------------------------
+    // --- Repost / in-platform send: click, confirmation, flipped control --------------
     // Signal one, here: the member clicked the platform's own repost or send control,
     // which opens a 90 second window. Signal two: content/observe.js watches the PAGE's
-    // own request for that action succeed and posts the confirmation back. Neither
-    // credits alone, so a menu opened and abandoned earns nothing, and a forged message
-    // with no preceding click earns nothing either.
+    // own request for that action come back 2xx and posts the confirmation back. Signal
+    // three, repost only: the platform's own control flipped to its undo state.
+    //
+    // Why the third signal exists. HTTP 2xx proves the request was ACCEPTED, nothing more.
+    // X's GraphQL answers a REFUSED retweet (rate limited, tweet deleted, author
+    // suspended) with HTTP 200 and an errors[] array in the body, and observe.js may not
+    // read that body, it would consume the stream the page itself is about to read. So we
+    // ask the page instead of the response: the repost control turns into the un-repost
+    // control only when the platform really did it. Status = accepted, flipped control =
+    // actually done. The DOM can flip a beat after the response lands, hence the short
+    // retry window below; if it never flips, nothing is credited.
+    //
+    // None of the three credits alone: a menu opened and abandoned earns nothing, and a
+    // forged message with no preceding click and no flipped control earns nothing either.
     const CONFIRM_WINDOW_MS = 90000;
+    const FLIP_TRIES = 10, FLIP_INTERVAL_MS = 400; // ~4s of grace for the control to flip
+    function whenFlipped(probe, onFlipped) {
+      let tries = 0;
+      (function tick() {
+        let flipped = false;
+        try { flipped = !!probe(); } catch { flipped = false; }
+        if (flipped) { try { onFlipped(); } catch { /* never throw out of a timer */ } return; }
+        if (++tries >= FLIP_TRIES) return; // never flipped: the platform refused it
+        setTimeout(tick, FLIP_INTERVAL_MS);
+      })();
+    }
     let pendingRepostUntil = 0, pendingSendUntil = 0, intentHooked = false;
     function hookIntent() {
       if (intentHooked) return; intentHooked = true;
@@ -202,22 +256,60 @@ self.EngageCore = (function () {
         try { if (typeof A.sendTarget === 'function' && A.sendTarget(e.target)) pendingSendUntil = Date.now() + CONFIRM_WINDOW_MS; } catch { /* same */ }
       }, true);
     }
+    // What this surface has taken responsibility for, so another surface running the same
+    // rule (X's timeline) can tell whether to stay out of the way. Short-lived on purpose.
+    let lastTaken = null; // { kind, ref, at }
+    const TAKEN_MEMORY_MS = 30000;
+    // Deterministic hand-off, asked by that other surface. True means engage-core is
+    // handling this confirmation, or is about to (whichever of the two window listeners
+    // runs first), so the other surface must not send a second credit for the same post.
+    // False means engage-core will never take it, which is exactly the /status/ case where
+    // the targets fetch has not resolved or failed, and the other surface must credit it
+    // or the repost is lost. Exactly one of the two paths ever fires.
+    function ownsConfirmation(kind, ref) {
+      try {
+        if (!ref) return false;
+        if (lastTaken && lastTaken.kind === kind && lastTaken.ref === ref
+            && Date.now() - lastTaken.at < TAKEN_MEMORY_MS) return true;
+        if (!state || state.ref !== ref) return false;
+        // Repost: this card owns any confirmation for its own post as long as it is able
+        // to credit one, whether through the click intent below or, when no intent was
+        // armed because the click landed before setup finished, through the self-heal in
+        // the 5s poll. Either way the other surface must stay out or both would credit the
+        // same repost and the second request would hit the server's unique index.
+        if (kind === 'repost') return repostCapable();
+        // Send leaves no state behind to self-heal from, so ownership needs a live intent.
+        if (kind === 'send') return sendCapable() && Date.now() < pendingSendUntil;
+        return false;
+      } catch { return false; }
+    }
+    try { self.RGCEngage = { ownsConfirmation }; } catch { /* the hand-off is optional */ }
     // The confirmation half. Validated strictly: same window, same origin, our marker,
-    // our platform, and the platform's own request must have SUCCEEDED. Whole body inside
-    // try/catch because this runs for every message the page posts to itself.
+    // our platform, and the platform's own request must have been ACCEPTED. Whole body
+    // inside try/catch because this runs for every message the page posts to itself.
     window.addEventListener('message', (e) => {
       try {
         if (e.source !== window || e.origin !== location.origin) return;
         const d = e.data;
         if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== A.platform) return;
         if (!state || !state.ref) return; // no active target on this page
-        const ref = d.ref == null ? null : String(d.ref);
-        if (ref && ref !== state.ref) return; // a different post on the same page
+        // A confirmation we cannot attribute is DROPPED, never guessed onto whatever this
+        // surface happens to have bound. A null ref means observe.js could not read the
+        // post id out of the request, and accepting it would dissolve the whole
+        // click/confirm binding: any unparsed confirmation would land on the current post.
+        const ref = d.ref == null ? '' : String(d.ref);
+        if (!ref || ref !== state.ref) return;
         const now = Date.now();
-        if (d.kind === 'repost' && state.canRepost && now < pendingRepostUntil) {
-          pendingRepostUntil = 0; fireEngagement('repost');
-        } else if (d.kind === 'send' && state.canSend && now < pendingSendUntil) {
-          pendingSendUntil = 0; fireEngagement('share_send');
+        if (d.kind === 'repost' && repostCapable() && now < pendingRepostUntil) {
+          pendingRepostUntil = 0;
+          lastTaken = { kind: 'repost', ref, at: now };
+          // Signal three: credit only once the control has actually flipped.
+          whenFlipped(() => !!state && state.ref === ref && adapterReposted(), () => fireEngagement('repost'));
+        } else if (d.kind === 'send' && sendCapable() && now < pendingSendUntil) {
+          pendingSendUntil = 0;
+          lastTaken = { kind: 'send', ref, at: now };
+          // A send leaves no state on the post to read back, so it stays at two signals.
+          fireEngagement('share_send');
         }
       } catch { /* a malformed page message must never break earning */ }
     });
@@ -552,6 +644,7 @@ self.EngageCore = (function () {
         watchPlaying: false, watchMuted: false, claiming: false,
         likeS: likeDone ? 'done' : 'idle', commentS: commentDone ? 'done' : 'idle',
         repostS: repostDone ? 'done' : 'idle', sendS: sendDone ? 'done' : 'idle',
+        repostHealAt: 0, // next moment the repost self-heal may re-fire (see the 5s poll)
         bonusDone: !!srv.bonus,
         canRepost: acts.repost === true, canSend: acts.shareSend === true,
         commentMinWords: (typeof target.commentMinWords === 'number' ? target.commentMinWords : 0),
@@ -570,6 +663,15 @@ self.EngageCore = (function () {
     setInterval(() => {
       if (!state || state.ref !== A.getRef()) return;
       if (A.actions.like && state.likeS === 'idle' && A.isLiked()) fireEngagement('like');
+      // Self-heal a repost the platform shows as done but the server never recorded: the
+      // credit request failed (network blip, token refresh, a 500), or the member reposted
+      // before this card finished setting up. Same idea as the like poll above, and the
+      // reason a failed repost is no longer unrecoverable. Cooldown so a credit that keeps
+      // failing is retried on the minute instead of every tick.
+      if (repostCapable() && state.repostS === 'idle' && Date.now() >= (state.repostHealAt || 0) && adapterReposted()) {
+        state.repostHealAt = Date.now() + 60000;
+        fireEngagement('repost');
+      }
       if (!A.actions.watch) return;
       // Seamless second watch: once the base watch is done and slots remain, keep a replay
       // session alive (self-heals if the session start ever failed) until one is running.

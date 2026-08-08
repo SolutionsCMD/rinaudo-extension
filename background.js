@@ -179,14 +179,29 @@ async function s2Debug(kind, data) {
   }).catch(() => {});
 }
 
+// Engagement credit. RESPONSE CONTRACT, relied on by content/engage-core.js and
+// content/x.js:
+//   success -> the server's own JSON, which always carries `credited`
+//              (true = this call earned the tickets, false = the member already had it).
+//   failure -> { error: '<reason>' } and NEVER a `credited` field.
+// The distinction is the whole point: an error means "we do not know", so the caller must
+// leave the action idle and retryable. This used to answer { credited: false } for every
+// failure too (no token, network drop, 400, 409), which made an error indistinguishable
+// from an already-earned success and stuck failed actions "done" forever.
 async function s2Engagement(platform, action, ref) {
   const token = await getS2Token();
-  if (!token) return { credited: false };
+  if (!token) return { error: 'not_connected' };
   const r = await fetch(S2.API + S2.ENGAGEMENT, {
     method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ platform, action, ref }),
   }).catch(() => null);
-  return r && r.ok ? r.json().catch(() => ({ credited: false })) : { credited: false };
+  if (!r) return { error: 'network' };
+  if (!r.ok) return { error: 'http_' + r.status };
+  const j = await r.json().catch(() => null);
+  if (!j || typeof j !== 'object') return { error: 'bad_json' };
+  // A 200 that does not answer the question is an error, not a silent "not credited".
+  if (!('credited' in j)) return { error: 'bad_response' };
+  return j;
 }
 
 // --- YouTube watch-to-earn (drives the existing s2 /api/watch/* flow) ---

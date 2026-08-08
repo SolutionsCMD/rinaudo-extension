@@ -5,6 +5,13 @@
 // credentials, never headers, never a response body, never anything beyond the post id
 // that was matched out of the request the page itself sent.
 //
+// WHAT `ok` MEANS, exactly: the platform ACCEPTED the request (HTTP 2xx). It does NOT mean
+// the platform carried it out. X's GraphQL answers a refused retweet (rate limited, tweet
+// deleted, author suspended) with HTTP 200 and an errors[] array in the BODY, and reading
+// that body here is forbidden by rule 2 below, it would consume the stream the page itself
+// is about to read. So `ok` is one signal, never proof: the isolated world also requires
+// the platform's own control to flip to its undo state before anything is credited.
+//
 // The isolated world holds the other half, the click intent. Neither signal credits alone.
 // A console user can forge the postMessage, which puts a repost at the same trust tier as
 // a like (client attested); honeypot targets and the server's repost burst sweep are the
@@ -99,7 +106,8 @@
           var sig = url ? matchSig(url, body) : null;
           if (sig && p && typeof p.then === 'function') {
             // Only a matched request's promise is ever observed (rule 5). res.ok is a
-            // status flag, not the body; the body is never touched.
+            // status flag, not the body; the body is never touched, so this reports
+            // "accepted", not "done" (see WHAT `ok` MEANS at the top of this file).
             p.then(
               function (res) { report(sig, url, body, !!(res && res.ok)); },
               function () { /* the page's own request failed: nothing was confirmed */ }
@@ -133,7 +141,9 @@
               try { u = xhrUrls.get(xhr) || ''; } catch (e) { u = ''; }
               var b = (typeof body === 'string') ? body : '';
               var sig = u ? matchSig(u, b) : null;
-              // A listener is attached only to a matched request, and only reads status.
+              // A listener is attached only to a matched request, and only reads status,
+              // never responseText. Same meaning as the fetch path: 2xx says the platform
+              // accepted the request, and the flipped control is what proves it happened.
               if (sig && typeof xhr.addEventListener === 'function') {
                 xhr.addEventListener('loadend', function () {
                   var ok = false;
