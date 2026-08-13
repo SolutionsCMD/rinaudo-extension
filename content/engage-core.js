@@ -469,6 +469,11 @@ self.EngageCore = (function () {
       })();
     }
     let pendingRepostUntil = 0, pendingSendUntil = 0, intentHooked = false;
+    // Hard cap on the Facebook reshare diagnostic below. The X reply diagnostic was also
+    // "temporary" and has since written 614,279 rows, over half the database, on a disk at
+    // 88%. A capped counter costs nothing and makes that impossible to repeat.
+    let fbDiagSent = 0;
+    const FB_DIAG_MAX = 6;
     function hookIntent() {
       if (intentHooked) return; intentHooked = true;
       if (typeof A.repostTarget !== 'function' && typeof A.sendTarget !== 'function') return;
@@ -526,6 +531,28 @@ self.EngageCore = (function () {
         const d = e.data;
         if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== A.platform) return;
         if (!state || !state.ref) return; // no active target on this page
+        // DIAGNOSTIC ONLY, never a credit. A share-shaped Facebook mutation that is not the
+        // one we credit, seen while this member is standing on a target post whose repost is
+        // still unearned. That is the exact moment the reported bug happens, so it is the
+        // only moment worth recording. Names only, capped per page, and it returns before
+        // every crediting branch below.
+        if (d.kind === 'fbdiag') {
+          try {
+            if (fbDiagSent < FB_DIAG_MAX && repostCapable() && state.repostS === 'idle') {
+              fbDiagSent++;
+              chrome.runtime.sendMessage({
+                type: 's2Debug',
+                kind: 'fbrepost',
+                data: {
+                  name: (d.meta && d.meta.name) || '',
+                  ref: state.ref,
+                  armed: Date.now() < pendingRepostUntil, // did they click inside the share sheet
+                },
+              });
+            }
+          } catch (e) { /* diagnostics are optional, crediting is not */ }
+          return;
+        }
         // Attribute the confirmation to a post. Normally observe.js read the post id out of
         // the request and it must equal this card's target, or the message is DROPPED (an
         // unattributable confirmation must never be guessed onto whatever this surface has

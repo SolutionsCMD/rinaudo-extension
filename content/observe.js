@@ -171,6 +171,42 @@
         // via the armed click intent (page-scoped, expires in 90s), like Instagram above.
         ref: function () { return null; },
       },
+      {
+        // DIAGNOSTIC, NOT A CREDIT. Reported 2026-08-13, and the numbers agree: 23 members
+        // who reshare happily on TikTok and Instagram have never once earned a Facebook
+        // repost, while it works for 95 others. Everything else was ruled out from data
+        // first: the target, the hour, the extension version, the host list, the wrapped
+        // transports, the share-affordance selector (missing at the same rate in both
+        // groups) and every isolated-world gate. What is left is that their reshare fires
+        // a mutation this list does not name, and Facebook has more than one way to
+        // reshare (to feed, to a story, to a group, with commentary).
+        //
+        // Guessing the other names is exactly what the rule below forbids, and a wrong
+        // guess here pays tickets for something that never spread the post. So this entry
+        // records the NAME ONLY of share-shaped mutations that are not the one we credit,
+        // the same way the reshare mutation itself was found on 2026-08-08.
+        //
+        // MUST stay after the repost entry: matchSig returns the FIRST match, so the real
+        // one always wins and this can only ever see what that missed. kind is 'fbdiag',
+        // which no crediting branch in engage-core reads, so it cannot pay anything.
+        platform: 'facebook', kind: 'fbdiag',
+        test: function (url, body) {
+          var b = String(body || '');
+          var m = b.match(/(?:^|&)fb_api_req_friendly_name=([^&]*)/);
+          if (!m) return false;
+          var n = m[1];
+          if (n === 'ComposerStoryCreateMutation') return false; // credited above
+          return /Composer|Reshare|Share|StoryCreate/i.test(n);
+        },
+        ref: function () { return null; },
+        // The friendly name and nothing else. No post content, no ids, no body.
+        meta: function (url, body) {
+          try {
+            var n = (String(body || '').match(/(?:^|&)fb_api_req_friendly_name=([^&]*)/) || [])[1] || '';
+            return { name: n.slice(0, 80) };
+          } catch (e) { return null; }
+        },
+      },
       // TODO(Instagram send): the paper plane media_share send, pending its own live
       // discovery session. Until an entry exists that action simply does not credit: the
       // isolated world never sees a confirmation, so the widget row stays un-ticked and no
