@@ -22,7 +22,11 @@ self.S2 = {
   // Stake-on-a-ticker rounds: GET → {round, me, connected}, POST →
   // {action:'nominate'|'stake'|'join', ticker?, amount?}.
   ROUND: '/api/extension/round',
-  POLL_FAST_MS: 5000,
+  // Widget refresh cadence. Each tick costs TWO engine requests (round + poll), so
+  // this number multiplies by every viewer watching the stream. At 5s with ~400
+  // concurrent viewers it was ~160 req/s on its own and the box was stalling
+  // (2026-08-10). 10s is still well inside the vote windows.
+  POLL_FAST_MS: 10000,
   // YouTube watch-to-earn (backend system already on s2; needs to accept the
   // extension bearer — see the backend handoff).
   WATCH_SESSION: '/api/watch/session',
@@ -45,5 +49,6 @@ self.BUILD_CAPS = {
   x:         { repost: true,  send: false },
   tiktok:    { repost: true,  send: false },
   instagram: { repost: true,  send: false },
+  facebook:  { repost: true,  send: false },
   youtube:   { repost: false, send: false },
 };

@@ -34,6 +34,11 @@ function roundAction(action, ticker, amount) {
 // when a round is actually open (panel shown).
 function drawRound(data) {
   if (!self.RGCStake || !data || !data.round) return false;
+  // Same rule the on-stream card already follows: a round sits in 'nominating' for
+  // hours, so letting it render here meant the popup opened for a live poll and then
+  // showed "Suggest a ticker" over the top of it. Suggesting stays available from the
+  // toolbar popup; this window is for polls and actual wagers.
+  if (data.round.status === 'nominating') return false;
   const card = el('div', 'card');
   const head = el('div', 'head');
   const label = el('span', 'label'); label.append(el('span', 'pulse'), document.createTextNode(

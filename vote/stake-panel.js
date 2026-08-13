@@ -7,7 +7,8 @@
 //   was rendered — callers fall back to their poll UI when it returns false)
 //   self.RGCStake.CSS -> styles to inject (popup <style> tag / frame css param)
 // data:    { round, me, connected } from the SW's s2Round message
-// actions: { nominate(ticker), stake(ticker, amount), join(amount) }
+// actions: { stake(ticker, amount), join(amount) }  (nominate is unused: the
+//          suggestion box was removed permanently)
 self.RGCStake = (function () {
   // Ticket sprites, same assets as the desk.
   const SITE = 'https://mizkif.com';
@@ -30,27 +31,33 @@ self.RGCStake = (function () {
     .stkOpt.sel .tk::before{content:'✓ ';color:#86D6A4}
     .stkOpt .cnt{position:relative;z-index:1;font-family:ui-monospace,'JetBrains Mono',monospace;font-size:12px;color:#9FA6B0;font-variant-numeric:tabular-nums}
     .stkSlider{margin:4px 0 6px}
-    .stkPile{position:relative;height:44px;margin-bottom:2px}
-    .stkPile img{position:absolute;width:26%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-    .stkRangeWrap{position:relative;padding:0 24px}
-    .stkRange{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:999px;outline:none;cursor:pointer}
-    .stkRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:#F4EFE3;border:2px solid #C8552A;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-    .stkRange::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#F4EFE3;border:2px solid #C8552A;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-    .stkRange:disabled{opacity:.45;cursor:default}
-    .stkThumb{position:absolute;top:-26px;transform:translateX(-50%);font-family:ui-monospace,'JetBrains Mono',monospace;font-weight:600;font-size:13px;color:#F4EFE3;background:#A84420;border-radius:7px;padding:1px 8px;pointer-events:none;white-space:nowrap}
-    .stkThumb.over{background:#7A1E12;color:#FFD9CF}
-    .stkCapTick{position:absolute;top:-30px;transform:translateX(-50%);pointer-events:none;white-space:nowrap}
-    .stkCapTick i{font-style:normal;font-family:ui-monospace,'JetBrains Mono',monospace;font-size:9px;color:#E8B339;background:rgba(232,179,57,.12);border:1px solid rgba(232,179,57,.4);border-radius:6px;padding:1px 6px}
-    .stkCapTick::after{content:'';display:block;width:1px;height:22px;background:rgba(232,179,57,.55);margin:2px auto 0}
+    .stkPile{position:relative;height:52px;margin-bottom:2px;overflow:hidden}
+    .stkPile img{position:absolute;width:21%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+    /* Typed amount + hold-to-repeat arrows. Replaced the drag slider: people kept
+       overshooting it and committing the wrong number of tickets. */
+    .stkStep{display:flex;align-items:stretch;gap:8px;margin:2px 0 6px}
+    .stkStep input{flex:1;min-width:0;padding:12px 14px;border-radius:9px;border:1px solid rgba(244,239,227,.16);background:rgba(255,255,255,.04);color:#F4EFE3;font-family:ui-monospace,'JetBrains Mono',monospace;font-size:20px;font-weight:600;text-align:center;outline:none;-moz-appearance:textfield}
+    .stkStep input::-webkit-outer-spin-button,.stkStep input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    .stkStep input:focus{border-color:rgba(201,167,102,.55)}
+    .stkStep input:disabled{opacity:.45}
+    .stkStep button{width:52px;flex:none;border:1px solid rgba(244,239,227,.16);border-radius:9px;background:rgba(255,255,255,.05);color:#F4EFE3;font:inherit;font-size:20px;font-weight:700;cursor:pointer;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+    .stkStep button:hover:not(:disabled){background:rgba(255,255,255,.1)}
+    .stkStep button:active:not(:disabled){background:rgba(200,85,42,.35)}
+    .stkStep button:disabled{opacity:.35;cursor:default}
+    .stkQuick{display:flex;gap:6px;margin:0 0 8px}
+    .stkQuick button{flex:1;padding:7px 0;border:1px solid rgba(244,239,227,.14);border-radius:7px;background:rgba(255,255,255,.03);color:#C9D2DC;font:inherit;font-size:11.5px;cursor:pointer}
+    .stkQuick button:hover:not(:disabled){background:rgba(255,255,255,.08);color:#F4EFE3}
+    .stkQuick button:disabled{opacity:.35;cursor:default}
     .stkCapHint{min-height:16px;font-size:11px;color:#E8B339;margin:2px 0 8px;text-align:center}
+    /* Post-placement confirmation: the button dulls for a few seconds so it is
+       obvious the stake landed and a second click cannot go in by accident. */
+    .stkBig.placed{background:linear-gradient(180deg,#3E4A3C,#2F3A2E);color:#BFD8B4;cursor:default;opacity:1}
+    .stkPot{margin:8px 0 0;padding:9px 11px;border-radius:8px;background:rgba(226,198,133,.08);border:1px solid rgba(226,198,133,.28);font-family:ui-monospace,'JetBrains Mono',monospace;font-size:12px;color:#E2C685;text-align:center}
+    .stkPot b{font-size:15px;font-weight:700}
     .stkBig{width:100%;padding:14px;border:0;border-radius:9px;background:linear-gradient(180deg,#C8552A,#A84420);color:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.01em}
     .stkBig:disabled{opacity:.45;cursor:default}
     .stkNote{font-size:11.5px;color:#9FA6B0;margin-top:8px;text-align:center}
-    .stkHint{font-family:ui-monospace,'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:#6E6B60;text-transform:uppercase;margin-top:10px;text-align:center}
-    .stkSugg{display:flex;gap:8px;margin-bottom:12px}
-    .stkSugg input{flex:1;padding:11px 13px;border-radius:8px;border:1px solid rgba(244,239,227,.14);background:rgba(255,255,255,.03);color:#F4EFE3;font:inherit;font-size:14px;text-transform:uppercase;outline:none}
-    .stkSugg input:focus{border-color:rgba(201,167,102,.5)}
-    .stkSugg button{padding:11px 16px;border:0;border-radius:8px;background:linear-gradient(180deg,#C8552A,#A84420);color:#fff;font:inherit;font-weight:700;cursor:pointer}`;
+    .stkHint{font-family:ui-monospace,'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:#6E6B60;text-transform:uppercase;margin-top:10px;text-align:center}`;
 
   const el = (tag, cls, text) => {
     const n = document.createElement(tag);
@@ -80,65 +87,121 @@ self.RGCStake = (function () {
   // your stake, ticket for ticket (capped at 24 sprites so huge piles stay cheap).
   function renderPile(host, count) {
     host.replaceChildren();
-    const n = Math.min(24, Math.max(0, count));
+    const n = Math.min(16, Math.max(0, count));
     for (let i = 0; i < n; i++) {
       const row = Math.floor(i / 8), col = i % 8;
       const img = document.createElement('img');
       img.src = tix(i);
       img.alt = '';
       img.style.left = `${3 + col * 12 + ((i * 37) % 7) - 3}%`;
-      img.style.bottom = `${row * 12}px`;
+      img.style.bottom = `${row * 14}px`;
       img.style.transform = `rotate(${((i * 53) % 25) - 12}deg)`;
       img.style.zIndex = String(30 - row);
       host.append(img);
     }
   }
 
-  // The slider assembly. onInput(n) fires with the committed ticket value.
-  function slider({ max, value, capAt, disabled, onInput }) {
+  // Typed amount control. Same interface the slider had ({wrap, value}) so the
+  // render branches below did not have to change shape.
+  //
+  // Why not a slider: dragging to an exact number is fiddly, and overshooting it
+  // commits the wrong number of TICKETS, which people were doing repeatedly. Typing
+  // is exact, the arrows step by one, and holding an arrow repeats (accelerating)
+  // for quickly walking a value up or down.
+  function amountInput({ max, value, capAt, disabled, onInput }) {
     const safeMax = Math.max(1, max);
     let v = Math.min(Math.max(1, value), safeMax);
-    const showCap = capAt != null && capAt >= 2 && capAt < safeMax;
 
     const wrap = el('div', 'stkSlider');
     const pile = el('div', 'stkPile');
-    const rangeWrap = el('div', 'stkRangeWrap');
-    const range = document.createElement('input');
-    range.type = 'range'; range.min = '0'; range.max = String(POS_MAX); range.step = '1';
-    range.className = 'stkRange';
-    if (disabled) range.disabled = true;
-    const thumb = el('span', 'stkThumb');
+    const row = el('div', 'stkStep');
+    const minus = el('button', '', '\u2212');
+    const plus = el('button', '', '+');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.setAttribute('aria-label', 'tickets');
     const hint = el('div', 'stkCapHint');
 
+    minus.type = 'button'; plus.type = 'button';
+    if (disabled) { minus.disabled = true; plus.disabled = true; input.disabled = true; }
+
     const paint = () => {
-      const pos = toPos(v, safeMax, showCap, capAt);
-      const pct = pos * 100;
-      range.value = String(Math.round(pos * POS_MAX));
-      range.style.background = `linear-gradient(90deg, #C8552A ${pct}%, #F1E8D2 ${pct}%)`;
-      thumb.textContent = String(v);
-      thumb.style.left = `calc(24px + (100% - 48px) * ${pct / 100})`;
-      const overCap = showCap && v > capAt;
-      thumb.classList.toggle('over', overCap);
-      // 1:1 desk over-cap warning: the extra would come back as a refund
-      hint.textContent = overCap ? `past the cap, the extra ~${v - capAt} would come back as a refund` : ' ';
+      if (document.activeElement !== input) input.value = String(v);
+      minus.disabled = disabled || v <= 1;
+      plus.disabled = disabled || v >= safeMax;
+      const overCap = capAt != null && capAt >= 2 && capAt < safeMax && v > capAt;
+      hint.textContent = overCap
+        ? `past the cap, the extra ~${v - capAt} would come back as a refund`
+        : (v >= safeMax ? `that is all ${safeMax.toLocaleString()} of your tickets` : ' ');
       renderPile(pile, v);
     };
-    range.addEventListener('input', () => {
-      v = Math.max(1, Math.min(safeMax, toVal(Number(range.value) / POS_MAX, safeMax, showCap, capAt)));
+    // `force` writes the value into the field even while it has focus. paint() normally
+    // refuses to do that so it can't fight someone mid-keystroke, but the arrow keys
+    // fire WHILE the field is focused and must move the visible number.
+    const setV = (n, force) => {
+      const next = Math.max(1, Math.min(safeMax, Math.floor(n) || 1));
+      const changed = next !== v;
+      v = next;
       paint();
-      onInput(v);
+      if (force) input.value = String(v);
+      if (changed) onInput(v);
+    };
+
+    // Hold-to-repeat: 400ms before the first repeat, then accelerating 120ms -> 30ms.
+    let holdT = null, holdI = null;
+    const stopHold = () => { clearTimeout(holdT); clearInterval(holdI); holdT = holdI = null; };
+    const startHold = (dir) => {
+      stopHold();
+      holdT = setTimeout(() => {
+        let step = 1, ticks = 0;
+        holdI = setInterval(() => {
+          ticks++;
+          if (ticks > 12) step = 5;
+          if (ticks > 30) step = 25;
+          setV(v + dir * step);
+          if ((dir < 0 && v <= 1) || (dir > 0 && v >= safeMax)) stopHold();
+        }, 60);
+      }, 400);
+    };
+    [[minus, -1], [plus, 1]].forEach(([btn, dir]) => {
+      btn.addEventListener('click', () => setV(v + dir));
+      btn.addEventListener('pointerdown', () => { if (!btn.disabled) startHold(dir); });
+      ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach((e) => btn.addEventListener(e, stopHold));
     });
 
-    if (showCap) {
-      const tick = el('span', 'stkCapTick');
-      tick.style.left = `calc(24px + (100% - 48px) * ${KNEE})`;
-      const label = el('i', '', `5% cap · ${capAt}`);
-      label.title = `≈ the 5% pool cap right now. Anything past ${capAt} is refunded once the buy goes through`;
-      tick.append(label);
-      rangeWrap.append(tick);
-    }
-    rangeWrap.append(range, thumb);
-    wrap.append(pile, rangeWrap, hint);
+    // Let them type freely, only clamping on blur/Enter so backspacing to empty
+    // does not fight them mid-edit.
+    input.addEventListener('input', () => {
+      const digits = input.value.replace(/[^0-9]/g, '');
+      if (input.value !== digits) input.value = digits;
+      if (digits === '') return;
+      const n = Math.max(1, Math.min(safeMax, Number(digits)));
+      if (n !== v) { v = n; onInput(v); }
+      minus.disabled = disabled || v <= 1;
+      plus.disabled = disabled || v >= safeMax;
+      renderPile(pile, v);
+    });
+    input.addEventListener('blur', () => setV(Number(input.value.replace(/[^0-9]/g, '')) || 1));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp') { e.preventDefault(); setV(v + (e.shiftKey ? 10 : 1), true); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); setV(v - (e.shiftKey ? 10 : 1), true); }
+      else if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+
+    row.append(minus, input, plus);
+
+    // Quick amounts — the common picks without typing.
+    const quick = el('div', 'stkQuick');
+    [['10', 10], ['25', 25], ['100', 100], ['All', safeMax]].forEach(([label, n]) => {
+      const b = el('button', '', label);
+      b.type = 'button';
+      b.disabled = disabled || n > safeMax;
+      b.addEventListener('click', () => setV(n));
+      quick.append(b);
+    });
+
+    wrap.append(pile, row, quick, hint);
     paint();
     return { wrap, get value() { return v; } };
   }
@@ -168,7 +231,33 @@ self.RGCStake = (function () {
   }
   function remember(round, n) { picked = { key: pickKey(round), amount: n }; }
 
-  // data: {round, me, connected}; actions: {nominate, stake, join}. Returns
+  // After a stake lands, dull the button for a few seconds. Two jobs: it is visible
+  // confirmation that the click registered, and it makes an accidental second
+  // commit impossible during the window where someone would double-click.
+  const PLACED_MS = 5000;
+  function markPlaced(btn, label) {
+    btn.disabled = true;
+    btn.classList.add('placed');
+    const original = btn.textContent;
+    btn.textContent = label;
+    setTimeout(() => {
+      // The panel is rebuilt on every poll tick, so this button is usually gone by
+      // now; only restore it if it is somehow still on screen.
+      if (!btn.isConnected) return;
+      btn.classList.remove('placed');
+      btn.textContent = original;
+      btn.disabled = false;
+    }, PLACED_MS);
+  }
+
+  // How many of MY tickets are already in this round's pot.
+  function potLine(n) {
+    const d = el('div', 'stkPot');
+    d.append(document.createTextNode('You have '), el('b', '', `${n.toLocaleString()} 🎟`), document.createTextNode(' in the pot'));
+    return d;
+  }
+
+  // data: {round, me, connected}; actions: {stake, join}. Returns
   // true when a round panel rendered (caller should skip its poll UI).
   function render(host, data, actions) {
     const round = data && data.round;
@@ -177,34 +266,11 @@ self.RGCStake = (function () {
     const connected = !!data.connected;
     host.replaceChildren();
 
-    // ── nominating: free suggestion box ─────────────────────────────────────
-    if (round.status === 'nominating') {
-      host.append(el('div', 'stkQ', 'Suggest a ticker'));
-      const row = el('div', 'stkSugg');
-      const input = document.createElement('input');
-      input.maxLength = 8; input.placeholder = connected ? 'e.g. NVDA' : 'connect to suggest';
-      input.disabled = !connected;
-      const go = el('button', '', 'Suggest');
-      const submit = () => {
-        const t = input.value.trim().toUpperCase();
-        if (!/^[A-Z]{1,8}$/.test(t)) return;
-        input.value = '';
-        actions.nominate(t);
-      };
-      go.addEventListener('click', submit);
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-      row.append(input, go);
-      host.append(row);
-      const tally = (round.tally || []).slice(0, 8);
-      if (tally.length) {
-        const total = tally.reduce((a, x) => a + x.amount, 0);
-        const opts = el('div', 'stkOpts');
-        tally.forEach((t) => opts.append(optionRow(t.ticker, t.amount, total, false, () => { input.value = t.ticker; })));
-        host.append(opts);
-      }
-      host.append(el('div', 'stkHint', 'Suggesting is free · the desk picks from the room’s list next'));
-      return true;
-    }
+    // ── nominating ───────────────────────────────────────────────────────────
+    // The suggestion box is GONE, permanently, at the owner's instruction: a round
+    // sits in 'nominating' for hours, so it put a card on screen almost all the time
+    // and kept reappearing whenever a vote started. Nothing renders in this phase.
+    if (round.status === 'nominating') return false;
 
     // ── staking: pick a ticker + slide tickets ──────────────────────────────
     if (round.status === 'staking') {
@@ -235,7 +301,7 @@ self.RGCStake = (function () {
       let amount = seedAmount(round, Math.min(25, Math.max(1, maxT)), Math.max(1, maxT));
       const big = el('button', 'stkBig');
       const paintBig = () => { big.textContent = sel ? `Stake ${amount} 🎟 on ${sel}` : 'Pick a ticker'; };
-      const sl = slider({
+      const sl = amountInput({
         max: Math.max(1, maxT), value: amount, capAt: null,
         disabled: !connected || !me || maxT < 1,
         onInput: (n) => { amount = n; remember(round, n); paintBig(); },
@@ -243,9 +309,14 @@ self.RGCStake = (function () {
       host.append(sl.wrap);
       paintBig();
       big.disabled = !connected || !me || maxT < 1 || !sel;
-      big.addEventListener('click', () => { if (sel) actions.stake(sel, amount); });
+      big.addEventListener('click', () => {
+        if (!sel) return;
+        markPlaced(big, `\u2713 ${amount} 🎟 on ${sel}`);
+        actions.stake(sel, amount);
+      });
       host.append(big);
-      if (mine) host.append(el('div', 'stkNote', `You have ${mine.amount.toLocaleString()} on ${mine.ticker}, staking moves it`));
+      if (mine) host.append(potLine(mine.amount));
+      if (mine) host.append(el('div', 'stkNote', `On ${mine.ticker} · staking again moves it`));
       else if (me && maxT < 1) host.append(el('div', 'stkNote', 'You have no tickets to stake'));
       host.append(el('div', 'stkHint', 'Most-staked ticker becomes the desk’s pick'));
       return true;
@@ -262,7 +333,7 @@ self.RGCStake = (function () {
       meta.append(img, document.createTextNode(`${committed.toLocaleString()} committed`));
       if (me) meta.append(el('b', '', ` · ${me.tickets.toLocaleString()} held`));
       host.append(meta, el('div', 'stkRule'));
-      host.append(el('div', 'stkQ', 'Step 2: Slide how many tickets to add.'));
+      host.append(el('div', 'stkQ', 'Step 2: How many tickets to add?'));
 
       const tickets = me ? me.tickets : 0;
       if (connected && me && tickets < 1) {
@@ -274,7 +345,7 @@ self.RGCStake = (function () {
         let amount = seedAmount(round, Math.min(25, Math.max(1, tickets)), Math.max(1, tickets));
         const big = el('button', 'stkBig');
         const paintBig = () => { big.textContent = `Join with ${Math.min(amount, Math.max(1, tickets))} 🎟`; };
-        const sl = slider({
+        const sl = amountInput({
           max: Math.max(1, tickets), value: amount, capAt,
           disabled: !connected || !me,
           onInput: (n) => { amount = n; remember(round, n); paintBig(); },
@@ -282,9 +353,15 @@ self.RGCStake = (function () {
         host.append(sl.wrap);
         paintBig();
         big.disabled = !connected || !me;
-        big.addEventListener('click', () => actions.join(Math.min(amount, Math.max(1, tickets))));
+        big.addEventListener('click', () => {
+          const n = Math.min(amount, Math.max(1, tickets));
+          markPlaced(big, `\u2713 ${n} 🎟 added`);
+          actions.join(n);
+        });
         host.append(big);
       }
+      // Always show what they already have committed, whether or not they can add more.
+      if (me && myCommitted > 0) host.append(potLine(myCommitted));
       host.append(el('div', 'stkHint', 'Final window · profit splits by ticket share when the desk sells'));
       return true;
     }

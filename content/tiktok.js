@@ -15,6 +15,10 @@
       const fill = path ? (path.getAttribute('fill') || getComputedStyle(path).fill || '') : '';
       return /254,\s*44,\s*85|#fe2c55|rgb\(254/i.test(fill);
     },
+    // TikTok likes are TWO-signal: the heart click arms an intent and the credit waits
+    // for the page's own digg mutation (observe.js). A signed-out click opens the login
+    // sheet and no digg ever fires, so it can never credit.
+    likeConfirmNetwork: true,
     likeTarget(t) { return t && t.closest ? t.closest('[data-e2e*="like-icon"]') : null; },
     commentSubmitTarget(t) {
       if (!t || !t.closest) return null;
@@ -76,6 +80,39 @@
       try {
         if (this.refFromPath(location.pathname) !== this.getRef() || !this.getRef()) return null;
         return !!document.querySelector('[data-e2e="repost-tag"], [data-e2e="repost-action-tag"]');
+      } catch (e) { return null; }
+    },
+    // The native control to ring for the FOCAL post. TikTok reshare is a two-step flow, so the
+    // control to click FIRST is the Share affordance that opens the panel, the same selector
+    // repostPresent detects (video is excluded here: it is a presence proxy, not a button).
+    // Prefer the clickable wrapper so the ring sits over what the user clicks. A video page
+    // has a non-empty getRef, the focal guard; returns null when getRef is empty or no share
+    // control is found, both safe no-rings.
+    // --- Highlight rings ------------------------------------------------------
+    // No-arg resolvers for the gold ring engage-core draws over the native control while
+    // that action is still unearned. Same safe-degrade rule as the rest of the adapter:
+    // return null and there is simply no ring.
+    likeHighlightTarget() {
+      try { return document.querySelector('[data-e2e*="like-icon"]') || null; } catch (e) { return null; }
+    },
+    commentHighlightTarget() {
+      try { return document.querySelector('[data-e2e*="comment-input"], [contenteditable="true"]') || null; } catch (e) { return null; }
+    },
+    repostDialogHighlightTargets() {
+      try {
+        const dlg = document.querySelector('[role="dialog"]');
+        if (!dlg) return null;
+        return Array.from(dlg.querySelectorAll('[role="button"], button'))
+          .filter((b) => { const r = b.getBoundingClientRect(); return r.width > 40 && r.height > 20; })
+          .slice(0, 3);
+      } catch (e) { return null; }
+    },
+    repostHighlightTarget() {
+      try {
+        if (!this.getRef()) return null;
+        const share = document.querySelector('[data-e2e*="video-share"], [data-e2e*="share"]');
+        if (!share) return null;
+        return share.closest('[role="button"], button') || share;
       } catch (e) { return null; }
     },
   };

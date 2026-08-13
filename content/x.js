@@ -59,6 +59,32 @@
       try { return !!card.querySelector('[data-testid="unretweet"]'); } catch { return null; }
     },
     repostPresent() { try { return !!document.querySelector('[data-testid="retweet"], [data-testid="unretweet"]'); } catch { return false; } },
+    // The native control to ring for the FOCAL post: the action-bar "retweet" button on the
+    // card for the tweet in the URL (getRef), the exact button repostPresent/repostTarget key
+    // on. Scoped through articleForRef so a repost button on another card in a timeline is
+    // never ringed, and so a reposted REPLY further down a thread is not mistaken for the
+    // post itself. Returns null when getRef is empty, the focal card cannot be resolved, or
+    // the control is gone (already reposted shows "unretweet", a different testid) — every
+    // one of those is a safe no-ring.
+    // --- Highlight rings ------------------------------------------------------
+    // No-arg resolvers for the gold ring engage-core draws over the native control while
+    // that action is still unearned. Same safe-degrade rule as the rest of the adapter:
+    // return null and there is simply no ring.
+    likeHighlightTarget() {
+      try { return document.querySelector('[data-testid="like"]') || null; } catch (e) { return null; }
+    },
+    commentHighlightTarget() {
+      try { return document.querySelector('[data-testid="reply"], [data-testid^="tweetTextarea_"]') || null; } catch (e) { return null; }
+    },
+    repostHighlightTarget() {
+      try {
+        const ref = this.getRef();
+        if (!ref) return null;
+        const card = articleForRef(ref);
+        if (!card) return null;
+        return card.querySelector('[data-testid="retweet"]');
+      } catch { return null; }
+    },
     getVideoEl() { return null; },
   };
   self.RGC_X_ADAPTER = adapter;

@@ -61,6 +61,38 @@
         ref: function (url, body) { var m = /"tweet_id"\s*:\s*"(\d+)"/.exec(String(body || '')); return m ? m[1] : null; },
       },
       {
+        platform: 'tiktok', kind: 'like',
+        // POST /api/commit/item/digg/ fires only for a REAL like by a signed-in account:
+        // signed-out heart clicks open the login sheet and never reach the network. type=1
+        // is like, type=0 is the un-like and must not match. This makes TikTok likes
+        // two-signal (owner, 2026-08-09: signed-out members were crediting likes the
+        // platform never recorded).
+        test: function (url) {
+          var u = String(url);
+          return /\/api\/commit\/item\/digg\/?\?/.test(u) && /[?&]type=1(&|$)/.test(u);
+        },
+        ref: function (url) { var m = /[?&]aweme_id=(\d+)/.exec(String(url)); return m ? m[1] : null; },
+      },
+      {
+        platform: 'youtube', kind: 'comment',
+        // POST https://www.youtube.com/youtubei/v1/comment/create_comment (and the reply
+        // variant) fires for EVERY posted comment in every interface language and on every
+        // markup variant, desktop and m.youtube alike. This is the language-proof comment
+        // signal: the composer DOM selectors keep missing on localized / A-B layouts
+        // (Serbian members, 2026-08-09, selector_health flooded with youtube composer
+        // misses), but the network call cannot be renamed by a locale. The typed text
+        // rides in the JSON body as "commentText", so the quality gate still applies.
+        test: function (url) { return /\/youtubei\/v1\/comment\/create_comment(_reply)?(\b|\?|$)/.test(String(url)); },
+        ref: function () { return null; },
+        txt: function (url, body) {
+          try {
+            var m = /"commentText"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(String(body || ''));
+            if (!m) return null;
+            return JSON.parse('"' + m[1] + '"');
+          } catch (e) { return null; }
+        },
+      },
+      {
         platform: 'tiktok', kind: 'repost',
         // POST https://www.tiktok.com/tiktok/v1/upvote/publish?...&item_id=<video id>
         // TikTok calls a repost an "upvote" internally, and puts the video id in the QUERY
@@ -87,6 +119,56 @@
         // our targets use, and the two cannot be reconciled here. Return null: the isolated
         // world credits the post on screen via the armed click intent, the same null-ref path
         // the design already documents (see the ref() note above).
+        ref: function () { return null; },
+      },
+      {
+        platform: 'facebook', kind: 'like',
+        // Comet's UFI react mutation fires for a like on posts AND reels, on every surface
+        // and in every interface language. The PC reel action rail broke the DOM path
+        // (2026-08-09: like control carries neither the English label nor aria-pressed
+        // there), so likes credit off the wire instead. Body match on the friendly name,
+        // like the repost signal below.
+        test: function (url, body) {
+          return /(?:^|&)fb_api_req_friendly_name=(?:CometUFIFeedbackReactMutation|useCometUFIFeedbackReactMutation)(?:&|$)/.test(String(body || ''));
+        },
+        ref: function () { return null; },
+        // Reported 2026-08-13: a member opened a Facebook post and was credited the like
+        // without liking it. This mutation pays with no click intent (facebook.js sets
+        // likeNetworkPageScoped), so anything react-shaped on the page pays, and we do not
+        // yet know what Facebook actually fired. This describes the mutation so the real
+        // trigger can be identified from live traffic rather than guessed at, and the
+        // matcher tightened precisely. Shapes only: the friendly name, whether a reaction
+        // id is present and whether it is being set or cleared, and whether a feedback id
+        // came along. No post content, no ids, nothing identifying.
+        meta: function (url, body) {
+          try {
+            var b = String(body || '');
+            var name = (b.match(/(?:^|&)fb_api_req_friendly_name=([^&]*)/) || [])[1] || '';
+            var vars = (b.match(/(?:^|&)variables=([^&]*)/) || [])[1] || '';
+            try { vars = decodeURIComponent(vars); } catch (e) { /* keep it raw */ }
+            var reaction = (vars.match(/"feedback_reaction_id"\s*:\s*"?([0-9]+)"?/) || [])[1] || null;
+            return {
+              name: name,
+              hasReaction: reaction != null,
+              reactionSet: reaction != null && reaction !== '0',
+              hasFeedbackId: /"feedback_id"\s*:/.test(vars),
+              varsLen: vars.length,
+            };
+          } catch (e) { return null; }
+        },
+      },
+      {
+        platform: 'facebook', kind: 'repost',
+        // FB's reshare ("Share now") posts a GraphQL mutation whose form-encoded body carries
+        // fb_api_req_friendly_name=ComposerStoryCreateMutation. Recorded live 2026-08-08.
+        // Anchored on the friendly-name in the BODY, not the path and not the rotating doc_id.
+        // Reshare is create-only: there is no "un-reshare" mutation, so nothing to exclude here.
+        test: function (url, body) {
+          return /(?:^|&)fb_api_req_friendly_name=ComposerStoryCreateMutation(?:&|$)/.test(String(body || ''));
+        },
+        // The mutation identifies the new story, not our numeric reel target, and the two
+        // cannot be reconciled here. Return null: the isolated world credits the reel on screen
+        // via the armed click intent (page-scoped, expires in 90s), like Instagram above.
         ref: function () { return null; },
       },
       // TODO(Instagram send): the paper plane media_share send, pending its own live
@@ -130,7 +212,11 @@
       try {
         var ref = null;
         try { ref = sig.ref(url, body) || null; } catch (e) { ref = null; }
-        window.postMessage({ rgcObs: 1, platform: sig.platform, kind: sig.kind, ref: ref, ok: !!ok }, location.origin);
+        var txt = null;
+        if (typeof sig.txt === 'function') { try { txt = sig.txt(url, body); } catch (e) { txt = null; } }
+        var meta = null;
+        if (typeof sig.meta === 'function') { try { meta = sig.meta(url, body); } catch (e) { meta = null; } }
+        window.postMessage({ rgcObs: 1, platform: sig.platform, kind: sig.kind, ref: ref, ok: !!ok, txt: txt, meta: meta }, location.origin);
       } catch (e) { /* postMessage can throw on odd origins; crediting is optional, the page is not */ }
     }
 
@@ -168,6 +254,34 @@
       };
       try { window.fetch = blendIn(wrappedFetch, 'fetch', 1); } catch (e) { /* non-writable fetch: observe nothing, break nothing */ }
     }
+
+    // --- sendBeacon ----------------------------------------------------------------
+    // Mobile web (m.youtube especially) fires some mutations through navigator.sendBeacon,
+    // which the fetch and XHR taps never see. A Firefox-mobile member commented and nothing
+    // credited (2026-08-10); this tap closes that path. String and URLSearchParams bodies
+    // are readable synchronously; Blob bodies are skipped rather than consumed.
+    try {
+      var oBeacon = navigator.sendBeacon && navigator.sendBeacon.bind(navigator);
+      if (oBeacon) {
+        navigator.sendBeacon = function (url, data) {
+          try {
+            var body = '';
+            if (typeof data === 'string') body = data;
+            else if (data && typeof URLSearchParams !== 'undefined' && data instanceof URLSearchParams) body = String(data);
+            var sig = matchSig(String(url || ''), body);
+            // sendBeacon gives no response to await: report on the boolean send result
+            // below, which parallels fetch's "accepted, not done" semantics closely enough
+            // for a mutation that only fires on a real user action.
+            if (sig) {
+              var sent = oBeacon(url, data);
+              report(sig, String(url || ''), body, sent !== false);
+              return sent;
+            }
+          } catch (e) { /* observing must never break the page */ }
+          return oBeacon(url, data);
+        };
+      }
+    } catch (e) { /* ignore */ }
 
     // --- XMLHttpRequest ------------------------------------------------------------
     var XHR = window.XMLHttpRequest;

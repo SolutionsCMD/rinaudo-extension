@@ -35,11 +35,52 @@ async function refreshVersion() {
   try { current = chrome.runtime.getManifest().version || ''; } catch { /* ignore */ }
   $('ver').textContent = current ? 'v' + current : '';
   const { extUpdate } = await chrome.storage.local.get('extUpdate').catch(() => ({}));
-  if (extUpdate && extUpdate.available) {
-    const u = $('update');
-    u.textContent = `Update available: v${extUpdate.latest}. Reload the extension to get the latest version.`;
-    u.style.display = 'block';
+  if (!extUpdate || !extUpdate.available) return;
+
+  const u = $('update');
+  $('updateText').textContent = `Update available: v${extUpdate.latest}`;
+  u.style.display = 'block';
+
+  const btn = $('updateBtn');
+  const msg = $('updateMsg');
+  const link = $('updateLink');
+  // Firefox (including Android) has no requestUpdateCheck and installs only from AMO,
+  // so there the button is replaced by a link to the listing.
+  const canSelfUpdate = !!(chrome.runtime && chrome.runtime.requestUpdateCheck);
+  const STORE = canSelfUpdate
+    ? 'https://chromewebstore.google.com/detail/rinaudo-capital/opnjljhcacpimaeohbbibagnicceeikb'
+    : 'https://addons.mozilla.org/en-US/firefox/addon/rinaudo-capital/';
+  link.href = STORE;
+
+  if (!canSelfUpdate) {
+    btn.style.display = 'none';
+    link.style.display = 'inline';
+    msg.textContent = 'Your browser installs updates from the add-ons site.';
+    return;
   }
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    msg.textContent = 'Checking…';
+    const r = await chrome.runtime.sendMessage({ type: 'applyUpdate' }).catch(() => null);
+    const status = r && r.status;
+    if (r && r.ok) {
+      // The extension is about to restart, which closes this popup.
+      msg.textContent = 'Updating now…';
+      return;
+    }
+    if (status === 'no_update') {
+      // The store has not published it to this browser yet — common for a few hours
+      // after a submission is approved.
+      msg.textContent = 'No update ready yet. The store has not rolled it out to you.';
+    } else if (status === 'throttled') {
+      msg.textContent = 'Checked too recently. Try again in a few minutes.';
+    } else {
+      msg.textContent = 'Could not update automatically.';
+      link.style.display = 'inline';
+    }
+    btn.disabled = false;
+  });
 }
 
 // Per-platform desktop-notification toggles. Stored in notifPrefs (opt-out: a platform

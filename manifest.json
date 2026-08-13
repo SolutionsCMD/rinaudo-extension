@@ -2,7 +2,7 @@
   "update_url": "https://clients2.google.com/service/update2/crx",
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.0.59",
+  "version": "1.125",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "minimum_chrome_version": "111",
   "permissions": [
@@ -21,6 +21,9 @@
     "https://www.instagram.com/*",
     "https://instagr.am/*",
     "https://instagram.com/*",
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*",
+    "https://m.facebook.com/*",
     "https://x.com/*",
     "https://twitter.com/*"
   ],
@@ -98,6 +101,20 @@
     },
     {
       "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*",
+        "https://m.facebook.com/*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "content/engage-core.js",
+        "content/facebook.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
         "https://x.com/*",
         "https://twitter.com/*"
       ],
@@ -117,7 +134,13 @@
         "https://m.tiktok.com/*",
         "https://www.instagram.com/*",
         "https://instagram.com/*",
-        "https://instagr.am/*"
+        "https://instagr.am/*",
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*",
+        "https://m.facebook.com/*",
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://youtube.com/*"
       ],
       "js": [
         "content/observe.js"

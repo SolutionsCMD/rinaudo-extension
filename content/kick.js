@@ -228,6 +228,10 @@ async function tick() {
     clear();
     return;
   }
+  // Nobody is looking at a hidden tab, so don't spend requests on it. The
+  // visibilitychange handler below ticks immediately when the tab comes back,
+  // so the card is current by the time it is on screen.
+  if (document.visibilityState === 'hidden') return;
   // A live stake round takes the card over (it reverts to polls when it ends).
   const rd = await chrome.runtime.sendMessage({ type: 's2Round' }).catch(() => null);
   if (rd && drawRound(rd)) return;

@@ -33,7 +33,8 @@ self.EngageCore = (function () {
     .row.pending .lbl,.row.pending .amt{color:#8A8678}
     .row.paused .lbl{color:#8A8678}
     .amt.req{color:#E8B339}
-    .hint{font-size:11px;color:#6B6960;margin:2px 0 6px;line-height:1.3}`;
+    .hint{font-size:11px;color:#6B6960;margin:2px 0 6px;line-height:1.3}
+    .warn{font-size:11.5px;color:#F5C77E;background:rgba(245,199,126,.10);border:1px solid rgba(245,199,126,.32);border-radius:7px;padding:7px 9px;margin:0 0 8px;line-height:1.35}`;
 
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const watchEstimate = (sec, r) => Math.max(r.watchFloor || 5, Math.floor((sec || 0) / 60) * (r.watchPerMinute || 1));
@@ -48,6 +49,25 @@ self.EngageCore = (function () {
     let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1,
       repostReward: 0, shareSendReward: 0, engageBonusReward: 0 };
 
+    // Admin "hide the repost / share row" switch — same public S2 status feed the Kick
+    // watchtime widget uses (the SW's 30s status poll writes chrome.storage.local.shareHidden).
+    // When set, the repost row is not drawn AND every repost credit path stands down (see
+    // repostCapable below), so a hidden row can never silently credit. Like / comment / watch /
+    // replay / send are untouched. Absent flag (default false) keeps the row shown, so older
+    // servers stay backwards compatible.
+    let shareHidden = false;
+    chrome.storage.local.get('shareHidden').then(({ shareHidden: sh }) => {
+      shareHidden = sh === true;
+      if (frame) drawWidget();
+    }).catch(() => {});
+    chrome.storage.onChanged.addListener((ch) => {
+      if (!ch.shareHidden) return;
+      shareHidden = ch.shareHidden.newValue === true;
+      // Re-draw so a toggle lands within a poll cycle with no page reload: the repost row
+      // appears or disappears and the earned pill recomputes.
+      if (frame) drawWidget();
+    });
+
     // Locally remember what's already credited per (platform, post) so the ✓ state
     // survives a refresh (the server is idempotent; this is purely the display).
     // Shape: { like, comment, watch, awarded, repost, send, bonus }.
@@ -57,7 +77,7 @@ self.EngageCore = (function () {
 
     function ensureFrame() {
       if (frame) return;
-      frame = self.RGCFrame.mount({ key: A.platform, title: '🎟 Earn Tickets', width: 240, pos: { bottom: 16, right: 16 }, css: ROW_CSS });
+      frame = self.RGCFrame.mount({ key: A.platform, title: '🎟 Earn Tickets', width: 300, pos: { bottom: 16, right: 16 }, css: ROW_CSS });
     }
     // status: 'idle' | 'pending' | 'done'
     function rowEl(label, amt, status) {
@@ -117,6 +137,7 @@ self.EngageCore = (function () {
       return !!(state && state.replayEligible && (state.replayMax || 0) > 0);
     }
     function hint(text) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = text; return h; }
+    function warn(text) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = text; return w; }
     // Can THIS build actually perform the action on this platform? The server's capability
     // matrix (state.canRepost / state.canSend) says the platform offers it; these say the
     // adapter in front of us can see the control that starts it. For a repost, isReposted()
@@ -124,7 +145,12 @@ self.EngageCore = (function () {
     // TikTok) wait for the flip before paying, adapters that do not (Instagram) credit on the
     // click intent plus the confirmed network mutation. An adapter that cannot see the control
     // can never credit, so nothing that depends on it may be advertised.
-    const repostCapable = () => !!(state && state.canRepost)
+    // shareHidden (admin kill switch) forces NOT capable. This is the single chokepoint every
+    // repost path funnels through, so gating it here drops the row in drawWidget, stands the 5s
+    // self-heal down, and makes the network-confirmation owner/credit checks bail — a hidden row
+    // therefore cannot silently credit. bonusReachable() keys off this too, so "Do it all" also
+    // hides while the set is unreachable. Like / comment / watch / replay / send are unaffected.
+    const repostCapable = () => !!(state && state.canRepost) && !shareHidden
       && typeof A.repostTarget === 'function';
     const sendCapable = () => !!(state && state.canSend) && typeof A.sendTarget === 'function';
     // Read the adapter's repost state without ever letting selector drift throw.
@@ -153,6 +179,20 @@ self.EngageCore = (function () {
       if (!state) return;
       ensureFrame();
       const body = frame.body; body.replaceChildren();
+      // Optional per-adapter notice, drawn above the rows. Advisory ONLY: it never
+      // gates a row, disables a button or blocks a claim, so a wrong answer can
+      // cost a viewer nothing. Adapters without notice() are unaffected.
+      const blocked = earnBlocked();
+      if (blocked) {
+        body.append(warn(blocked));
+        // Nothing else is drawn: showing rows that cannot pay would be a lie.
+        return;
+      }
+      if (typeof A.notice === 'function') {
+        let n = null;
+        try { n = A.notice(); } catch { n = null; }
+        if (n) body.append(warn(n));
+      }
       if (A.actions.watch && (state.sessionId || state.watchDone)) {
         body.append(watchRow());
         if (state.watchError && !state.watchDone) body.append(hint(watchErrText(state.watchError)));
@@ -165,20 +205,14 @@ self.EngageCore = (function () {
       }
       if (A.actions.like) body.append(rowEl('Like', socialAmt(rewards.likeReward, state.likeS), state.likeS));
       // The server can switch commenting off per platform (targets route sends
-      // commentEnabled:false). Show it as off rather than dangling a reward nobody can
-      // collect. Undefined means an older server, so default to enabled.
-      if (A.actions.comment && state.commentEnabled === false) {
-        body.append(rowEl('Comment', 'off', 'idle'));
-        body.append(hint('Comments are switched off for this platform right now'));
-      } else if (A.actions.comment) {
-        body.append(rowEl('Comment', socialAmt(rewards.commentReward, state.commentS), state.commentS));
-        if (state.commentS === 'idle') {
-          const banned = (state.commentBannedWords || []);
-          const lenRule = state.commentMinWords > 0
-            ? `Comment must be more than ${state.commentMinWords} words`
-            : 'Comment must be more than 5 characters';
-          body.append(hint(banned.length ? `${lenRule}, and can't mention ${banned[0]}s` : lenRule));
-        }
+      // commentEnabled:false). When that happens the comment row is HIDDEN entirely,
+      // not shown as off, so nothing dangles a reward nobody can collect. Undefined
+      // means an older server, so default to enabled.
+      if (A.actions.comment && state.commentEnabled !== false) {
+        body.append(rowEl('Comment something meaningful', socialAmt(rewards.commentReward, state.commentS), state.commentS));
+        // No hint line: the row label itself is the owner's full instruction ("Comment
+        // something meaningful"). The word-count floor and the banned-words list are
+        // enforced silently by passesGate; naming them was bad optics and a dodge guide.
       }
       // Repost / send. Two gates, both required, and the reward gate is the dark-ship
       // contract: the server says the platform offers the action AND this adapter can do
@@ -202,8 +236,171 @@ self.EngageCore = (function () {
         + (state.bonusDone ? rewards.engageBonusReward : 0)
         + (state.watchDone ? (state.awarded || 0) : 0) + ((state.replayReward || 0) * (state.replayUsed || 0));
       frame.setPill(earned ? `+${earned}` : '🎟');
+      // Keep the on-page share-highlight ring in sync with this draw (repost done,
+      // shareHidden toggle, ref change, etc.). Never let a ring error break the widget.
+      try { ensureShareRing(); } catch { /* safe degrade: no ring */ }
     }
-    function clearWidget() { if (frame) { frame.destroy(); frame = null; } state = null; }
+    function clearWidget() { try { teardownShareRing(); } catch { /* safe degrade */ } if (frame) { frame.destroy(); frame = null; } state = null; }
+
+    // --- On-page SHARE-HIGHLIGHT ring -------------------------------------------
+    // A gold ring + "+N" badge drawn OVER the platform's own Share / Repost control so
+    // the member can see which native button starts the reshare that is still owed. This
+    // is purely an on-page indicator, entirely separate from the draggable widget: the
+    // overlay is pointer-events:none and never restyles the host button, so it can never
+    // intercept the click or disturb the confirmation flow.
+    //
+    // It shows only when a repost is bound for THIS post, the server says the platform
+    // offers it (state.canRepost), the tariff pays for it (rewards.repostReward > 0), the
+    // repost is not already done (state.repostS !== 'done'), the admin kill switch is off
+    // (!shareHidden), and the adapter can point at the control (A.repostHighlightTarget()
+    // returns an element for the focal post). Anything missing, or any throw anywhere,
+    // means no ring (safe degrade). Gold #C9A766 matches the widget chrome. A rAF follow
+    // loop keeps the ring hugging the control across scroll / resize / SPA relayout on
+    // desktop and mobile Firefox alike; the expensive re-resolve + gate re-check is
+    // throttled to ~500ms while the cheap per-frame reposition just tracks the rect.
+    const RING_GOLD = '#C9A766';
+    // One highlight per action that is still OUTSTANDING on this post: like, comment,
+    // repost, and every button inside an OPEN share dialog (the second step of a reshare,
+    // which is where members get stuck). Each ring is an independent overlay so they can
+    // show together. Same contract as the original single share ring: pointer-events:none
+    // so the click always falls through, a rAF loop keeps each ring hugging its control,
+    // the expensive re-resolve is throttled to ~500ms, and ANY throw tears everything down
+    // (no ring is always better than a broken page).
+    let rings = new Map();      // key -> { host, ring, badge, el, last }
+    let ringsRaf = 0;
+    let ringsLastResolve = 0;
+
+    function ringCall(fn) {
+      try { return typeof A[fn] === 'function' ? A[fn]() : null; } catch { return null; }
+    }
+    // What SHOULD be ringed right now: [{ key, el, txt }].
+    function ringSpecs() {
+      const out = [];
+      try {
+        if (!state || state.ref !== A.getRef()) return out;
+        const push = (key, el, n) => {
+          if (el && el.nodeType === 1) out.push({ key, el, txt: '+' + (n || 0) });
+        };
+        if (A.actions.like && rewards.likeReward > 0 && state.likeS !== 'done') {
+          push('like', ringCall('likeHighlightTarget'), rewards.likeReward);
+        }
+        if (A.actions.comment && state.commentEnabled !== false
+            && rewards.commentReward > 0 && state.commentS !== 'done') {
+          push('comment', ringCall('commentHighlightTarget'), rewards.commentReward);
+        }
+        if (state.canRepost === true && rewards.repostReward > 0
+            && state.repostS !== 'done' && !shareHidden) {
+          push('repost', ringCall('repostHighlightTarget'), rewards.repostReward);
+          // Second step: the options inside the open share sheet. Capped so a dialog full
+          // of controls cannot carpet the screen in gold.
+          let list = null;
+          try {
+            list = typeof A.repostDialogHighlightTargets === 'function'
+              ? A.repostDialogHighlightTargets() : null;
+          } catch { list = null; }
+          if (list && list.length) {
+            Array.prototype.slice.call(list, 0, 3)
+              .forEach((el, i) => push('dlg' + i, el, rewards.repostReward));
+          }
+        }
+      } catch { return []; }
+      return out;
+    }
+    function buildRing(key) {
+      const host = document.createElement('div');
+      host.id = 'rgc-ring-' + key;
+      host.style.cssText = 'position:fixed;top:0;left:0;z-index:2147483646;pointer-events:none;margin:0;padding:0;display:none';
+      const shadow = host.attachShadow({ mode: 'open' });
+      const style = document.createElement('style');
+      style.textContent = `
+        .ring{position:absolute;top:0;left:0;right:0;bottom:0;box-sizing:border-box;
+          border:2px solid ${RING_GOLD};border-radius:12px;
+          box-shadow:0 0 0 2px rgba(201,167,102,.28),0 0 14px rgba(201,167,102,.55);
+          animation:rgcRingPulse 1.8s ease-in-out infinite}
+        .badge{position:absolute;top:-11px;right:-11px;min-width:18px;height:20px;padding:0 6px;
+          border-radius:999px;background:${RING_GOLD};color:#0E1B2C;
+          font:700 12px/20px system-ui,-apple-system,sans-serif;text-align:center;
+          box-shadow:0 3px 10px rgba(0,0,0,.45);white-space:nowrap}
+        @keyframes rgcRingPulse{0%,100%{opacity:1}50%{opacity:.5}}
+        @media (prefers-reduced-motion: reduce){.ring{animation:none}}`;
+      const ring = document.createElement('div'); ring.className = 'ring';
+      const badge = document.createElement('span'); badge.className = 'badge';
+      ring.appendChild(badge); shadow.append(style, ring);
+      (document.body || document.documentElement).appendChild(host);
+      return { host, ring, badge, el: null, last: null };
+    }
+    function positionRing(r) {
+      if (!r || !r.el) return;
+      const rect = r.el.getBoundingClientRect();
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const offscreen = (rect.width === 0 && rect.height === 0)
+        || rect.bottom <= 0 || rect.top >= vh || rect.right <= 0 || rect.left >= vw;
+      if (offscreen) { if (r.host.style.display !== 'none') r.host.style.display = 'none'; return; }
+      const pad = 6;
+      const left = Math.round(rect.left - pad), top = Math.round(rect.top - pad);
+      const w = Math.round(rect.width + pad * 2), h = Math.round(rect.height + pad * 2);
+      const last = r.last;
+      if (r.host.style.display === 'block' && last
+          && last.left === left && last.top === top && last.w === w && last.h === h) return;
+      r.host.style.display = 'block';
+      r.host.style.left = left + 'px'; r.host.style.top = top + 'px';
+      r.host.style.width = w + 'px'; r.host.style.height = h + 'px';
+      r.last = { left, top, w, h };
+    }
+    function reconcileRings() {
+      const specs = ringSpecs();
+      const want = new Set(specs.map((x) => x.key));
+      for (const key of Array.from(rings.keys())) {
+        if (!want.has(key)) { try { rings.get(key).host.remove(); } catch { /* ignore */ } rings.delete(key); }
+      }
+      for (const spec of specs) {
+        let r = rings.get(spec.key);
+        if (!r) { r = buildRing(spec.key); rings.set(spec.key, r); }
+        if (r.el !== spec.el) { r.el = spec.el; r.last = null; }
+        if (r.badge.textContent !== spec.txt) r.badge.textContent = spec.txt;
+        positionRing(r);
+      }
+      return rings.size > 0;
+    }
+    function ringsTick() {
+      ringsRaf = 0;
+      try {
+        if (!rings.size) return;
+        rings.forEach(positionRing);
+        const now = Date.now();
+        if (now - ringsLastResolve >= 500) {
+          ringsLastResolve = now;
+          if (!reconcileRings()) { teardownShareRing(); return; }
+        }
+      } catch { teardownShareRing(); return; }
+      if (rings.size) ringsRaf = requestAnimationFrame(ringsTick);
+    }
+    let ringsScrollHooked = false;
+    function onRingScroll() { try { rings.forEach(positionRing); } catch { /* safe degrade */ } }
+    function teardownShareRing() {
+      if (ringsRaf) { try { cancelAnimationFrame(ringsRaf); } catch { /* ignore */ } ringsRaf = 0; }
+      rings.forEach((r) => { try { r.host.remove(); } catch { /* ignore */ } });
+      rings.clear();
+      if (ringsScrollHooked) {
+        try { window.removeEventListener('scroll', onRingScroll, { capture: true }); } catch { /* ignore */ }
+        try { window.removeEventListener('resize', onRingScroll); } catch { /* ignore */ }
+        ringsScrollHooked = false;
+      }
+    }
+    // Reactive entry point, unchanged name so every existing call site still works:
+    // drawWidget (state changes) and the 5s poll (controls that render late). Idempotent.
+    function ensureShareRing() {
+      try {
+        ringsLastResolve = Date.now();
+        if (!reconcileRings()) { teardownShareRing(); return; }
+        if (!ringsScrollHooked) {
+          try { window.addEventListener('scroll', onRingScroll, { passive: true, capture: true }); } catch { /* ignore */ }
+          try { window.addEventListener('resize', onRingScroll, { passive: true }); } catch { /* ignore */ }
+          ringsScrollHooked = true;
+        }
+        if (!ringsRaf && rings.size) ringsRaf = requestAnimationFrame(ringsTick);
+      } catch { teardownShareRing(); }
+    }
 
     // Server action name -> widget state key and local-cache flag.
     const ACTION_KEY = { like: 'likeS', comment: 'commentS', repost: 'repostS', share_send: 'sendS' };
@@ -235,7 +432,7 @@ self.EngageCore = (function () {
       // The watch gate is like-only (comments stopped earning 2026-08-08). If a claim
       // already bounced off the gate, the like that just landed is exactly what it was
       // waiting for: clear the error and retry now rather than sitting out the backoff.
-      if (state[key] === 'done' && action === 'like' && state.watchError === 'engagement_required') {
+      if (state[key] === 'done' && (action === 'like' || action === 'comment') && state.watchError === 'engagement_required') {
         state.watchError = null;
         claimWatch();
       }
@@ -339,11 +536,68 @@ self.EngageCore = (function () {
         // page-scoped and expires in 90s. Adapters that DO parse a ref (X, TikTok) are
         // unchanged: a present ref must match, and a ref-less confirmation there is still
         // dropped.
+        // Network-confirmed COMMENT (YouTube): create_comment fired while this page's
+        // target is bound. Language and markup independent, which the composer DOM path
+        // is not (localized layouts kept missing it). The typed text rides along, so the
+        // same quality gate applies: too short or a banned word means no credit, exactly
+        // as if the member had typed it into a detected composer. Ref-less by nature, so
+        // it is page-scoped like Instagram's repost confirmation.
+        // Network-confirmed LIKE (TikTok two-signal): pays only when the click intent is
+        // still armed for THIS post and the mutation's aweme_id agrees.
+        if (d.kind === 'like') {
+          const now2 = Date.now();
+          const okRef = !d.ref || String(d.ref) === state.ref;
+          if (A.likeConfirmNetwork && okRef && pendingLikeRef === state.ref
+              && now2 < pendingLikeUntil && state.likeS === 'idle') {
+            pendingLikeUntil = 0;
+            fireEngagement('like');
+          } else if (A.likeNetworkPageScoped && okRef && state.likeS === 'idle') {
+            // Reported 2026-08-13: credited on opening a post, without liking it. This
+            // branch pays on the mutation alone, so record what the mutation looked like
+            // at the moment it paid. Shapes only, no content: enough to tell a real react
+            // from whatever Facebook fires on open, which is what the fix needs.
+            try {
+              chrome.runtime.sendMessage({
+                type: 's2Debug',
+                kind: 'fblike',
+                data: Object.assign({ ev: 'paid', ref: state.ref }, d.meta || {}),
+              });
+            } catch (e) { /* diagnostics are optional, crediting is not */ }
+            // Page-scoped (Facebook): no click intent required, because the DOM anchors are
+            // exactly what keeps failing on localized / reel-rail surfaces. The mutation is
+            // ref-less, so this only ever runs while THIS post's target is bound, and the
+            // server stays idempotent per (user, post, action) regardless.
+            fireEngagement('like');
+          }
+          return;
+        }
+        if (d.kind === 'comment') {
+          if (A.actions.comment && state.commentEnabled !== false && state.commentS === 'idle'
+              && typeof d.txt === 'string' && passesGate(d.txt.trim())) {
+            fireEngagement('comment');
+          }
+          return;
+        }
         let ref = d.ref == null ? '' : String(d.ref);
         if (!ref && typeof A.isReposted !== 'function') ref = state.ref;
         if (!ref || ref !== state.ref) return;
         const now = Date.now();
-        if (d.kind === 'repost' && repostCapable() && now < pendingRepostUntil) {
+        // Page-scoped repost (Instagram): credit on the confirmed mutation ALONE, with no
+        // click intent required. Reported 2026-08-11 by a viewer on a FRENCH Instagram:
+        // repost never credited because repostTarget() matches svg[aria-label="Repost"],
+        // and the label is localized ("Republier" etc), so the intent never armed and the
+        // mutation that did arrive was discarded. Same failure the Facebook like had.
+        //
+        // Safe because the widget only binds on a single-post permalink: getRef() parses
+        // /p/<shortcode>/ out of the path, so on a feed or profile there is no ref and no
+        // widget. One post on the page means a repost mutation firing here belongs to it.
+        // isLiked-style DOM checks are not available for repost, which is why this leans
+        // on the network signal rather than adding another localized selector.
+        if (d.kind === 'repost' && repostCapable() && A.repostNetworkPageScoped
+            && state.repostS === 'idle' && now >= pendingRepostUntil) {
+          lastTaken = { kind: 'repost', ref, at: now };
+          fireEngagement('repost');
+        } else if (d.kind === 'repost' && repostCapable() && now < pendingRepostUntil) {
           pendingRepostUntil = 0;
           lastTaken = { kind: 'repost', ref, at: now };
           // Signal three, repost only and only where the adapter exposes isReposted (X,
@@ -448,6 +702,7 @@ self.EngageCore = (function () {
     // not-liked state. We no longer sample the heart's color afterward (brittle across UIs
     // and platform reverts) — the click IS the signal. The pre-click isLiked() read only
     // guards against crediting an un-like; if it can't tell, we still credit the intent.
+    let pendingLikeUntil = 0, pendingLikeRef = '';
     function hookLike() {
       if (likeHooked || !A.actions.like || !A.likeTarget) return; likeHooked = true;
       document.addEventListener('click', (e) => {
@@ -456,12 +711,32 @@ self.EngageCore = (function () {
         // Captured during the capture phase, BEFORE the page toggles the like, so this is
         // the pre-click state. Skip only when we're clearly already liked (an un-like).
         if (A.isLiked()) return;
+        if (A.likeConfirmNetwork) {
+          // Two-signal like (TikTok): the click only ARMS. Credit waits for the page's own
+          // like mutation via observe.js; a signed-out click never produces one, so the
+          // 90 second window just expires and nothing pays.
+          pendingLikeUntil = Date.now() + 90 * 1000;
+          pendingLikeRef = state.ref;
+          return;
+        }
         fireEngagement('like');
       }, true);
     }
 
+    // An adapter can refuse to earn. Returns a reason string to block, or null to allow.
+    // Used by Facebook to require a signed-in session before any ticket is collected.
+    function earnBlocked() {
+      if (typeof A.earnBlocked !== 'function') return null;
+      try { return A.earnBlocked() || null; } catch { return null; }
+    }
+
     async function startWatch() {
       if (!A.actions.watch) return;
+      // Never open a watch session while the adapter says earning is blocked. Watch is
+      // the one thing a signed-out viewer could otherwise still collect: likes and
+      // comments already fail on their own, because their second signal is the site's
+      // own network mutation and that never fires without a session.
+      if (earnBlocked()) return;
       // Guard against overlapping attempts so the load watchdog can't spawn duplicate
       // sessions while a prior attempt is still in its metadata wait.
       if (!state || state.watchStarting || state.sessionId || state.watchDone) return;
@@ -529,6 +804,7 @@ self.EngageCore = (function () {
     // as baseTarget (for the continuation display) before state.target is reset to the new
     // session's requirement. Idempotent-ish: guarded so the 5s loop can safely re-attempt.
     async function maybeStartReplay() {
+      if (earnBlocked()) return;   // same gate as the first watch
       if (!state || !state.watchDone || !replayAvailable()) return;
       if (state.replaying || state.replayStarting || state.replayAllDone) return;
       if ((state.replayUsed || 0) >= (state.replayMax || 0)) { state.replayAllDone = true; return; }
@@ -583,10 +859,10 @@ self.EngageCore = (function () {
         const ref = state.ref;
         const failures = [];
         // watch: the page should have a findable <video> when the watch action applies.
-        // Instagram is exempt: photo posts legitimately have no video (the watch row
-        // simply never appears there), so a missing video is normal, not selector
-        // drift, and would otherwise flood the table with permanent noise.
-        if (A.actions.watch && A.platform !== 'instagram') {
+        // Instagram and Facebook are exempt: photo and text posts legitimately have no
+        // video (the watch row simply never appears there), so a missing video is normal,
+        // not selector drift, and would otherwise flood the table with permanent noise.
+        if (A.actions.watch && A.platform !== 'instagram' && A.platform !== 'facebook') {
           let v = null; try { v = A.getVideoEl(); } catch { v = null; }
           if (!v) failures.push('video');
         }
@@ -712,6 +988,11 @@ self.EngageCore = (function () {
 
     // Every 5s: detect a like, accrue focused-playing watch time, heartbeat, claim when ready.
     setInterval(() => {
+      // Safety net for the on-page share ring: catches a control that renders after the
+      // last drawWidget (e.g. a comments panel opened) and drops a stale ring when state
+      // has gone. Cheap: one throttled selector resolve. Wrapped so it can never break the
+      // watch loop below.
+      try { ensureShareRing(); } catch { /* safe degrade: no ring */ }
       if (!state || state.ref !== A.getRef()) return;
       if (A.actions.like && state.likeS === 'idle' && A.isLiked()) fireEngagement('like');
       // Self-heal a repost the platform shows as done but the server never recorded: the

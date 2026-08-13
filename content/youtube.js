@@ -106,6 +106,18 @@
     },
     // Selector-health probes for engage-core's telemetry sample: can the adapter
     // currently see a comment composer / a like control on this page at all?
+    // --- Highlight rings ------------------------------------------------------
+    // No-arg resolvers for the gold ring engage-core draws over the native control while
+    // that action is still unearned. Same safe-degrade rule as the rest of the adapter:
+    // return null and there is simply no ring.
+    likeHighlightTarget() {
+      try {
+        return document.querySelector('ytd-watch-metadata like-button-view-model button, #top-level-buttons-computed button[aria-label*="like" i]') || null;
+      } catch (e) { return null; }
+    },
+    commentHighlightTarget() {
+      try { return document.querySelector(COMPOSER_SEL) || document.querySelector('#simplebox-placeholder') || null; } catch (e) { return null; }
+    },
     composerPresent() { try { return !!document.querySelector(COMPOSER_SEL); } catch { return false; } },
     likePresent() { try { return !!likeControl(); } catch { return false; } },
     getVideoEl() {

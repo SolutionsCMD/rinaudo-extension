@@ -9,7 +9,7 @@
 self.RGCFrame = (function () {
   const CSS = `
     .frame{position:fixed;z-index:2147483647;font-family:system-ui,-apple-system,sans-serif}
-    .card{width:var(--rgc-w,240px);background:#0E1B2C;color:#F4EFE3;border:1px solid #C9A766;border-radius:13px;box-shadow:0 18px 50px rgba(0,0,0,.55)}
+    .card{width:min(var(--rgc-w,240px), calc(100vw - 32px));box-sizing:border-box;background:#0E1B2C;color:#F4EFE3;border:1px solid #C9A766;border-radius:13px;box-shadow:0 18px 50px rgba(0,0,0,.55)}
     .bar{display:flex;align-items:center;gap:8px;padding:11px 13px;cursor:grab;user-select:none;border-bottom:1px solid rgba(201,167,102,.16)}
     .bar:active{cursor:grabbing}
     .dot{width:7px;height:7px;border-radius:50%;background:#53FC18;flex:none;box-shadow:0 0 8px rgba(83,252,24,.7)}
@@ -61,7 +61,9 @@ self.RGCFrame = (function () {
         if (u && u.available) {
           bver.textContent = 'v' + VER + ' · update ⬆';
           bver.classList.add('upd');
-          bver.title = 'A newer version (v' + u.latest + ') is available. Reload the extension.';
+          // The popup now has a real "Update now" button, so point people there
+          // instead of telling them to go and reload the extension themselves.
+          bver.title = 'A newer version (v' + u.latest + ') is available. Open the Mizkif Global extension icon and hit Update now.';
         }
       }).catch(() => {});
     } catch { /* ignore */ }

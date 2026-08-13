@@ -343,6 +343,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2WatchHeartbeat') { reply(await s2WatchHeartbeat(msg.sessionId)); }
     else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.platform, msg.videoRef, msg.mode)); }
     else if (msg.type === 's2KickCheckin') { reply(await s2KickCheckin()); }
+    else if (msg.type === 'applyUpdate') { reply(await applyUpdate()); }
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
     else if (msg.type === 's2Round') { reply(await s2Round()); }
@@ -418,9 +419,11 @@ async function earnToastImage(platform, ref) {
   return 'icons/notif-earn.png';
 }
 
+// Returns whether the stream is live, so the alarm handler below can decide how much
+// of the rest of the work is worth doing right now.
 async function checkSignals() {
   const r = await fetch(C.API + C.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-  if (!r) return;
+  if (!r) return false;
   const store = await chrome.storage.local.get(['sigSeen', 'notifUrls', 'notifPrefs']);
   const seen = store.sigSeen || null;
   const notifUrls = store.notifUrls || {};
@@ -458,16 +461,23 @@ async function checkSignals() {
   const nowSocial = {};
   (r.latestSocial || []).forEach((s) => { if (s.url) nowSocial[s.platform] = s.url; });
   await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos, social: nowSocial }, notifUrls });
+  return !!r.streamLive;
 }
 
-// Public S2 flag feed (no auth) — currently just the watchtime-widget
-// visibility switch. Content scripts read the stored value, so hiding the
-// widget propagates to every viewer within one alarm tick (30s). The flag is
-// flipped from the Office dashboard (mizkif.com/office).
+// Public S2 flag feed (no auth) — the admin visibility kill switches. Content
+// scripts read the stored values, so a flip propagates to every viewer within
+// one alarm tick (30s). Both flags are toggled from the Office dashboard
+// (mizkif.com/office):
+//   watchWidgetHidden — hides the Kick watchtime widget (earning continues).
+//   shareHidden       — hides the repost / share row in the Earn Tickets overlay
+//                       (like / comment / watch keep working).
 async function checkS2Status() {
   const r = await fetch(S2.API + S2.STATUS).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   if (!r) return;
-  await chrome.storage.local.set({ watchWidgetHidden: r.watchWidgetHidden === true });
+  await chrome.storage.local.set({
+    watchWidgetHidden: r.watchWidgetHidden === true,
+    shareHidden: r.shareHidden === true,
+  });
 }
 
 if (HAS_NOTIFICATIONS) {
@@ -592,6 +602,38 @@ async function checkLatestVersion() {
   await chrome.storage.local.set({ extUpdate: { latest, available: isNewerVersion(latest, current) } });
 }
 
+// Apply a pending update on demand, so the popup can offer a real button instead of
+// telling people to go and reload the extension themselves.
+//
+// chrome.runtime.requestUpdateCheck() asks the browser to look now rather than waiting
+// for its own schedule (Chrome checks roughly every few hours). If one is waiting,
+// runtime.reload() restarts the extension, which is what actually installs it.
+//
+// Firefox does not implement requestUpdateCheck, and Firefox for Android updates only
+// through addons.mozilla.org, so there we report 'unsupported' and the popup falls back
+// to a store link. Never throws: a failed update check must not break the popup.
+async function applyUpdate() {
+  if (!chrome.runtime.requestUpdateCheck) return { ok: false, status: 'unsupported' };
+  try {
+    const res = await new Promise((resolve) => {
+      try {
+        const r = chrome.runtime.requestUpdateCheck((status, details) => resolve({ status, details }));
+        // MV3 Chrome returns a promise instead of using the callback.
+        if (r && typeof r.then === 'function') r.then((d) => resolve(d && d.status ? d : { status: d })).catch(() => resolve({ status: 'error' }));
+      } catch { resolve({ status: 'error' }); }
+    });
+    const status = (res && (res.status || res)) || 'error';
+    if (status === 'update_available') {
+      // Give the reply a moment to reach the popup before the world restarts.
+      setTimeout(() => { try { chrome.runtime.reload(); } catch { /* ignore */ } }, 300);
+      return { ok: true, status: 'update_available' };
+    }
+    return { ok: false, status: String(status) };
+  } catch {
+    return { ok: false, status: 'error' };
+  }
+}
+
 // --- Selector health telemetry (fail-soft) ---
 // Content scripts append failed-selector samples to storage under selHealth (see
 // engage-core). Ship them to the backend at most once per 10 minutes so a platform
@@ -619,6 +661,10 @@ async function sendSelectorHealth() {
   } catch { /* fail-soft: telemetry must never break polling or earning */ }
 }
 
+// How many 30s ticks to skip the non-urgent work for while the stream is OFFLINE.
+// 6 x 30s = roughly every 3 minutes.
+const OFFLINE_SKIP = 6;
+
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== 'poll') return;
   // Run sequentially, NOT concurrently: checkSignals and checkNewTargets both
@@ -626,7 +672,28 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   // back a stale copy and clobbers the other's click-URL — so a target notification loses
   // its URL and the click falls back to the Kick channel URL. Awaiting keeps each one's
   // read+write atomic with respect to the others.
-  await checkSignals();
+
+  // checkSignals is the go-live detector and ALWAYS runs at full cadence. Slowing it
+  // would mean viewers hear about the stream starting late, which is the one thing
+  // this loop exists for.
+  const live = await checkSignals();
+
+  // Everything below only changes meaningfully while a stream is running, but the
+  // extension is installed on hundreds of browsers polling around the clock. Measured
+  // 2026-08-11: with the stream offline these loops were still driving ~60% of all
+  // server traffic. Off-stream they now run about once every 3 minutes instead of
+  // every 30 seconds. Nothing a viewer EARNS depends on this: video targets are
+  // fetched by the content script when a video page opens, engagement is detected by
+  // page listeners, and watch time has its own timer on the Kick tab.
+  if (!live) {
+    const { offTick = 0 } = await chrome.storage.local.get('offTick');
+    const next = (offTick + 1) % OFFLINE_SKIP;
+    await chrome.storage.local.set({ offTick: next });
+    if (next !== 0) return;
+  } else if (typeof chrome.storage.local.set === 'function') {
+    await chrome.storage.local.set({ offTick: 0 }); // back to full cadence the moment he's live
+  }
+
   await checkPoll();
   await checkNewTargets();
   await checkManualPush();

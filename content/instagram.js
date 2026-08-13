@@ -59,6 +59,16 @@
     getVideoEl() { return document.querySelector('video'); },
 
     // --- Repost ---------------------------------------------------------------
+    // Credit reposts from the confirmed network mutation alone, no click intent needed.
+    // A viewer on a FRENCH Instagram reported 2026-08-11 that repost never paid: the
+    // selectors below key on the ENGLISH aria-label "Repost", which is localized
+    // ("Republier"), so the intent never armed and the confirmed mutation was thrown away.
+    // usePolarisCreateMediaRepostMutation is language independent, and the widget only ever
+    // binds on a single-post permalink (getRef parses /p/<shortcode>/), so a repost firing
+    // while this target is bound belongs to this post. Same fix already proven for the
+    // Facebook like. The selectors below stay for the highlight ring, which is cosmetic and
+    // simply does not draw in other languages.
+    repostNetworkPageScoped: true,
     // The repost control is svg[aria-label="Repost"] (role="img"), recorded live 2026-08-08.
     // The intent must arm ONLY on the repost control (its svg, or the wrapper button that
     // contains that svg), never on an arbitrary role=button, so a delayed confirmation from
@@ -77,6 +87,32 @@
     repostPresent() {
       try { return !!document.querySelector('svg[aria-label="Repost"]'); }
       catch (e) { return false; }
+    },
+    // The native control to ring for the FOCAL post: the same svg[aria-label="Repost"] that
+    // repostTarget/repostPresent trust, preferring its clickable wrapper button so the ring
+    // sits over what the user actually clicks. Instagram post pages are single-post surfaces,
+    // so a non-empty getRef is the focal guard. Returns null when getRef is empty or the
+    // control is absent, both safe no-rings.
+    // --- Highlight rings ------------------------------------------------------
+    // No-arg resolvers for the gold ring engage-core draws over the native control while
+    // that action is still unearned. Same safe-degrade rule as the rest of the adapter:
+    // return null and there is simply no ring.
+    likeHighlightTarget() {
+      try {
+        const svg = document.querySelector('svg[aria-label="Like"], svg[aria-label="Unlike"]');
+        return svg ? (svg.closest('[role="button"], button') || svg) : null;
+      } catch (e) { return null; }
+    },
+    commentHighlightTarget() {
+      try { return document.querySelector(COMPOSER_SEL) || null; } catch (e) { return null; }
+    },
+    repostHighlightTarget() {
+      try {
+        if (!this.getRef()) return null;
+        const svg = document.querySelector('svg[aria-label="Repost"]');
+        if (!svg) return null;
+        return svg.closest('[role="button"], button') || svg;
+      } catch (e) { return null; }
     },
     // NO isReposted / isRepostedFocal by choice: the owner declined a reposted-state DOM
     // marker to keep maintenance low, so Instagram credits on two signals (the click intent
