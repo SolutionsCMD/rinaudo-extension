@@ -23,13 +23,18 @@ permissions:
 jobs:
   unsigned:
     name: build (unsigned)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
+      # Xcode version matters here, not just for building: the converter's
+      # "not supported by your current version of Safari" list comes from the SDK it
+      # ships with. On Xcode 15.4 it flags world:"MAIN", which Safari has supported
+      # since 17.4, so an old toolchain reports a bug that is not there.
       - name: Show the toolchain
         run: |
           sw_vers
+          ls /Applications | grep -i '^Xcode' || true
           xcodebuild -version
           xcrun --find safari-web-extension-converter || echo "converter not on PATH"
 
@@ -99,7 +104,7 @@ jobs:
     name: build + TestFlight (signed)
     needs: unsigned
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
