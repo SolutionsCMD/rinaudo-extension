@@ -119,10 +119,29 @@ backend already supports old clients, with members still running 1.0.59.
 
 ## Known limits, to be said out loud rather than discovered
 
-- **Safari 17.4+ only** (iOS 17.4 / macOS 14.4, March 2024). Below that, the MAIN-world
-  observer does not run and reposts would silently stop crediting. The deployment target
-  enforces this so the App Store simply hides the app on older devices, rather than
-  shipping a version that half works.
+- **`world: "MAIN"` is reported UNSUPPORTED by Apple's own converter**, and not only on
+  an old toolchain: verified on Xcode 15.4 AND Xcode 16.4 (Safari 18 era), both of which
+  list `world` alongside `notifications` as keys Safari ignores. The plan for this port
+  assumed Safari 17.4 had added it. That assumption was wrong, or at least the converter
+  disagrees, and nobody here can open Safari to settle it.
+
+  This matters more than any other line in this document. `content/observe.js` runs in
+  the MAIN world and is the platform-confirmed half of two-signal repost and share
+  crediting. If Safari ignores the key, that script never runs, and **reposts (5 tickets,
+  the largest single action) and TikTok shares would not credit on Safari** while
+  watching, liking and commenting all work.
+
+  **The fix, when someone picks this up:** inject the observer the pre-`world` way. A
+  normal isolated content script creates a `<script src="...">` element pointing at
+  `chrome.runtime.getURL('content/observe.js')` and appends it to the document; the
+  browser then runs that file in the page's own world. It needs `observe.js` added to
+  `web_accessible_resources`. This is how everyone did it before `world` existed, it
+  works on every browser including Safari, and it would let all three targets share one
+  mechanism instead of Safari having its own. It touches the anti-fraud path, so it wants
+  its own careful pass and a real device to confirm, not a blind edit.
+
+  Until that is done, treat Safari as: watch, like and comment credit; repost and share
+  do not. Do not advertise repost earning on the Safari download card.
 - **No go-live notifications.** Safari has no `notifications` API. The `HAS_NOTIFICATIONS`
   guard (background.js:17) already handles it, so nothing breaks; the pings just never
   fire. Say so on the downloads card. Discord remains the alert channel.
