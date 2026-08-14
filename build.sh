@@ -175,7 +175,13 @@ fi
 # ---------------------------------------------------------------------------
 echo "== Summary =="
 echo "version: $VERSION"
-sha256sum "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
+# macOS ships `shasum`, Linux ships `sha256sum`. The Safari lane builds on a macOS
+# runner, so this has to work on both.
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
+else
+  shasum -a 256 "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
+fi
 echo
 echo "next steps:"
 if [[ "$MODE" == "publish" ]]; then
