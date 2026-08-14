@@ -112,38 +112,32 @@ backend already supports old clients, with members still running 1.0.59.
 - [ ] Connect to your account from the popup, and the desk shows you as connected
 - [ ] Watch a YouTube target from the Earn page: tickets land
 - [ ] Like and comment on a post: both credit
-- [ ] **Repost on X**: EXPECTED TO FAIL until the observer is injected the pre-`world`
-      way (see the first known limit below). Test it anyway and record what happens; a
-      real device is the only thing that can settle whether Apple's converter warning
-      reflects the runtime
+- [ ] **Repost on X**: credits. The one Safari-specific risk, because it needs the
+      MAIN-world observer. Requires Safari 18 / iOS 18 or newer. Check the tester's iOS
+      version FIRST: on 17 or older this is expected to fail and proves nothing
 - [ ] kick.com/mizkif shows the widget and the stake panel
 - [ ] Popup shows the right ticket count and rates
 
 ## Known limits, to be said out loud rather than discovered
 
-- **`world: "MAIN"` is reported UNSUPPORTED by Apple's own converter**, and not only on
-  an old toolchain: verified on Xcode 15.4 AND Xcode 16.4 (Safari 18 era), both of which
-  list `world` alongside `notifications` as keys Safari ignores. The plan for this port
-  assumed Safari 17.4 had added it. That assumption was wrong, or at least the converter
-  disagrees, and nobody here can open Safari to settle it.
+- **`world: "MAIN"` works from Safari 18 / iOS 18.** Apple's converter warns that `world`
+  is "not supported by your current version of Safari" on BOTH Xcode 15.4 and 16.4, which
+  looked like a blocker for the MAIN-world observer that carries half of two-signal repost
+  crediting. It is a false alarm: the converter checks against an older baseline, not
+  against shipping Safari. MDN's browser-compat-data records `content_scripts.world` as
+  `version_added: "18"` for Safari, mirrored on iOS (Chrome 111, Firefox 128 for
+  comparison). Treat the converter's list as "read and check", not as truth.
 
-  This matters more than any other line in this document. `content/observe.js` runs in
-  the MAIN world and is the platform-confirmed half of two-signal repost and share
-  crediting. If Safari ignores the key, that script never runs, and **reposts (5 tickets,
-  the largest single action) and TikTok shares would not credit on Safari** while
-  watching, liking and commenting all work.
+  **Consequence for the app: set the deployment target to iOS 18 / macOS 15** (September
+  2024), not the 17.4 the plan first assumed. Below 18 the observer would not run and
+  reposts and shares would silently stop crediting, so the App Store gate is what keeps
+  a half-working build off older devices. No code change is needed and the observer stays
+  exactly as it is on all three browsers.
 
-  **The fix, when someone picks this up:** inject the observer the pre-`world` way. A
-  normal isolated content script creates a `<script src="...">` element pointing at
-  `chrome.runtime.getURL('content/observe.js')` and appends it to the document; the
-  browser then runs that file in the page's own world. It needs `observe.js` added to
-  `web_accessible_resources`. This is how everyone did it before `world` existed, it
-  works on every browser including Safari, and it would let all three targets share one
-  mechanism instead of Safari having its own. It touches the anti-fraud path, so it wants
-  its own careful pass and a real device to confirm, not a blind edit.
-
-  Until that is done, treat Safari as: watch, like and comment credit; repost and share
-  do not. Do not advertise repost earning on the Safari download card.
+  If a real device ever shows reposts failing on Safari 18+, the pre-`world` fallback is
+  to inject `observe.js` via a `<script src=chrome.runtime.getURL(...)>` tag from an
+  isolated content script, with the file added to `web_accessible_resources`. Written
+  down in case it is needed; it should not be.
 - **No go-live notifications.** Safari has no `notifications` API. The `HAS_NOTIFICATIONS`
   guard (background.js:17) already handles it, so nothing breaks; the pings just never
   fire. Say so on the downloads card. Discord remains the alert channel.
