@@ -112,8 +112,10 @@ backend already supports old clients, with members still running 1.0.59.
 - [ ] Connect to your account from the popup, and the desk shows you as connected
 - [ ] Watch a YouTube target from the Earn page: tickets land
 - [ ] Like and comment on a post: both credit
-- [ ] **Repost on X**: credits. This is the one Safari-specific risk, because it needs
-      the MAIN-world observer that Safari only supports from 17.4
+- [ ] **Repost on X**: EXPECTED TO FAIL until the observer is injected the pre-`world`
+      way (see the first known limit below). Test it anyway and record what happens; a
+      real device is the only thing that can settle whether Apple's converter warning
+      reflects the runtime
 - [ ] kick.com/mizkif shows the widget and the stake panel
 - [ ] Popup shows the right ticket count and rates
 
