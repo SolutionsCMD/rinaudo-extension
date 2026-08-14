@@ -6,7 +6,7 @@
 
 **Architecture:** One webextension source, three targets. Safari joins Chrome and Firefox through the same pattern those two already use: a per-browser manifest swapped in by `build.sh`, gated by `scripts/release-checks.mjs`. The Mac problem is solved by GitHub Actions: macOS runners with Xcode are free on public repos, and this repo is public. Apple's `safari-web-extension-converter` wraps the webextension in the required native app; CI builds and (once signing exists) uploads it. No Mac is ever owned; a ~$5/day cloud Mac is rented only for interactive debugging sessions.
 
-**Tech Stack:** Existing vanilla-JS webextension (MV3), `xcrun safari-web-extension-converter`, `xcodebuild`, GitHub Actions `macos-14` runners, TestFlight, App Store Connect.
+**Tech Stack:** Existing vanilla-JS webextension (MV3), `xcrun safari-web-extension-converter`, `xcodebuild`, GitHub Actions `macos-15` runners, TestFlight, App Store Connect.
 
 ---
 
@@ -46,14 +46,14 @@
 
 **Files:** Create `manifest.safari.json`; modify `build.sh`, `scripts/release-checks.mjs`
 
-- [ ] **Step 1: Write `manifest.safari.json`.** Start from `manifest.json` and apply exactly these deltas (this is the whole diff, mirroring how the Firefox manifest differs):
+- [x] **Step 1: Write `manifest.safari.json`.** Start from `manifest.json` and apply exactly these deltas (this is the whole diff, mirroring how the Firefox manifest differs):
   - Drop `update_url` (Chrome-only) and `minimum_chrome_version`.
-  - Keep `manifest_version: 3` and the `background.service_worker` form (Safari 16.4+ supports it; our floor is 17.4). If the first CI build logs a converter warning that the worker failed to register, switch to the Firefox-style `background.scripts: ["config.js", "background.js"]` — that alternative is already proven in this codebase.
-  - Everything else byte-identical: permissions, host_permissions, all seven content_script blocks INCLUDING the `world: "MAIN"` observe.js block (Safari 17.4+ supports MAIN world).
-- [ ] **Step 2: Wire the third target into `build.sh`.** `SAFARI_ZIP="rinaudo-extension-safari.zip"`, packaged from the same `SHARED` set with `manifest.safari.json` renamed to `manifest.json` inside the zip — the same mechanism the Firefox zip uses. `--set-version` updates all THREE manifests.
-- [ ] **Step 3: Extend `release-checks.mjs`.** Every check that today compares Chrome↔Firefox now runs across all three: version equality, host-permission coverage, content-script file lists (the Instagram-never-loaded failure class), dash policy, `node --check` syntax. Add two Safari-specific rules: `update_url` must NOT appear in the Safari manifest, and the MAIN-world block MUST appear (losing it would silently kill repost crediting on the one browser nobody tests by hand).
-- [ ] **Step 4: Chrome-namespace promise audit.** Safari supports the `chrome.*` alias with promises, but grep for the two patterns that bite: callback-style `chrome.storage.local.get(key, cb)` mixed with awaited calls, and any `chrome.runtime.lastError` checks that assume callbacks. Emit a list; convert stragglers to the awaited form (the codebase is already predominantly `await chrome.…`).
-- [ ] **Step 5:** `./build.sh` produces three zips, checks green. Commit: `safari: third build target, same source, same gate`.
+  - Keep `manifest_version: 3` and the `background.service_worker` form (Safari 16.4+ supports it; our floor is 18). If the first CI build logs a converter warning that the worker failed to register, switch to the Firefox-style `background.scripts: ["config.js", "background.js"]` — that alternative is already proven in this codebase.
+  - Everything else byte-identical: permissions, host_permissions, all seven content_script blocks INCLUDING the `world: "MAIN"` observe.js block (Safari 18+ supports MAIN world).
+- [x] **Step 2: Wire the third target into `build.sh`.** `SAFARI_ZIP="rinaudo-extension-safari.zip"`, packaged from the same `SHARED` set with `manifest.safari.json` renamed to `manifest.json` inside the zip — the same mechanism the Firefox zip uses. `--set-version` updates all THREE manifests.
+- [x] **Step 3: Extend `release-checks.mjs`.** Every check that today compares Chrome↔Firefox now runs across all three: version equality, host-permission coverage, content-script file lists (the Instagram-never-loaded failure class), dash policy, `node --check` syntax. Add two Safari-specific rules: `update_url` must NOT appear in the Safari manifest, and the MAIN-world block MUST appear (losing it would silently kill repost crediting on the one browser nobody tests by hand).
+- [x] **Step 4: Chrome-namespace promise audit.** Safari supports the `chrome.*` alias with promises, but grep for the two patterns that bite: callback-style `chrome.storage.local.get(key, cb)` mixed with awaited calls, and any `chrome.runtime.lastError` checks that assume callbacks. Emit a list; convert stragglers to the awaited form (the codebase is already predominantly `await chrome.…`).
+- [x] **Step 5:** `./build.sh` produces three zips, checks green. Commit: `safari: third build target, same source, same gate`.
 
 ## Task 2: CI — the Mac we do not own
 
