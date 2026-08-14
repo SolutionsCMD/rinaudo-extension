@@ -222,10 +222,11 @@ async function initWidgetToggles() {
   box.addEventListener('change', async () => {
     const { widgetPrefs: cur } = await chrome.storage.local.get('widgetPrefs').catch(() => ({}));
     await chrome.storage.local.set({ widgetPrefs: { ...(cur || {}), voteCard: box.checked } });
-    // Tell any open Kick tab to apply the change immediately.
-    chrome.tabs.query({ url: 'https://kick.com/mizkif*' }, (tabs) => {
-      for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'rgcWidgetPrefs' }).catch(() => {});
-    });
+    // Tell any open Kick tab to apply the change immediately. Awaited rather than
+    // callback style: the only such call left in the extension, and keeping one
+    // shape everywhere is what makes the Safari port boring.
+    const tabs = await chrome.tabs.query({ url: 'https://kick.com/mizkif*' }).catch(() => []);
+    for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'rgcWidgetPrefs' }).catch(() => {});
   });
 }
 

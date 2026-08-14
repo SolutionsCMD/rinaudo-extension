@@ -5,7 +5,7 @@
 // Modes:
 //   node scripts/release-checks.mjs
 //       Run the source-tree checks (manifests, syntax, dash policy, host coverage).
-//   node scripts/release-checks.mjs --zips <chrome.zip> <firefox.zip>
+//   node scripts/release-checks.mjs --zips <chrome.zip> <firefox.zip> <safari.zip>
 //       Run the post-build zip checks (version match, gecko id placement,
 //       content/instagram.js present inside each archive).
 //
@@ -15,6 +15,9 @@
 // ad-hoc zips) and manifest host coverage drifted between the Chrome and
 // Firefox manifests — Instagram content scripts silently never loaded in
 // production. Every rule below encodes one of those failure modes.
+//
+// Safari (2026-08-14) is held to the same rules, and needs them more than either:
+// nobody here can hand-check it (no Mac), so a Safari-only drift would ship blind.
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -63,27 +66,57 @@ function readJson(rel) {
 // Check 1 + 2: manifests parse, versions agree, gecko id on the right side
 // ---------------------------------------------------------------------------
 function checkManifests() {
-  let chrome = null, firefox = null;
+  let chrome = null, firefox = null, safari = null;
   try { chrome = readJson('manifest.json'); }
   catch (e) { fail('manifest-json', `manifest.json failed to parse: ${e.message}`); }
   try { firefox = readJson('manifest.firefox.json'); }
   catch (e) { fail('manifest-json', `manifest.firefox.json failed to parse: ${e.message}`); }
-  if (!chrome || !firefox) return null;
-  ok('manifest-json', 'both manifests parse');
+  try { safari = readJson('manifest.safari.json'); }
+  catch (e) { fail('manifest-json', `manifest.safari.json failed to parse: ${e.message}`); }
+  if (!chrome || !firefox || !safari) return null;
+  ok('manifest-json', 'all three manifests parse');
 
-  if (chrome.version !== firefox.version) {
-    fail('version-sync', `version mismatch: chrome=${chrome.version} firefox=${firefox.version}`);
+  const versions = { chrome: chrome.version, firefox: firefox.version, safari: safari.version };
+  if (new Set(Object.values(versions)).size !== 1) {
+    fail('version-sync', `version mismatch: ${Object.entries(versions).map(([k, v]) => `${k}=${v}`).join(' ')}`);
   } else {
-    ok('version-sync', `both manifests at ${chrome.version}`);
+    ok('version-sync', `all three manifests at ${chrome.version}`);
   }
 
   const ffGecko = firefox.browser_specific_settings?.gecko?.id;
   const crGecko = chrome.browser_specific_settings?.gecko?.id;
+  const sfGecko = safari.browser_specific_settings?.gecko?.id;
   if (!ffGecko) fail('gecko-id', 'manifest.firefox.json is missing browser_specific_settings.gecko.id');
   if (crGecko) fail('gecko-id', `manifest.json (chrome) must NOT carry a gecko id, found ${crGecko}`);
-  if (ffGecko && !crGecko) ok('gecko-id', `firefox has ${ffGecko}, chrome has none`);
+  if (sfGecko) fail('gecko-id', `manifest.safari.json must NOT carry a gecko id, found ${sfGecko}`);
+  if (ffGecko && !crGecko && !sfGecko) ok('gecko-id', `firefox has ${ffGecko}, chrome and safari have none`);
 
-  return { chrome, firefox };
+  // Safari-specific rules. Both encode a way Safari could break silently on a
+  // browser none of us can open.
+  let sfBad = 0;
+  if (safari.update_url) {
+    sfBad++;
+    fail('safari-manifest', `manifest.safari.json must NOT carry update_url (Chrome CRX only), found ${safari.update_url}`);
+  }
+  // observe.js in the MAIN world is the platform-confirmed half of two-signal
+  // repost/share crediting. Lose this block and reposts silently stop paying on
+  // Safari alone. Safari 17.4+ supports it, which is why the app's deployment
+  // target is iOS 17.4 / macOS 14.4.
+  const sfMain = (safari.content_scripts || []).filter((b) => b.world === 'MAIN');
+  if (sfMain.length !== 1) {
+    sfBad++;
+    fail('safari-manifest', `manifest.safari.json needs exactly one world:"MAIN" content_script block, found ${sfMain.length}`);
+  } else if (!(sfMain[0].js || []).includes('content/observe.js')) {
+    sfBad++;
+    fail('safari-manifest', 'the MAIN-world block in manifest.safari.json does not load content/observe.js');
+  }
+  if (!safari.background?.service_worker && !safari.background?.scripts) {
+    sfBad++;
+    fail('safari-manifest', 'manifest.safari.json has no background service_worker or scripts');
+  }
+  if (!sfBad) ok('safari-manifest', 'no update_url, MAIN-world observe.js present, background declared');
+
+  return { chrome, firefox, safari };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,21 +270,29 @@ function apiHostsFromConfig() {
   return [...hosts];
 }
 
-function checkHostCoverage(chrome, firefox) {
+function checkHostCoverage(chrome, firefox, safari) {
   let bad = 0;
-  const report = (label, d) => {
+  // Every pair, not just chrome-vs-firefox: a pattern present in two manifests and
+  // absent from the third is the Instagram failure wearing a different hat.
+  const report = (label, a, b, d) => {
     if (d.onlyA.length || d.onlyB.length) {
       bad++;
-      if (d.onlyA.length) fail('host-coverage', `${label}: only in chrome manifest: ${d.onlyA.join(', ')}`);
-      if (d.onlyB.length) fail('host-coverage', `${label}: only in firefox manifest: ${d.onlyB.join(', ')}`);
+      if (d.onlyA.length) fail('host-coverage', `${label}: only in ${a} manifest: ${d.onlyA.join(', ')}`);
+      if (d.onlyB.length) fail('host-coverage', `${label}: only in ${b} manifest: ${d.onlyB.join(', ')}`);
     }
   };
-  report('content_scripts matches', setDiff(contentMatches(chrome), contentMatches(firefox)));
-  report('host_permissions', setDiff(chrome.host_permissions || [], firefox.host_permissions || []));
+  for (const [an, a, bn, b] of [
+    ['chrome', chrome, 'firefox', firefox],
+    ['chrome', chrome, 'safari', safari],
+  ]) {
+    report('content_scripts matches', an, bn, setDiff(contentMatches(a), contentMatches(b)));
+    report('host_permissions', an, bn, setDiff(a.host_permissions || [], b.host_permissions || []));
+  }
 
   const union = new Set([
     ...contentMatches(chrome), ...(chrome.host_permissions || []),
     ...contentMatches(firefox), ...(firefox.host_permissions || []),
+    ...contentMatches(safari), ...(safari.host_permissions || []),
   ]);
   for (const p of REQUIRED_PATTERNS) {
     if (!union.has(p)) { bad++; fail('host-coverage', `required Instagram pattern missing from both manifests: ${p}`); }
@@ -261,7 +302,7 @@ function checkHostCoverage(chrome, firefox) {
   for (const host of apiHosts) {
     if (!hostCovered(host, [...union])) { bad++; fail('host-coverage', `config.js API host ${host} is not covered by any manifest pattern`); }
   }
-  if (!bad) ok('host-coverage', `manifests identical; Instagram patterns present; API hosts covered (${apiHosts.join(', ')})`);
+  if (!bad) ok('host-coverage', `all three manifests identical; Instagram patterns present; API hosts covered (${apiHosts.join(', ')})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -279,19 +320,21 @@ function zipReadFile(zipPath, entry) {
   return r.stdout;
 }
 
-function checkZips(chromeZip, firefoxZip) {
+function checkZips(chromeZip, firefoxZip, safariZip) {
   let srcVersion = null;
   try {
     const chrome = readJson('manifest.json');
     const firefox = readJson('manifest.firefox.json');
-    if (chrome.version !== firefox.version) fail('zip-verify', `source manifests disagree on version (${chrome.version} vs ${firefox.version})`);
+    const safari = readJson('manifest.safari.json');
+    const vs = [chrome.version, firefox.version, safari.version];
+    if (new Set(vs).size !== 1) fail('zip-verify', `source manifests disagree on version (${vs.join(' vs ')})`);
     srcVersion = chrome.version;
   } catch (e) {
     fail('zip-verify', `could not read source manifests: ${e.message}`);
     return;
   }
 
-  for (const [label, zipPath, wantGecko] of [['chrome', chromeZip, false], ['firefox', firefoxZip, true]]) {
+  for (const [label, zipPath, wantGecko] of [['chrome', chromeZip, false], ['firefox', firefoxZip, true], ['safari', safariZip, false]]) {
     if (!existsSync(zipPath)) { fail('zip-verify', `${label} zip not found: ${zipPath}`); continue; }
     let names, manifest;
     try {
@@ -319,13 +362,13 @@ function checkZips(chromeZip, firefoxZip) {
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
 if (args[0] === '--zips') {
-  const [chromeZip, firefoxZip] = args.slice(1);
-  if (!chromeZip || !firefoxZip) {
-    console.error('usage: release-checks.mjs --zips <chrome.zip> <firefox.zip>');
+  const [chromeZip, firefoxZip, safariZip] = args.slice(1);
+  if (!chromeZip || !firefoxZip || !safariZip) {
+    console.error('usage: release-checks.mjs --zips <chrome.zip> <firefox.zip> <safari.zip>');
     process.exit(2);
   }
   console.log('Release checks (built zips):');
-  checkZips(path.resolve(chromeZip), path.resolve(firefoxZip));
+  checkZips(path.resolve(chromeZip), path.resolve(firefoxZip), path.resolve(safariZip));
 } else if (args.length > 0) {
   console.error(`unknown argument: ${args[0]}\nusage: release-checks.mjs [--zips <chrome.zip> <firefox.zip>]`);
   process.exit(2);
@@ -334,7 +377,7 @@ if (args[0] === '--zips') {
   const manifests = checkManifests();
   checkSyntax();
   checkDashes();
-  if (manifests) checkHostCoverage(manifests.chrome, manifests.firefox);
+  if (manifests) checkHostCoverage(manifests.chrome, manifests.firefox, manifests.safari);
 }
 
 if (failures.length) {

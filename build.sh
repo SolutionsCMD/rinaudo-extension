@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Release builder for the Mizkif Global browser extension.
 #
-#   ./build.sh                      run release checks, then build both zips in the repo root
+#   ./build.sh                      run release checks, then build all three zips in the repo root
 #   ./build.sh --set-version V      set the version field in BOTH manifests, then exit (no build)
 #   ./build.sh --publish            build, then stage the zips + version bump into the portal
 #                                   (/opt/mizdaq-prod-staging/web). Does NOT build or restart
@@ -20,6 +20,7 @@ ROOT="$(pwd)"
 CHECKS="$ROOT/scripts/release-checks.mjs"
 CHROME_ZIP="rinaudo-extension-chrome.zip"
 FIREFOX_ZIP="rinaudo-extension-firefox.zip"
+SAFARI_ZIP="rinaudo-extension-safari.zip"
 PORTAL_WEB="${PORTAL_WEB:-/opt/mizdaq-prod-staging/web}"
 
 # The packaged file set. Must stay in lockstep with the lists at the top of
@@ -64,7 +65,7 @@ if [[ "$MODE" == "set-version" ]]; then
   node -e '
     const fs = require("fs");
     const v = process.argv[1];
-    for (const f of ["manifest.json", "manifest.firefox.json"]) {
+    for (const f of ["manifest.json", "manifest.firefox.json", "manifest.safari.json"]) {
       const src = fs.readFileSync(f, "utf8");
       JSON.parse(src); // refuse to touch a broken manifest
       const out = src.replace(/("version"\s*:\s*")[^"]+(")/, `$1${v}$2`);
@@ -91,7 +92,7 @@ echo
 VERSION="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("manifest.json","utf8")).version)')"
 
 # ---------------------------------------------------------------------------
-# Build both zips (same layout as the historical hand-built ones:
+# Build all three zips (same layout as the historical hand-built ones:
 # everything at zip root, firefox manifest renamed to manifest.json)
 # ---------------------------------------------------------------------------
 build_zip() {
@@ -110,13 +111,18 @@ build_zip() {
 echo "== Building v$VERSION =="
 build_zip manifest.json         "$CHROME_ZIP"
 build_zip manifest.firefox.json "$FIREFOX_ZIP"
+# Safari's zip is not a store upload: it is the INPUT to
+# xcrun safari-web-extension-converter, which wraps it in the native app that
+# Apple requires. Same file set, so a Safari-only regression cannot come from
+# packaging differences.
+build_zip manifest.safari.json  "$SAFARI_ZIP"
 echo
 
 # ---------------------------------------------------------------------------
 # Post-build checks inside the archives
 # ---------------------------------------------------------------------------
 echo "== Release checks (built zips) =="
-node "$CHECKS" --zips "$CHROME_ZIP" "$FIREFOX_ZIP"
+node "$CHECKS" --zips "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
 echo
 
 # ---------------------------------------------------------------------------
@@ -169,7 +175,7 @@ fi
 # ---------------------------------------------------------------------------
 echo "== Summary =="
 echo "version: $VERSION"
-sha256sum "$CHROME_ZIP" "$FIREFOX_ZIP"
+sha256sum "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
 echo
 echo "next steps:"
 if [[ "$MODE" == "publish" ]]; then
