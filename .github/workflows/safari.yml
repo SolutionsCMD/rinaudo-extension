@@ -13,7 +13,7 @@ name: safari
 
 on:
   push:
-    branches: [main]
+    branches: [master]   # this repo's default branch is master, not main
     tags: ['v*']
   workflow_dispatch: {}
 
