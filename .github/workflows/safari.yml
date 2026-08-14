@@ -1,0 +1,174 @@
+# Safari build. This is the Mac we do not own.
+#
+# Safari extensions must be wrapped in a native app built with Xcode, and there is no
+# Mac in this project's infrastructure. GitHub gives public repos free macOS runners
+# with Xcode preinstalled, so the wrapper is built here instead of on a desk.
+#
+# Two lanes:
+#   unsigned  runs on every push to main and on demand. Needs no Apple account, so the
+#             whole chain stays provable before anyone spends $99.
+#   signed    runs on a v* tag AND only when the App Store Connect secrets exist, so it
+#             stays dormant until the account is real, then lights up with no edit here.
+name: safari
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned:
+    name: build (unsigned)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --find safari-web-extension-converter || echo "converter not on PATH"
+
+      # The same gate that guards a Chrome or Firefox release. If the manifests have
+      # drifted, stop here rather than wrapping a broken extension in an app.
+      - name: Release checks + build the three zips
+        run: ./build.sh
+
+      - name: Convert the webextension into a Safari app project
+        run: |
+          set -euo pipefail
+          rm -rf safari-build && mkdir -p safari-build/webext
+          unzip -q rinaudo-extension-safari.zip -d safari-build/webext
+          cd safari-build
+          # Both targets are generated. The unsigned lane only BUILDS the macOS one
+          # (an iOS build needs a signing team even for a simulator archive); the iOS
+          # target is exercised by the signed lane. iPhone is the one that matters:
+          # 31 of our 33 Safari lander hits were iPhone.
+          xcrun safari-web-extension-converter webext \
+            --project-location . \
+            --app-name "Mizkif Global" \
+            --bundle-identifier dev.jsolutions.mizkifglobal \
+            --swift \
+            --no-open \
+            --no-prompt \
+            --force 2>&1 | tee converter.log
+
+      # The converter names every manifest key Safari ignores. Anything load-bearing in
+      # that list is a real porting bug, so surface it in the job summary instead of
+      # letting it scroll past in a log nobody opens.
+      - name: Surface what Safari ignored
+        run: |
+          {
+            echo "### safari-web-extension-converter"
+            echo '```'
+            grep -iE "warn|unsupported|not supported|ignor" safari-build/converter.log || echo "(no warnings)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Discover the generated schemes
+        working-directory: safari-build/Mizkif Global
+        run: xcodebuild -list
+
+      - name: Build (no signing)
+        working-directory: safari-build/Mizkif Global
+        run: |
+          set -euo pipefail
+          # The converter emits a project on some Xcode versions and a workspace on
+          # others, and names schemes differently across releases. Handle both rather
+          # than burn a CI round trip on a guess.
+          SCHEME="$(xcodebuild -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=(d.get("project") or d.get("workspace") or {}).get("schemes") or []; print(next((x for x in s if "macos" in x.lower()), s[0] if s else ""))')"
+          [ -n "$SCHEME" ] || { echo "no schemes found in the generated project"; exit 1; }
+          echo "building scheme: $SCHEME"
+          xcodebuild -scheme "$SCHEME" -configuration Release \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safari-project-unsigned
+          path: |
+            safari-build
+            !safari-build/webext
+          retention-days: 14
+
+  signed:
+    name: build + TestFlight (signed)
+    needs: unsigned
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dormant until the Apple account exists. Checked at run time rather than in the
+      # job `if:`, because secrets are not available to job-level conditions.
+      - name: Do we have signing credentials yet?
+        id: creds
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          if [ -n "$ASC_KEY_ID" ]; then echo "have=yes" >> "$GITHUB_OUTPUT"
+          else echo "have=no" >> "$GITHUB_OUTPUT"; echo "No Apple credentials yet, skipping the signed lane." >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Build the zips
+        if: steps.creds.outputs.have == 'yes'
+        run: ./build.sh
+
+      - name: Import the distribution certificate
+        if: steps.creds.outputs.have == 'yes'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CERT_P12 }}
+          p12-password: ${{ secrets.CERT_PASSWORD }}
+
+      - name: Convert
+        if: steps.creds.outputs.have == 'yes'
+        run: |
+          set -euo pipefail
+          rm -rf safari-build && mkdir -p safari-build/webext
+          unzip -q rinaudo-extension-safari.zip -d safari-build/webext
+          cd safari-build
+          xcrun safari-web-extension-converter webext \
+            --project-location . --app-name "Mizkif Global" \
+            --bundle-identifier dev.jsolutions.mizkifglobal \
+            --swift --no-open --no-prompt --force
+
+      - name: Archive and export
+        if: steps.creds.outputs.have == 'yes'
+        working-directory: safari-build/Mizkif Global
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          SCHEME="$(xcodebuild -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=(d.get("project") or d.get("workspace") or {}).get("schemes") or []; print(next((x for x in s if "ios" in x.lower()), s[0] if s else ""))')"
+          [ -n "$SCHEME" ] || { echo "no schemes found in the generated project"; exit 1; }
+          xcodebuild -scheme "$SCHEME" -configuration Release \
+            -archivePath build/app.xcarchive \
+            DEVELOPMENT_TEAM="$TEAM_ID" archive
+          cat > export.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/app.xcarchive \
+            -exportOptionsPlist export.plist -exportPath build/export
+
+      - name: Upload to TestFlight
+        if: steps.creds.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/private_keys
+          echo "$ASC_KEY_P8" | base64 --decode > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          IPA="$(find "safari-build/Mizkif Global/build/export" -name '*.ipa' | head -1)"
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
