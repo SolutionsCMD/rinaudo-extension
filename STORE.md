@@ -10,8 +10,9 @@ with his content:
   card appears on the post, tracks what you have done on it, and credits the action.
 - **Like / repost** his promoted posts on X. A repost credits only after X's own site
   confirms it (see "The X repost check" below).
-- **Vote** on live polls from his Kick stream (an on-stream card, plus a pop-out window
-  when you're on another tab), and earn watch time while that stream is playing.
+- **Vote** on live polls from his Kick stream, on a card that sits over the stream
+  itself, and earn watch time while that stream is playing. If you're on another tab
+  when a vote opens, you get a notification that takes you back to the stream.
 - **Notifications** when he goes live or posts (no login required for these).
 The popup and the on-install welcome page show a live "How to earn" list, read from the
 server, so the listed rewards are always the ones the season is actually paying.

@@ -1,11 +1,11 @@
 // Shared stake panel — the stake-on-a-ticker poll, mirrored 1:1 from the live
 // desk (DeskLive.tsx): ticker picks with live tallies, the ticket-pile slider,
 // and the 5% pool-cap tick with the over-cap refund warning during the join
-// window. Used by the vote popup (vote/vote.html) and the Kick on-page card
-// (content/kick.js). Exposes a single global:
+// window. Used by the Kick on-page card (content/kick.js); it also backed the
+// detached vote window until that was retired in 1.127. Exposes a single global:
 //   self.RGCStake.render(host, data, actions) -> bool (true when a round panel
 //   was rendered — callers fall back to their poll UI when it returns false)
-//   self.RGCStake.CSS -> styles to inject (popup <style> tag / frame css param)
+//   self.RGCStake.CSS -> styles to inject (frame css param)
 // data:    { round, me, connected } from the SW's s2Round message
 // actions: { stake(ticker, amount), join(amount) }  (nominate is unused: the
 //          suggestion box was removed permanently)

@@ -13,9 +13,8 @@ const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Tok
 // them at the top level (addListener) would throw and abort the whole background script —
 // which unregisters the onMessage listener and makes "Connect" fail with
 // "Could not establish connection. Receiving end does not exist." Feature-detect once and
-// guard every use, so connect + polling still work on mobile (just without toasts / pop-out).
+// guard every use, so connect + polling still work on mobile (just without toasts).
 const HAS_NOTIFICATIONS = !!(chrome.notifications && chrome.notifications.create);
-const HAS_WINDOWS = !!(chrome.windows && chrome.windows.create);
 function notify(id, opts) { try { if (HAS_NOTIFICATIONS) chrome.notifications.create(id, opts); } catch { /* unsupported */ } }
 
 // Strips a post link down to the PLATFORM HOMEPAGE so the member searches for the post
@@ -290,24 +289,15 @@ async function focusedOnKick() {
   } catch { return false; }
 }
 
-// Pop the vote window, reusing one if already open.
-async function openVoteWindow() {
-  if (!HAS_WINDOWS) return; // no separate pop-out window on Firefox Android
-  const { voteWin } = await chrome.storage.local.get('voteWin');
-  if (voteWin != null) {
-    try { await chrome.windows.update(voteWin, { focused: true, drawAttention: true }); return; } catch { /* gone */ }
-  }
-  const w = await chrome.windows.create({ url: 'vote/vote.html', type: 'popup', width: 360, height: 320, focused: true });
-  await chrome.storage.local.set({ voteWin: w.id });
-}
-if (HAS_WINDOWS) chrome.windows.onRemoved.addListener(async (id) => {
-  const { voteWin } = await chrome.storage.local.get('voteWin');
-  if (id === voteWin) await chrome.storage.local.remove('voteWin');
-});
-
-// On the alarm: if a NEW poll is open AND the viewer isn't on the Kick tab, pop
-// the window (deduped per poll id). On the Kick tab, the on-page card handles it.
+// On the alarm: if a NEW poll is open AND the viewer isn't on the Kick tab, nudge them
+// to the stream (deduped per poll id). On the Kick tab, the on-page card handles it.
 // Same treatment for a stake round entering its staking/joining phase.
+//
+// This used to pop a detached window carrying the full stake UI, which meant the one
+// place you could bet without the stream in front of you was the place it opened for
+// people who were not watching. Members muted the stream and waited for it (owner,
+// 2026-08-15). Voting and staking now live only in the module on Mizkif's Kick page;
+// off-Kick members get a link to the stream instead of a betting panel.
 async function checkPoll() {
   const data = await s2Poll();
   const poll = data && data.poll;
@@ -316,7 +306,14 @@ async function checkPoll() {
     const { lastPollKey } = await chrome.storage.local.get('lastPollKey');
     if (key !== lastPollKey) {
       await chrome.storage.local.set({ lastPollKey: key });
-      if (!(await focusedOnKick())) await openVoteWindow();
+      if (!(await focusedOnKick())) {
+        notify('rgc-poll-' + poll.id, {
+          type: 'basic', iconUrl: 'icons/icon128.png',
+          title: 'Vote is live on stream',
+          message: "A community vote just opened on Mizkif's Kick page. Click to watch and vote.",
+          buttons: [{ title: 'Open the stream' }], priority: 2,
+        });
+      }
     }
   }
   const rd = await s2Round();
@@ -326,7 +323,14 @@ async function checkPoll() {
     const { lastRoundKey } = await chrome.storage.local.get('lastRoundKey');
     if (key !== lastRoundKey) {
       await chrome.storage.local.set({ lastRoundKey: key });
-      if (!(await focusedOnKick())) await openVoteWindow();
+      if (!(await focusedOnKick())) {
+        notify('rgc-round-' + round.id + '-' + round.status, {
+          type: 'basic', iconUrl: 'icons/icon128.png',
+          title: round.status === 'joining' ? 'Final window is open' : 'Staking is live on stream',
+          message: "Tickets are moving on Mizkif's Kick page. Click to watch and place yours.",
+          buttons: [{ title: 'Open the stream' }], priority: 2,
+        });
+      }
     }
   }
 }
@@ -348,11 +352,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
     else if (msg.type === 's2Round') { reply(await s2Round()); }
     else if (msg.type === 's2RoundAction') { reply(await s2RoundAction(msg.action, msg.ticker, msg.amount)); }
-    else if (msg.type === 'resize' && typeof msg.height === 'number') {
-      const { voteWin } = await chrome.storage.local.get('voteWin');
-      if (voteWin != null) { try { await chrome.windows.update(voteWin, { height: Math.round(msg.height) }); } catch { /* gone */ } }
-      reply({ ok: true });
-    }
+    // 'resize' belonged to the detached vote window, which sent its measured height so
+    // the window could shrink to fit. That window is gone; the on-page card sizes itself
+    // in the document. Answered rather than dropped so an older tab still gets a reply.
+    else if (msg.type === 'resize') { reply({ ok: true }); }
   })();
   return true; // async reply
 });
