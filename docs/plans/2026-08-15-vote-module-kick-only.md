@@ -6,14 +6,13 @@
 
 **Why (owner, 2026-08-15):** people mute the stream and wait for the pop-out to play without watching. `background.js` pops a detached 360×320 window with the FULL desk stake UI whenever a poll/round opens and the viewer is NOT on Kick — it fires precisely for the people who aren't watching.
 
-**Architecture:** All changes in `/opt/rinaudo-extension` (public repo `SolutionsCMD/rinaudo-extension`, branch `master`, v1.126 everywhere). No engine/portal work. The on-page card on `kick.com/mizkif*` already renders polls AND stake rounds via shared `vote/stake-panel.js`, so this plan deletes the pop-out, swaps its two triggers for a notification, and adds the dashboard as a second injection point.
+**Architecture:** All changes in `/opt/rinaudo-extension` (public repo `SolutionsCMD/rinaudo-extension`, branch `master`, v1.126 everywhere). No engine/portal work. The on-page card on `kick.com/mizkif*` already renders polls AND stake rounds via shared `vote/stake-panel.js`, so this plan deletes the pop-out and swaps its two triggers for a notification. No manifest permission changes.
 
 **Verified facts (2026-08-15, do not re-derive):**
 - The ONLY off-Kick vote path is `openVoteWindow()` (`background.js:294`), called from two trigger sites (~319 poll, ~329 round), both gated on `!(await focusedOnKick())`. Toolbar popup cannot vote; notifications don't vote.
 - `vote/vote.html` is referenced only at `background.js:300`. `vote/stake-panel.js` is SHARED with the on-page card (`kick.js` content_script list) — keep it.
 - Notification clicks (body and button) already open `notifUrls[id] || C.CHANNEL_URL` where `CHANNEL_URL = 'https://kick.com/mizkif'`. So a poll notification with no notifUrls entry opens the stream — zero new click plumbing.
 - `notify()` is feature-guarded (`HAS_NOTIFICATIONS`); mobile Firefox has neither windows nor notifications APIs, so it never had the pop-out and loses nothing (memory: every change MUST keep working on mobile Firefox).
-- `dashboard.kick.com` appears in NO manifest today. Adding it is a NEW host permission → Chrome may disable the extension for every user until they re-approve. This is why Task 2 verifies on a scratch profile BEFORE the owner decides to ship it in the same release.
 - Tests: `node --test test/` (mjs suites); three-way manifest check `node scripts/release-checks.mjs`.
 - User-facing copy rules: no em dashes, no AI-tell phrasing.
 
@@ -70,5 +69,4 @@
 
 ## Self-review notes
 - Spec coverage: pop-out removed (T1), module stays the on-page card on kick.com/mizkif, nudge replaces the window (T1), release (T2). The moderator dashboard is deferred to its own release: it needs a NEW host permission (dashboard.kick.com), which Chrome may answer by disabling the extension fleet-wide until each user re-approves, so it ships as an announced update, not a rider.
-- Deliberately out of scope: requiring the stream to be audibly playing to vote (owner has not asked; flagged in T3 report), `voteCard` popup toggle (leaving it: a member who hides the card can still vote on the website).
-- Risk called out rather than buried: the dashboard host permission may disable the extension fleet-wide on update; T2 cannot proceed past Step 1 without evidence.
+- Deliberately out of scope: requiring the stream to be audibly playing to vote (owner has not asked; flagged in the T2 report), `voteCard` popup toggle (leaving it: a member who hides the card can still vote on the website).
