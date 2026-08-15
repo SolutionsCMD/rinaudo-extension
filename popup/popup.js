@@ -180,7 +180,15 @@ function earnRow(t, data) {
   open.className = 'earn-open';
   open.type = 'button';
   open.textContent = 'Open';
-  open.addEventListener('click', () => { chrome.tabs.create({ url: t.url }); });
+  // YouTube and TikTok open his CHANNEL, not the video: the member finds the post
+  // themselves (owner, 2026-08-15). Same rule as the toasts in background.js and the
+  // website's Earn Tickets page. Everything else opens the post directly.
+  const EARN_CHANNEL = {
+    youtube: 'https://www.youtube.com/@MizkifLive',
+    tiktok: 'https://www.tiktok.com/@realmizkif',
+  };
+  const dest = EARN_CHANNEL[t.platform] || t.url;
+  open.addEventListener('click', () => { chrome.tabs.create({ url: dest }); });
   head.append(plat, open);
   li.append(head);
   const label = truncate(t.label, EARN_LABEL_CHARS);

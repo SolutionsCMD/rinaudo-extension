@@ -17,32 +17,43 @@ const getS2Token = async () => (await chrome.storage.local.get('s2Token')).s2Tok
 const HAS_NOTIFICATIONS = !!(chrome.notifications && chrome.notifications.create);
 function notify(id, opts) { try { if (HAS_NOTIFICATIONS) chrome.notifications.create(id, opts); } catch { /* unsupported */ } }
 
-// Strips a post link down to the PLATFORM HOMEPAGE so the member searches for the post
-// themselves. Only the owner's manual push still does this; the earn toasts below carry
-// the direct link (see postLink). Unknown hosts (e.g. a Kick stream or a custom link) are
-// left as-is so go-live still opens the stream.
+// Where a toast lands. Instagram, Facebook and X open the POST ITSELF, because each one
+// is an earnable action and a homepage landing costs the member the like or repost they
+// came for.
+//
+// YouTube and TikTok are the exception (owner, 2026-08-15): they open his CHANNEL, so the
+// member finds the video themselves. The website's Earn Tickets page follows the same
+// rule, so the two surfaces behave identically.
+//
+// YouTube points at @MizkifLive, not @Mizkif: the videos that pay tickets are published
+// on the Live channel.
+const PLATFORM_HOME = {
+  youtube: 'https://www.youtube.com/@MizkifLive',
+  tiktok: 'https://www.tiktok.com/@realmizkif',
+  instagram: 'https://www.instagram.com/realmizkif/',
+  facebook: 'https://www.facebook.com/realmizkif',
+  twitter: 'https://x.com/REALMizkif',
+  x: 'https://x.com/REALMizkif',
+};
+const CHANNEL_ONLY = new Set(['youtube', 'tiktok']);
+const postLink = (url, platform) =>
+  (CHANNEL_ONLY.has(platform) ? PLATFORM_HOME[platform] : url) || PLATFORM_HOME[platform] || '';
+
+// Strips a post link down to his CHANNEL on that platform, so the member finds the post
+// themselves. Used by the owner's manual push, and by the YouTube/TikTok earn toasts
+// (see postLink). Unknown hosts (e.g. a Kick stream or a custom link) are left as-is so
+// go-live still opens the stream.
 function homepageFor(url) {
   let host = '';
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
-  if (host.endsWith('youtube.com') || host === 'youtu.be') return 'https://www.youtube.com';
-  if (host.endsWith('tiktok.com')) return 'https://www.tiktok.com';
-  if (host.endsWith('instagram.com') || host === 'instagr.am') return 'https://www.instagram.com';
-  if (host.endsWith('x.com') || host.endsWith('twitter.com')) return 'https://x.com';
+  if (host.endsWith('youtube.com') || host === 'youtu.be') return PLATFORM_HOME.youtube;
+  if (host.endsWith('tiktok.com')) return PLATFORM_HOME.tiktok;
+  if (host.endsWith('instagram.com') || host === 'instagr.am') return PLATFORM_HOME.instagram;
+  if (host.endsWith('facebook.com')) return PLATFORM_HOME.facebook;
+  if (host.endsWith('x.com') || host.endsWith('twitter.com')) return PLATFORM_HOME.x;
   return url;
 }
 
-// New-post toasts (soc-*, vid-*, target-*) open the POST ITSELF: every one of them is an
-// earnable action, and a homepage landing costs the member the like/repost/watch they came
-// for. A payload with no url falls back to the platform homepage, and an empty result falls
-// back again to the Kick channel in the click handlers.
-const PLATFORM_HOME = {
-  youtube: 'https://www.youtube.com',
-  tiktok: 'https://www.tiktok.com',
-  instagram: 'https://www.instagram.com',
-  twitter: 'https://x.com',
-  x: 'https://x.com',
-};
-const postLink = (url, platform) => url || PLATFORM_HOME[platform] || '';
 
 // Per-platform toast-notification toggles (set in the popup). Opt-OUT: a platform is on
 // unless its pref is explicitly false. Keys: kick, youtube, tiktok, instagram, x.
