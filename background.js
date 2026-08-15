@@ -280,60 +280,15 @@ async function s2RoundAction(action, ticker, amount) {
   return r ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
 
-// Is the active tab Mizkif's Kick channel? (kick.com host permission makes
-// tab.url readable for that tab; other tabs read undefined → false.)
-async function focusedOnKick() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    return !!(tab && /^https:\/\/kick\.com\/mizkif/.test(tab.url || ''));
-  } catch { return false; }
-}
-
-// On the alarm: if a NEW poll is open AND the viewer isn't on the Kick tab, nudge them
-// to the stream (deduped per poll id). On the Kick tab, the on-page card handles it.
-// Same treatment for a stake round entering its staking/joining phase.
+// There is deliberately no poll/round watcher here any more.
 //
-// This used to pop a detached window carrying the full stake UI, which meant the one
-// place you could bet without the stream in front of you was the place it opened for
-// people who were not watching. Members muted the stream and waited for it (owner,
-// 2026-08-15). Voting and staking now live only in the module on Mizkif's Kick page;
-// off-Kick members get a link to the stream instead of a betting panel.
-async function checkPoll() {
-  const data = await s2Poll();
-  const poll = data && data.poll;
-  if (poll) {
-    const key = 'poll:' + poll.id;
-    const { lastPollKey } = await chrome.storage.local.get('lastPollKey');
-    if (key !== lastPollKey) {
-      await chrome.storage.local.set({ lastPollKey: key });
-      if (!(await focusedOnKick())) {
-        notify('rgc-poll-' + poll.id, {
-          type: 'basic', iconUrl: 'icons/icon128.png',
-          title: 'Vote is live on stream',
-          message: "A community vote just opened on Mizkif's Kick page. Click to watch and vote.",
-          buttons: [{ title: 'Open the stream' }], priority: 2,
-        });
-      }
-    }
-  }
-  const rd = await s2Round();
-  const round = rd && rd.round;
-  if (round && (round.status === 'staking' || round.status === 'joining')) {
-    const key = 'round:' + round.id + ':' + round.status;
-    const { lastRoundKey } = await chrome.storage.local.get('lastRoundKey');
-    if (key !== lastRoundKey) {
-      await chrome.storage.local.set({ lastRoundKey: key });
-      if (!(await focusedOnKick())) {
-        notify('rgc-round-' + round.id + '-' + round.status, {
-          type: 'basic', iconUrl: 'icons/icon128.png',
-          title: round.status === 'joining' ? 'Final window is open' : 'Staking is live on stream',
-          message: "Tickets are moving on Mizkif's Kick page. Click to watch and place yours.",
-          buttons: [{ title: 'Open the stream' }], priority: 2,
-        });
-      }
-    }
-  }
-}
+// It used to pop a detached window carrying the full stake UI, and briefly a toast,
+// whenever a vote opened and the viewer was NOT on Kick. Both were crutches: they let
+// members mute the stream, go elsewhere, and get pulled back only for the moment money
+// moved (owner, 2026-08-15: "we want people to be there without leaving"). Voting and
+// staking now exist only in the module on Mizkif's Kick page, for people who are there.
+//
+// Dropping it also takes two API calls per alarm tick off every install.
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
@@ -697,7 +652,6 @@ chrome.alarms.onAlarm.addListener(async (a) => {
     await chrome.storage.local.set({ offTick: 0 }); // back to full cadence the moment he's live
   }
 
-  await checkPoll();
   await checkNewTargets();
   await checkManualPush();
   await checkLatestVersion();
