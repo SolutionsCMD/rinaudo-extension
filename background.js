@@ -1,5 +1,5 @@
 // Service worker: Season-2 "Connect with Kick" (tickets), the live-poll vote
-// module (on-stream card + off-tab pop-out window), and desktop notifications
+// module (an on-stream card inside Kick), and desktop notifications
 // when Mizkif goes live or posts.
 // Chrome (service worker) loads config via importScripts; Firefox (event page)
 // loads config.js via manifest background.scripts, so importScripts is absent there.
@@ -151,8 +151,21 @@ async function getCaps() {
   return _caps;
 }
 
+// Sent on every S2 call so the server can gate features by client version. From
+// 2026-08-22 the engine stops serving poll/round data to clients that do not send
+// this, so the retired pop-out window has nothing to open on old installs.
+let _extVersion = '';
+function extVersion() {
+  if (!_extVersion) { try { _extVersion = chrome.runtime.getManifest().version || ''; } catch { /* ignore */ } }
+  return _extVersion;
+}
+
 async function s2Headers(token, json) {
-  const h = { Authorization: `Bearer ${token}`, 'X-RGC-Device': await getDeviceId() };
+  const h = {
+    Authorization: `Bearer ${token}`,
+    'X-RGC-Device': await getDeviceId(),
+    'X-RGC-Client': extVersion(),
+  };
   const fp = await getFingerprint();
   if (fp) h['X-RGC-Fingerprint'] = fp;
   const caps = await getCaps();
@@ -244,7 +257,11 @@ async function s2KickCheckin() {
 // --- Live poll vote module ---
 async function s2Poll() {
   const token = await getS2Token();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  // X-RGC-Client on the GETs too: these are the reads the server's version gate
+  // inspects, and it must identify us even before a token exists.
+  const headers = token
+    ? { Authorization: `Bearer ${token}`, 'X-RGC-Client': extVersion() }
+    : { 'X-RGC-Client': extVersion() };
   const r = await fetch(S2.API + S2.POLL, { headers }).catch(() => null);
   const base = r && r.ok ? await r.json().catch(() => ({ poll: null, tally: [], myVote: null })) : { poll: null, tally: [], myVote: null };
   return { ...base, connected: !!token };
@@ -263,7 +280,11 @@ async function s2PollVote(pollId, optionIdx) {
 // --- Stake round module (the stake-on-a-ticker poll) ---
 async function s2Round() {
   const token = await getS2Token();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  // X-RGC-Client on the GETs too: these are the reads the server's version gate
+  // inspects, and it must identify us even before a token exists.
+  const headers = token
+    ? { Authorization: `Bearer ${token}`, 'X-RGC-Client': extVersion() }
+    : { 'X-RGC-Client': extVersion() };
   const r = await fetch(S2.API + S2.ROUND, { headers }).catch(() => null);
   const base = r && r.ok ? await r.json().catch(() => ({ round: null, me: null })) : { round: null, me: null };
   return { ...base, connected: !!token };
