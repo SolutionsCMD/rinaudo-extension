@@ -256,6 +256,36 @@
       } catch (e) { /* postMessage can throw on odd origins; crediting is optional, the page is not */ }
     }
 
+    // Body text for the matchers, from every encoding a page may use.
+    //
+    // FormData used to read as EMPTY, and that is a crediting bug, not a cosmetic one: a
+    // multipart submit is invisible to every signature below, so the mutation never
+    // matches and the fbdiag probe cannot see it either. That is the exact shape of the
+    // Facebook reshare cohort reported 2026-08-13 and again 2026-08-16 (members who
+    // reshare fine on TikTok and Instagram, never once on Facebook, and whose probe rows
+    // contain read queries only, never a create).
+    //
+    // ONLY the request-name fields are read, never the payload: the composer's text and
+    // any attachment live in `variables`, and this file does not look at member content.
+    // FormData.get() is synchronous and does not consume anything, unlike a Blob or a
+    // stream, which stay unread exactly as before (rule 2).
+    function bodyText(b) {
+      try {
+        if (b == null) return '';
+        if (typeof b === 'string') return b;
+        if (typeof URLSearchParams !== 'undefined' && b instanceof URLSearchParams) return b.toString();
+        if (typeof FormData !== 'undefined' && b instanceof FormData) {
+          var out = '';
+          var n = b.get('fb_api_req_friendly_name');
+          if (typeof n === 'string' && n) out = 'fb_api_req_friendly_name=' + n;
+          var d = b.get('doc_id');
+          if (typeof d === 'string' && d) out += (out ? '&' : '') + 'doc_id=' + d;
+          return out;
+        }
+      } catch (e) { /* an unreadable body observes as empty, exactly as it did before */ }
+      return '';
+    }
+
     // --- fetch ---------------------------------------------------------------------
     var oFetch = window.fetch;
     if (typeof oFetch === 'function') {
@@ -265,12 +295,7 @@
         // object could throw, and that must not stop the page's own call from happening.
         try {
           url = typeof input === 'string' ? input : (input && input.url) || '';
-          // URLSearchParams is stringified too, so a page that serializes a matched mutation
-          // that way still matches; FormData/Blob stay unread (not our case).
-          body = init && init.body != null
-            ? (typeof init.body === 'string' ? init.body
-               : (init.body instanceof URLSearchParams ? init.body.toString() : ''))
-            : '';
+          body = bodyText(init && init.body);
         } catch (e) { url = ''; body = ''; }
         // Call through first and return this exact promise, untouched, no matter what.
         var p = oFetch.apply(this, arguments);
@@ -301,9 +326,7 @@
       if (oBeacon) {
         navigator.sendBeacon = function (url, data) {
           try {
-            var body = '';
-            if (typeof data === 'string') body = data;
-            else if (data && typeof URLSearchParams !== 'undefined' && data instanceof URLSearchParams) body = String(data);
+            var body = bodyText(data);
             var sig = matchSig(String(url || ''), body);
             // sendBeacon gives no response to await: report on the boolean send result
             // below, which parallels fetch's "accepted, not done" semantics closely enough
@@ -339,12 +362,7 @@
             try {
               var u = '';
               try { u = xhrUrls.get(xhr) || ''; } catch (e) { u = ''; }
-              // URLSearchParams is stringified too, so a page that serializes a matched
-              // mutation that way still matches; FormData/Blob stay unread (not our case).
-              var b = body != null
-                ? (typeof body === 'string' ? body
-                   : (body instanceof URLSearchParams ? body.toString() : ''))
-                : '';
+              var b = bodyText(body);
               var sig = u ? matchSig(u, b) : null;
               // A listener is attached only to a matched request, and only reads status,
               // never responseText. Same meaning as the fetch path: 2xx says the platform
