@@ -159,12 +159,16 @@
       },
       {
         platform: 'facebook', kind: 'repost',
-        // FB's reshare ("Share now") posts a GraphQL mutation whose form-encoded body carries
+        // FB's reshare ("Share now") posts a GraphQL mutation carrying
         // fb_api_req_friendly_name=ComposerStoryCreateMutation. Recorded live 2026-08-08.
-        // Anchored on the friendly-name in the BODY, not the path and not the rotating doc_id.
-        // Reshare is create-only: there is no "un-reshare" mutation, so nothing to exclude here.
+        // Anchored on the friendly-name, not the path and not the rotating doc_id.
+        //
+        // Checked in the URL **and** the body: Comet sends this name in the query string on
+        // some routes, and a body-only test could not see those at all (2026-08-16). Reshare
+        // is create-only: there is no "un-reshare" mutation, so nothing to exclude here.
         test: function (url, body) {
-          return /(?:^|&)fb_api_req_friendly_name=ComposerStoryCreateMutation(?:&|$)/.test(String(body || ''));
+          return /(?:[?&])fb_api_req_friendly_name=ComposerStoryCreateMutation(?:&|$)/.test(
+            String(url || '') + '&' + String(body || ''));
         },
         // The mutation identifies the new story, not our numeric reel target, and the two
         // cannot be reconciled here. Return null: the isolated world credits the reel on screen
@@ -190,20 +194,46 @@
         // one always wins and this can only ever see what that missed. kind is 'fbdiag',
         // which no crediting branch in engage-core reads, so it cannot pay anything.
         platform: 'facebook', kind: 'fbdiag',
+        // Reads are EXCLUDED, and that is the point of this revision. Opening the composer
+        // fires five *Query names in a burst (UnifiedShareSheet…, useFeedComposerCometMentions…),
+        // which is more than the isolated world's per-page diagnostic budget: the budget was
+        // spent before the member finished typing, so the create mutation this probe exists to
+        // find could never be recorded. Every sample collected 2026-08-13..16 is a read query
+        // for exactly that reason — the probe was starving itself, not proving Facebook hides
+        // the create. Names ending in "Query" are therefore skipped here.
+        //
+        // Also matched against the URL, not just the body: Comet puts the friendly name in the
+        // query string on some routes, which a body-only test cannot see at all.
+        //
+        // Last resort: a graphql POST carrying NO readable friendly name is recorded by SHAPE
+        // only (the body's type), because "we cannot read this request at all" is itself the
+        // answer if that is what is happening.
         test: function (url, body) {
-          var b = String(body || '');
-          var m = b.match(/(?:^|&)fb_api_req_friendly_name=([^&]*)/);
-          if (!m) return false;
-          var n = m[1];
-          if (n === 'ComposerStoryCreateMutation') return false; // credited above
-          return /Composer|Reshare|Share|StoryCreate/i.test(n);
+          var u = String(url || '');
+          var m = (u + '&' + String(body || '')).match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/);
+          if (m) {
+            var n = m[1];
+            if (n === 'ComposerStoryCreateMutation') return false; // credited above
+            if (/Query$/i.test(n)) return false;                   // a read: never the create
+            return true;
+          }
+          return /\/api\/graphql\//.test(u);
         },
         ref: function () { return null; },
-        // The friendly name and nothing else. No post content, no ids, no body.
+        // The friendly name and nothing else. No post content, no ids, no body. When there is
+        // no name, the body's TYPE only — never its contents.
         meta: function (url, body) {
           try {
-            var n = (String(body || '').match(/(?:^|&)fb_api_req_friendly_name=([^&]*)/) || [])[1] || '';
-            return { name: n.slice(0, 80) };
+            var n = ((String(url || '') + '&' + String(body || ''))
+              .match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/) || [])[1] || '';
+            if (n) return { name: n.slice(0, 80) };
+            var kind = body == null ? 'empty'
+              : typeof body === 'string' ? 'string'
+              : (typeof FormData !== 'undefined' && body instanceof FormData) ? 'formdata'
+              : (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) ? 'urlsearchparams'
+              : (typeof Blob !== 'undefined' && body instanceof Blob) ? 'blob'
+              : 'other';
+            return { name: '(unnamed:' + kind + ')' };
           } catch (e) { return null; }
         },
       },

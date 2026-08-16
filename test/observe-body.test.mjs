@@ -49,12 +49,50 @@ test('a form-encoded reshare still matches, unchanged', async () => {
   assert.ok(sent.find((m) => m.platform === 'facebook' && m.kind === 'repost'));
 });
 
-test('an unrelated multipart POST matches nothing', async () => {
+test('a multipart READ query matches nothing at all, not even the probe', async () => {
   const { win, sent } = loadObserver();
   const fd = new FormData();
   fd.set('fb_api_req_friendly_name', 'CometUnifiedShareSheetDialogQuery');
   await win.fetch('https://www.facebook.com/api/graphql/', { method: 'POST', body: fd });
   assert.equal(sent.some((m) => m.kind === 'repost'), false);
-  // ...but the diagnostic sees it now, which is the whole point of the probe.
-  assert.ok(sent.find((m) => m.kind === 'fbdiag'));
+  // Not a credit AND not a diagnostic: reads are what starved the probe of its budget.
+  assert.equal(sent.some((m) => m.kind === 'fbdiag'), false);
+});
+
+test('a reshare naming itself in the URL query credits (body-only test missed these)', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/?fb_api_req_friendly_name=ComposerStoryCreateMutation&doc_id=9',
+    { method: 'POST', body: 'variables=%7B%7D' });
+  assert.ok(sent.find((m) => m.platform === 'facebook' && m.kind === 'repost'),
+    'the friendly name lives in the URL on some Comet routes');
+});
+
+test('composer read queries do not consume the diagnostic budget', async () => {
+  const { win, sent } = loadObserver();
+  // The exact five the composer fires on open. These used to fill the per-page budget
+  // before the member ever pressed Post, which is why the probe only ever caught reads.
+  for (const n of ['CometUnifiedShareSheetDialogQuery', 'UnifiedShareSheetMessengerSectionQuery',
+                   'useFeedComposerCometMentionsBootloadDataSourceQuery',
+                   'useFeedComposerCometMentionsBootloadDataSourceWithTaggingTransparencyQuery',
+                   'useFeedComposerCometMentionsNullstateDataSourceWithTaggingTransparencyQuery']) {
+    await win.fetch('https://www.facebook.com/api/graphql/', { method: 'POST', body: `fb_api_req_friendly_name=${n}` });
+  }
+  assert.equal(sent.filter((m) => m.kind === 'fbdiag').length, 0, 'reads must be ignored');
+
+  // ...and a genuinely unknown create IS recorded, which is the whole point.
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST', body: 'fb_api_req_friendly_name=SomeUnknownResharePostMutation' });
+  const diag = sent.filter((m) => m.kind === 'fbdiag');
+  assert.equal(diag.length, 1);
+  assert.equal(diag[0].meta.name, 'SomeUnknownResharePostMutation');
+});
+
+test('a graphql POST with no readable name is recorded by shape, never by content', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST', body: JSON.stringify({ secret: 'my private caption' }) });
+  const diag = sent.find((m) => m.kind === 'fbdiag');
+  assert.ok(diag, 'an unnameable graphql POST is itself the finding');
+  assert.equal(diag.meta.name, '(unnamed:string)');
+  assert.equal(JSON.stringify(sent).includes('my private caption'), false);
 });
