@@ -950,7 +950,16 @@ self.EngageCore = (function () {
         shareSendReward: (data && data.shareSendReward) || 0,
         engageBonusReward: (data && data.engageBonusReward) || 0,
       };
-      const target = data && (data.targets || []).find((t) => t.platform === A.platform && t.ref === ref);
+      // ONLY a `listed` target may bind to the page. Binding is what makes crediting
+      // passive: once bound, a normal like or watch on this page earns without the member
+      // ever knowing the post was eligible. For unlisted targets (hidden posts, honeypots)
+      // that passivity is exactly wrong — an honest member who lands on such a post
+      // organically must NOT be credited for it, both because hidden posts are deliberately
+      // unadvertised and because a honeypot credit reads as cheating. With this gate, the
+      // only way to earn on an unlisted ref is to fabricate the claim outside this
+      // extension, which is the thing the trap exists to catch (owner, 2026-08-16).
+      // A payload with no `listed` field counts as unlisted, same as background.js.
+      const target = data && (data.targets || []).find((t) => t.platform === A.platform && t.ref === ref && t.listed === true);
       if (!target) return clearWidget();
       // Merge server done flags (bearer-scoped, authoritative) with local cache.
       const local = await getDone(ref);
