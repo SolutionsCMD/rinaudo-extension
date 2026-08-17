@@ -363,6 +363,29 @@ function inKickQuietWindow(now = new Date()) {
   return weekend || night;
 }
 
+// Overnight mute for EVERY automatic notification (uploads, posts, earn targets), not
+// just the go-live toast. A two-day-old video got re-announced to everyone at 5am when
+// its successor was deleted and the feed's "latest" pointer reverted (2026-08-17); the
+// owner's rule since: nothing goes out overnight, ever. Nights only — weekend daytime
+// uploads are real news, unlike weekend go-lives. Manual pushes are exempt: those are
+// the owner pressing a button on purpose.
+function inNightWindow(now = new Date()) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).formatToParts(now);
+  let hr = parseInt(p.find((x) => x.type === 'hour').value, 10);
+  if (hr === 24) hr = 0;
+  return hr >= 20 || hr < 8; // 8pm–8am ET
+}
+
+// Never announce anything older than this, no matter when we first see it. The feed's
+// pointer can resurface an old item (deletion of its successor, feed hiccup), and a
+// browser waking from sleep sees "new" items that are hours stale.
+const MAX_NOTIFY_AGE_MS = 2 * 60 * 60 * 1000;
+function isFresh(publishedAt) {
+  if (!publishedAt) return false; // no timestamp, no claim of newness
+  const t = new Date(publishedAt).getTime();
+  return Number.isFinite(t) && Date.now() - t <= MAX_NOTIFY_AGE_MS;
+}
+
 // Is this YouTube upload a Short? The public feed only gives /watch URLs, so probe
 // youtube.com/shorts/<id> (host permission granted): a real Short serves 200, a regular
 // video 3xx-redirects to /watch (status 0 / opaqueredirect under manual). Errors → treat
@@ -420,6 +443,15 @@ async function checkSignals() {
   const nowVideos = {};
   (r.latestVideos || []).forEach((v) => { if (v.videoId) nowVideos[v.channelId] = v.videoId; });
 
+  // Every id/url ever notified (or silently seen), NOT just the last pointer. The
+  // Discord announcer survived the 2026-08-17 deletion-revert because it remembers
+  // everything it has seen; the pointer compare re-announced a two-day-old video.
+  const vidSeen = new Set(seen?.vidSeen || []);
+  const socSeen = new Set(seen?.socSeen || []);
+  // First run with the new shape (fresh install OR upgrade from the pointer version):
+  // seed silently from the current feed, so nothing already public ever notifies.
+  const seeding = !seen || !seen.vidSeen;
+
   if (seen) {
     if (r.streamLive && !seen.live && prefOn(prefs, 'kick') && !inKickQuietWindow()) {
       const id = `live-${Date.now()}`;
@@ -427,29 +459,47 @@ async function checkSignals() {
       notify(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live. Vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
     }
     for (const v of (r.latestVideos || [])) {
-      if (v.videoId && seen.videos[v.channelId] && v.videoId !== seen.videos[v.channelId] && prefOn(prefs, 'youtube')) {
-        const id = `vid-${v.videoId}`;
-        notifUrls[id] = postLink(v.url, 'youtube');
-        const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
-        const img = await youtubeThumbCard(v.videoId);
-        const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Click to watch it.` : `New ${kind}. Click to watch it.`, priority: 2 };
-        notify(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
-      }
+      if (!v.videoId || vidSeen.has(v.videoId)) continue;
+      vidSeen.add(v.videoId); // seen once judged, even when muted or stale: never fires later
+      if (seeding || !prefOn(prefs, 'youtube')) continue;
+      if (inNightWindow() || !isFresh(v.publishedAt)) continue;
+      const id = `vid-${v.videoId}`;
+      notifUrls[id] = postLink(v.url, 'youtube');
+      const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
+      const img = await youtubeThumbCard(v.videoId);
+      const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Click to watch it.` : `New ${kind}. Click to watch it.`, priority: 2 };
+      notify(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
     }
     const SOCIAL_TITLES = { tiktok: 'New TikTok: Mizkif', instagram: 'New Instagram: Mizkif', twitter: 'New X post: Mizkif' };
     const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
-    (r.latestSocial || []).forEach((s) => {
-      const prev = (seen.social || {})[s.platform];
-      if (s.url && prev && s.url !== prev && prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) {
-        const id = `soc-${s.platform}-${Date.now()}`;
-        notifUrls[id] = postLink(s.url, s.platform);
-        notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title}. Click to open the post.` : 'New post. Click to open it.', priority: 2 });
-      }
-    });
+    for (const s of (r.latestSocial || [])) {
+      if (!s.url || socSeen.has(s.url)) continue;
+      socSeen.add(s.url);
+      if (seeding || !prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) continue;
+      // Social posts carry no timestamp, so the freshness check cannot apply; the seen
+      // set still blocks the deletion-revert replay, and nights are muted regardless.
+      if (inNightWindow()) continue;
+      const id = `soc-${s.platform}-${Date.now()}`;
+      notifUrls[id] = postLink(s.url, s.platform);
+      notify(id, { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: s.title ? `${s.title}. Click to open the post.` : 'New post. Click to open it.', priority: 2 });
+    }
+  } else {
+    // Very first poll ever: seed both sets from the feed without notifying.
+    (r.latestVideos || []).forEach((v) => { if (v.videoId) vidSeen.add(v.videoId); });
+    (r.latestSocial || []).forEach((s) => { if (s.url) socSeen.add(s.url); });
   }
   const nowSocial = {};
   (r.latestSocial || []).forEach((s) => { if (s.url) nowSocial[s.platform] = s.url; });
-  await chrome.storage.local.set({ sigSeen: { live: !!r.streamLive, videos: nowVideos, social: nowSocial }, notifUrls });
+  await chrome.storage.local.set({
+    sigSeen: {
+      live: !!r.streamLive, videos: nowVideos, social: nowSocial,
+      // Bounded: the feed only ever carries a handful of items, so 60/30 outlast
+      // anything that could resurface while staying a trivial storage footprint.
+      vidSeen: [...vidSeen].slice(-60),
+      socSeen: [...socSeen].slice(-30),
+    },
+    notifUrls,
+  });
   return !!r.streamLive;
 }
 
@@ -520,6 +570,10 @@ async function checkNewTargets() {
     if (t.notify === false) continue;
     seen.add(key); // only mark seen once we've decided to notify
     if (!prefOn(prefs, t.platform)) continue; // user muted this platform — seen, but no toast
+    // Overnight mute (owner, 2026-08-17): a target added at 3am is seen-and-silent, not
+    // deferred — members find it in the earn list anyway, and a morning toast for a
+    // middle-of-the-night post would fail the freshness rule the video path enforces.
+    if (inNightWindow()) continue;
     const id = `target-${key}`;
     notifUrls[id] = postLink(t.url, t.platform);
     // Exact ticket value comes from the server per target (watch payout). Fall back to a
