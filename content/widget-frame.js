@@ -104,6 +104,26 @@ self.RGCFrame = (function () {
       frame.style.right = 'auto'; frame.style.bottom = 'auto';
     }
 
+    // Never let the card leave the window. A dragged position is absolute pixels, and a
+    // window that shrinks afterwards (resize, zoom, theater mode, a laptop screen after a
+    // monitor) left the card - drag bar included - outside the viewport with no way to
+    // pull it back (owner, 2026-08-17: "getting clipped off the screen and they cant move
+    // it"). Re-clamp on every resize AND whenever the card's own size changes, because a
+    // poll with many options grows the card downward past the bottom edge.
+    function keepInView() {
+      const r = frame.getBoundingClientRect();
+      if (!r.width || !r.height) return; // hidden or not laid out yet
+      const nx = clamp(r.left, 4, Math.max(4, window.innerWidth - r.width - 4));
+      const ny = clamp(r.top, 4, Math.max(4, window.innerHeight - r.height - 4));
+      if (Math.abs(nx - r.left) > 0.5 || Math.abs(ny - r.top) > 0.5) {
+        frame.style.left = nx + 'px'; frame.style.top = ny + 'px';
+        frame.style.right = 'auto'; frame.style.bottom = 'auto';
+      }
+    }
+    window.addEventListener('resize', keepInView);
+    let ro = null;
+    try { ro = new ResizeObserver(keepInView); ro.observe(frame); } catch { /* older engines */ }
+
     placeDefault();
     try {
       chrome.storage.local.get(key).then((s) => {
@@ -111,6 +131,7 @@ self.RGCFrame = (function () {
         if (!v) return;
         if (v.pos) { pos = v.pos; placeXY(pos.x, pos.y); }
         if (v.collapsed) setCollapsed(true, false);
+        keepInView(); // a spot saved on a bigger window must still land on THIS one
       }).catch(() => {});
     } catch { /* ignore */ }
 
@@ -137,7 +158,11 @@ self.RGCFrame = (function () {
       body,
       setPill(text) { pval.textContent = text || ''; },
       setTitle(text) { bttl.textContent = text || ''; pttl.textContent = text || ''; },
-      destroy() { try { host.remove(); } catch { /* ignore */ } },
+      destroy() {
+        try { window.removeEventListener('resize', keepInView); } catch { /* ignore */ }
+        try { if (ro) ro.disconnect(); } catch { /* ignore */ }
+        try { host.remove(); } catch { /* ignore */ }
+      },
     };
   }
 
