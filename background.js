@@ -27,16 +27,26 @@ function notify(id, opts) { try { if (HAS_NOTIFICATIONS) chrome.notifications.cr
 // @MizkifLive read as a broken link. The website's Earn Tickets page follows the same rule,
 // so the two surfaces behave identically.
 const PLATFORM_HOME = {
-  youtube: 'https://www.youtube.com/',
-  tiktok: 'https://www.tiktok.com/',
+  youtube: 'https://www.youtube.com/@Mizkif',
+  tiktok: 'https://www.tiktok.com/@realmizkif',
   instagram: 'https://www.instagram.com/realmizkif/',
   facebook: 'https://www.facebook.com/realmizkif',
   twitter: 'https://x.com/REALMizkif',
   x: 'https://x.com/REALMizkif',
 };
 const CHANNEL_ONLY = new Set(['youtube', 'tiktok']);
-const postLink = (url, platform) =>
-  (CHANNEL_ONLY.has(platform) ? PLATFORM_HOME[platform] : url) || PLATFORM_HOME[platform] || '';
+// Mizkif runs TWO YouTube channels, so "his page" is not one address. A target carries the
+// account that posted it (targets API `channel`), and the toast opens that one; anything
+// without a recorded channel falls back to the main account. Sending a MizkifLive video to
+// @Mizkif reads as a broken link exactly like the reverse did (owner, 2026-08-16/17).
+const YT_CHANNEL_HOME = {
+  Mizkif: 'https://www.youtube.com/@Mizkif',
+  MizkifLive: 'https://www.youtube.com/@MizkifLive',
+};
+const channelHome = (platform, channel) =>
+  (platform === 'youtube' && channel && YT_CHANNEL_HOME[channel]) || PLATFORM_HOME[platform] || '';
+const postLink = (url, platform, channel) =>
+  (CHANNEL_ONLY.has(platform) ? channelHome(platform, channel) : url) || PLATFORM_HOME[platform] || '';
 
 // Strips a post link down to the landing page for that platform, so the member finds the
 // post themselves. Used by the owner's manual push, and by the YouTube/TikTok earn toasts
@@ -502,7 +512,7 @@ async function checkSignals() {
       if (seeding || !prefOn(prefs, 'youtube')) continue;
       if (inNightWindow() || !isFresh(v.publishedAt)) continue;
       const id = `vid-${v.videoId}`;
-      notifUrls[id] = postLink(v.url, 'youtube');
+      notifUrls[id] = postLink(v.url, 'youtube', v.channelName);
       const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
       const img = await youtubeThumbCard(v.videoId);
       const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Click to watch it.` : `New ${kind}. Click to watch it.`, priority: 2 };
@@ -613,7 +623,7 @@ async function checkNewTargets() {
     // middle-of-the-night post would fail the freshness rule the video path enforces.
     if (inNightWindow()) continue;
     const id = `target-${key}`;
-    notifUrls[id] = postLink(t.url, t.platform);
+    notifUrls[id] = postLink(t.url, t.platform, t.channel);
     // Exact ticket value comes from the server per target (watch payout). Fall back to a
     // generic line if it's missing (older server).
     const n = Number(t.reward) || 0;
