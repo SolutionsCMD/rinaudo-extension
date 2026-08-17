@@ -365,15 +365,18 @@ function inKickQuietWindow(now = new Date()) {
 
 // Overnight mute for EVERY automatic notification (uploads, posts, earn targets), not
 // just the go-live toast. A two-day-old video got re-announced to everyone at 5am when
-// its successor was deleted and the feed's "latest" pointer reverted (2026-08-17); the
-// owner's rule since: nothing goes out overnight, ever. Nights only — weekend daytime
-// uploads are real news, unlike weekend go-lives. Manual pushes are exempt: those are
-// the owner pressing a button on purpose.
+// two later uploads were deleted and the feed's "latest" pointer reverted to it
+// (2026-08-17); the owner's rule since: nothing goes out overnight, ever.
+//
+// Midnight–7am ET, NOT the go-live toast's 8pm–8am (owner, 2026-08-17). Evening is prime
+// posting time and a 9pm upload is real news worth a toast; the small hours are not.
+// Nights only, every day — a weekend daytime upload is real news, unlike a weekend
+// go-live. Manual pushes are exempt: those are the owner pressing a button on purpose.
 function inNightWindow(now = new Date()) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).formatToParts(now);
   let hr = parseInt(p.find((x) => x.type === 'hour').value, 10);
   if (hr === 24) hr = 0;
-  return hr >= 20 || hr < 8; // 8pm–8am ET
+  return hr < 7; // midnight–7am ET
 }
 
 // Never announce anything older than this, no matter when we first see it. The feed's

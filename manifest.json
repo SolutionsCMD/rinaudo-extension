@@ -2,7 +2,7 @@
   "update_url": "https://clients2.google.com/service/update2/crx",
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.133",
+  "version": "1.134",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "minimum_chrome_version": "111",
   "permissions": [
