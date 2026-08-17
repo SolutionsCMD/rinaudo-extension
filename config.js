@@ -17,6 +17,7 @@ self.S2 = {
   TARGETS: '/api/extension/targets',
   STATUS: '/api/extension/status',
   ENGAGEMENT: '/api/extension/engagement',
+  UI_EVENTS: '/api/ui-events',
   POLL: '/api/extension/poll',
   POLL_VOTE: '/api/extension/poll-vote',
   // Stake-on-a-ticker rounds: GET → {round, me, connected}, POST →

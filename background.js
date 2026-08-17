@@ -201,6 +201,39 @@ async function s2Debug(kind, data) {
   }).catch(() => {});
 }
 
+// --- Staking-surface UI log (clicks/inputs on OUR panel only) ---------------------
+// Batched: a staking session is a handful of events and should cost one request. Rides
+// the existing poll cadence rather than adding a timer of its own. Fail-soft like
+// s2Debug — a logging error must never cost somebody their stake.
+//
+// SCOPE: the stake panel and vote buttons this extension draws. Nothing else on kick.com,
+// nothing typed anywhere else. An extension that reported more than its own UI would
+// deserve to be pulled from review.
+let uiQueue = [];
+const UI_QUEUE_MAX = 50;
+
+async function s2FlushUi() {
+  if (!uiQueue.length) return;
+  const token = await getS2Token();
+  if (!token) { uiQueue = []; return; } // not connected: nothing to attribute it to
+  const batch = uiQueue.slice(0, UI_QUEUE_MAX);
+  uiQueue = uiQueue.slice(batch.length);
+  try {
+    await fetch(S2.API + S2.UI_EVENTS, {
+      method: 'POST', headers: await s2Headers(token, true),
+      body: JSON.stringify({ events: batch }),
+    });
+  } catch { /* dropped; the next flush carries whatever is still queued */ }
+}
+
+function s2LogUi(e) {
+  try {
+    const ver = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
+    uiQueue.push({ ...e, client: `extension ${ver}`.trim() });
+    if (uiQueue.length >= UI_QUEUE_MAX) void s2FlushUi();
+  } catch { /* ignore */ }
+}
+
 // Engagement credit. RESPONSE CONTRACT, relied on by content/engage-core.js and
 // content/x.js:
 //   success -> the server's own JSON, which always carries `credited`
@@ -329,6 +362,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
     else if (msg.type === 's2Debug') { s2Debug(msg.kind || 'x', msg.data); reply({ ok: true }); }
+    else if (msg.type === 's2LogUi') { s2LogUi(msg.event || {}); reply({ ok: true }); }
+    else if (msg.type === 's2FlushUi') { await s2FlushUi(); reply({ ok: true }); }
     else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.platform, msg.videoRef, msg.playerDuration)); }
     else if (msg.type === 's2WatchHeartbeat') { reply(await s2WatchHeartbeat(msg.sessionId)); }
     else if (msg.type === 's2WatchClaim') { reply(await s2WatchClaim(msg.platform, msg.videoRef, msg.mode)); }

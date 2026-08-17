@@ -10,6 +10,16 @@
 // actions: { stake(ticker, amount), join(amount) }  (nominate is unused: the
 //          suggestion box was removed permanently)
 self.RGCStake = (function () {
+  // Clicks and inputs on THIS panel only. The background worker owns the bearer and
+  // batches the send; a logging failure must never interrupt staking.
+  function logUi(event, control, value, ref) {
+    try {
+      chrome.runtime.sendMessage(
+        { type: 's2LogUi', event: { surface: 'ext-stake-panel', event, control, value: value == null ? null : String(value), ref: ref == null ? null : String(ref) } },
+        () => { void chrome.runtime.lastError; },
+      );
+    } catch (e) { /* ignore */ }
+  }
   // Ticket sprites, same assets as the desk.
   const SITE = 'https://mizkif.com';
   const tix = (i) => `${SITE}/uploads/site/ticket-${i % 8}.svg`;
@@ -259,11 +269,18 @@ self.RGCStake = (function () {
 
   // data: {round, me, connected}; actions: {stake, join}. Returns
   // true when a round panel rendered (caller should skip its poll UI).
+  // Only log the panel opening once per round, not on every 2s repaint.
+  let lastRenderedRound = null;
+
   function render(host, data, actions) {
     const round = data && data.round;
     if (!round) return false;
     const me = data.me || null;
     const connected = !!data.connected;
+    if (lastRenderedRound !== round.id) {
+      lastRenderedRound = round.id;
+      logUi('open', round.status, null, round.id);
+    }
     host.replaceChildren();
 
     // ── nominating ───────────────────────────────────────────────────────────
@@ -312,6 +329,7 @@ self.RGCStake = (function () {
       big.addEventListener('click', () => {
         if (!sel) return;
         markPlaced(big, `\u2713 ${amount} 🎟 on ${sel}`);
+        logUi('submit', 'stake', `${sel}:${amount}`, round && round.id);
         actions.stake(sel, amount);
       });
       host.append(big);
@@ -356,6 +374,7 @@ self.RGCStake = (function () {
         big.addEventListener('click', () => {
           const n = Math.min(amount, Math.max(1, tickets));
           markPlaced(big, `\u2713 ${n} 🎟 added`);
+          logUi('submit', 'join', n, round && round.id);
           actions.join(n);
         });
         host.append(big);
