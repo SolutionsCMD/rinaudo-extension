@@ -657,9 +657,19 @@ async function checkManualPush() {
   const urls = notifUrls || {};
   urls[id] = homepageFor(push.url);
 
+  // Icon follows the pushed link's platform. It was hardcoded to YouTube, so an X post
+  // went out wearing a YouTube icon (owner, 2026-08-17).
+  let pushIcon = 'icons/icon128.png';
+  try {
+    const h = new URL(push.url).hostname.replace(/^www\./, '');
+    if (h.endsWith('x.com') || h.endsWith('twitter.com')) pushIcon = 'icons/x.png';
+    else if (h.endsWith('youtube.com') || h === 'youtu.be') pushIcon = 'icons/youtube.png';
+    else if (h.endsWith('tiktok.com')) pushIcon = 'icons/tiktok.png';
+    else if (h.endsWith('instagram.com') || h === 'instagr.am') pushIcon = 'icons/instagram.png';
+  } catch { /* keep the neutral icon */ }
   notify(id, {
     type: 'basic',
-    iconUrl: 'icons/youtube.png',
+    iconUrl: pushIcon,
     title: push.title,
     message: push.message || 'Open the app and search for it.',
     priority: 2,
