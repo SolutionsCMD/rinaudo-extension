@@ -94,6 +94,7 @@
       return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest('#contenteditable-root, [contenteditable="true"]') : null; },
+    composerSel: '#contenteditable-root, [contenteditable="true"]',
     commentText() {
       // Scan every candidate composer and return the first with text (instagram.js
       // pattern). Covers the /watch composer, /shorts side-panel composer, and open

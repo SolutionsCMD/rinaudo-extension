@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.140",
+  "version": "1.141",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "permissions": [
     "storage",
@@ -95,7 +95,8 @@
         "config.js",
         "content/widget-frame.js",
         "content/engage-core.js",
-        "content/instagram.js"
+        "content/instagram.js",
+        "content/grid-highlight.js"
       ],
       "run_at": "document_idle"
     },
@@ -109,7 +110,8 @@
         "config.js",
         "content/widget-frame.js",
         "content/engage-core.js",
-        "content/facebook.js"
+        "content/facebook.js",
+        "content/grid-highlight.js"
       ],
       "run_at": "document_idle"
     },
@@ -122,7 +124,8 @@
         "config.js",
         "content/widget-frame.js",
         "content/engage-core.js",
-        "content/x.js"
+        "content/x.js",
+        "content/grid-highlight.js"
       ],
       "run_at": "document_idle"
     },

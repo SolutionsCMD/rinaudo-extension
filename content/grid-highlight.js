@@ -24,35 +24,96 @@
   // the adapters export themselves (test/_load.mjs reads self[globalName]). They are the
   // parts most likely to break when a site changes a URL shape, so they are the parts that
   // get tested without a browser.
+  // One table per platform. Every ref is read from the LINK SHAPE, never from a class
+  // name: both the markup and the class names on all five sites churn constantly, while
+  // these URL shapes are effectively permanent. Each `single` test marks the page where
+  // engage-core binds the post itself, so the two ring systems never share a page.
+  const PLATFORMS = {
+    youtube: {
+      sel: 'a[href*="/watch?v="], a[href^="/shorts/"], a[href*="youtube.com/shorts/"]',
+      ref: (u) => (u.pathname.startsWith('/shorts/') ? (u.pathname.split('/')[2] || '')
+        : u.pathname === '/watch' ? (u.searchParams.get('v') || '') : ''),
+      single: (p) => p === '/watch' || p.startsWith('/shorts/'),
+    },
+    tiktok: {
+      sel: 'a[href*="/video/"]',
+      ref: (u) => (u.pathname.match(/^\/@[^/]+\/video\/(\d+)/) || [])[1] || '',
+      single: (p) => /^\/@[^/]+\/video\/\d+/.test(p),
+    },
+    x: {
+      // The card's timestamp link is the only stable permalink on a timeline tweet.
+      sel: 'a[href*="/status/"]',
+      ref: (u) => (u.pathname.match(/\/status\/(\d+)/) || [])[1] || '',
+      single: (p) => /\/status\/\d+/.test(p),
+      card: 'article',
+    },
+    instagram: {
+      // Profile grid tiles AND the feed's permalink/timestamp link are both these shapes.
+      sel: 'a[href*="/p/"], a[href*="/reel/"], a[href*="/tv/"]',
+      ref: (u) => (u.pathname.match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/) || [])[1] || '',
+      single: (p) => /^\/(?:p|reel|tv)\/[A-Za-z0-9_-]+/.test(p),
+      card: 'article',
+    },
+    facebook: {
+      // Reels only. Facebook's feed markup is the most hostile of the five and our targets
+      // are reels, which send members to a /reel/ page where engage-core takes over anyway.
+      sel: 'a[href*="/reel/"]',
+      ref: (u) => (u.pathname.match(/\/reel\/(\d+)/) || [])[1] || '',
+      single: (p) => /^\/reel\/\d+/.test(p),
+    },
+  };
+
   function refFor(platform, href, origin) {
     try {
-      const u = new URL(href, origin || 'https://example.com');
-      if (platform === 'youtube') {
-        if (u.pathname.startsWith('/shorts/')) return u.pathname.split('/')[2] || '';
-        if (u.pathname === '/watch') return u.searchParams.get('v') || '';
-        return '';
-      }
-      const m = u.pathname.match(/^\/@[^/]+\/video\/(\d+)/);
-      return m ? m[1] : '';
+      const cfg = PLATFORMS[platform];
+      if (!cfg) return '';
+      return cfg.ref(new URL(href, origin || 'https://example.com')) || '';
     } catch { return ''; }
   }
-  // On a single-video page engage-core binds the post and draws the button rings, so the
+  // On a single-post page engage-core binds the post and draws the button rings, so the
   // grid module stays silent there and the two never double-ring one page.
   function isSingleVideoPath(platform, pathname) {
-    const p = pathname || '';
-    if (platform === 'youtube') return p === '/watch' || p.startsWith('/shorts/');
-    return /^\/@[^/]+\/video\/\d+/.test(p);
+    const cfg = PLATFORMS[platform];
+    return cfg ? !!cfg.single(pathname || '') : false;
+  }
+  // What this post STILL pays this member: every action the platform offers, at its real
+  // rate, minus what they have already collected. One number meaning one thing on all five
+  // platforms. It replaced badging the watch payout alone, which was fine on YouTube but a
+  // lie on X — X has no watch, and the payload's per-target `reward` degrades to the watch
+  // floor for a ref with no learned length, so an X post would have advertised a watch
+  // reward that does not exist.
+  function remainingFor(t, rates) {
+    if (!t) return 0;
+    const a = t.actions || {}, done = t.done || {}, r = rates || {};
+    const isX = t.platform === 'x';
+    const n = (v) => (Number(v) > 0 ? Number(v) : 0);
+    let total = 0;
+    if (a.watch && !done.watch) total += n(t.reward);
+    if (a.like && !done.like) total += n(isX ? r.xLikeReward : r.likeReward);
+    // `actions.comment` already has the server's per-platform comment switch applied.
+    if (a.comment && !done.comment) total += n(isX ? r.xCommentReward : r.commentReward);
+    if (a.repost && !done.repost) total += n(r.repostReward);
+    if (a.shareSend && !done.shareSend) total += n(r.shareSendReward);
+    return total;
   }
   // Owner: ring the collected ones too, as a progress board. The badge is what tells them
-  // apart — the exact payout, or a tick once the watch is banked.
-  function badgeText(hit) { return hit && hit.watchDone ? '✓' : '+' + ((hit && hit.reward) || 0); }
-  try { self.RGC_GRID_HIGHLIGHT = { refFor, isSingleVideoPath, badgeText }; } catch { /* ignore */ }
+  // apart — what is still on the table, or a tick once nothing is.
+  function badgeText(hit) {
+    const left = hit && Number(hit.remaining) > 0 ? Number(hit.remaining) : 0;
+    return left > 0 ? '+' + left : '✓';
+  }
+  try { self.RGC_GRID_HIGHLIGHT = { refFor, isSingleVideoPath, badgeText, remainingFor }; } catch { /* ignore */ }
 
   const HOST = location.hostname;
-  const IS_YT = /(^|\.)youtube\.com$/.test(HOST);
-  const IS_TT = /(^|\.)tiktok\.com$/.test(HOST);
-  if (!IS_YT && !IS_TT) return;
-  const PLATFORM = IS_YT ? 'youtube' : 'tiktok';
+  const PLATFORM =
+      /(^|\.)youtube\.com$/.test(HOST) ? 'youtube'
+    : /(^|\.)tiktok\.com$/.test(HOST) ? 'tiktok'
+    : /(^|\.)(x|twitter)\.com$/.test(HOST) ? 'x'
+    : /(^|\.)(instagram\.com|instagr\.am)$/.test(HOST) ? 'instagram'
+    : /(^|\.)facebook\.com$/.test(HOST) ? 'facebook'
+    : '';
+  if (!PLATFORM) return;
+  const CFG = PLATFORMS[PLATFORM];
 
   // Look cloned from engage-core.js buildRing. Keep in step with it.
   const RING_GOLD = '#C9A766';
@@ -81,30 +142,46 @@
   const isSingleVideoPage = () => isSingleVideoPath(PLATFORM, location.pathname);
   const refFromHref = (href) => refFor(PLATFORM, href, location.origin);
 
-  const TILE_SELECTOR = IS_YT
-    ? 'a[href*="/watch?v="], a[href^="/shorts/"], a[href*="youtube.com/shorts/"]'
-    : 'a[href*="/video/"]';
+  const TILE_SELECTOR = CFG.sel;
 
-  // The box to ring: the tile's thumbnail rather than the whole anchor, so the ring hugs
-  // the image instead of swallowing the title and channel line beneath it. Falls back to
-  // the anchor when no thumbnail wrapper is recognisable.
+  const MIN_BOX = 40; // below this the tile is collapsed or not laid out yet
+
+  // What the ring should hug. Two shapes, because the five sites split cleanly:
+  //  - GRID sites (YouTube, TikTok, Instagram profile): the anchor IS the tile, so ring
+  //    its thumbnail rather than the anchor, or the ring swallows the title beneath it.
+  //  - CARD sites (X, Instagram feed): the anchor is a tiny timestamp permalink, so ring
+  //    the enclosing post card instead — a 20px ring on a date would be useless.
+  // Anything unresolvable falls back to the anchor, and a box under MIN_BOX is skipped by
+  // the caller, so a layout we do not recognise simply does not ring.
   function ringBox(anchor) {
     try {
+      if (CFG.card) {
+        // OUTERMOST matching card: a quoted tweet nests an <article> inside the real one,
+        // and ringing the quote block instead of the tweet would point at the wrong post.
+        let card = null;
+        for (let el = anchor.parentElement; el; el = el.parentElement) {
+          if (el.matches && el.matches(CFG.card)) card = el;
+        }
+        if (card) {
+          const cr = card.getBoundingClientRect();
+          if (cr.width > MIN_BOX && cr.height > MIN_BOX) return card;
+        }
+      }
       const img = anchor.querySelector('img');
       if (img) {
         // Walk up from the image to the largest ancestor still inside the anchor: that is
-        // the thumbnail frame on both sites, whatever it happens to be called this week.
+        // the thumbnail frame on these sites, whatever it happens to be called this week.
         let box = img;
         while (box.parentElement && box.parentElement !== anchor
                && anchor.contains(box.parentElement)) box = box.parentElement;
         const r = box.getBoundingClientRect();
-        if (r.width > 40 && r.height > 40) return box;
+        if (r.width > MIN_BOX && r.height > MIN_BOX) return box;
       }
     } catch { /* fall through */ }
     return anchor;
   }
 
-  let eligible = new Map();   // ref -> { reward, watchDone }
+  let eligible = new Map();   // ref -> { remaining }
   let targetsAt = 0;
   let rings = new Map();      // ref -> { host, ring, badge, el, last }
   let raf = 0;
@@ -126,10 +203,7 @@
       // must stay quiet. Same gate engage-core uses before binding a post, and a payload
       // with no `listed` field counts as unlisted.
       if (t.platform !== PLATFORM || t.listed !== true || !t.ref) continue;
-      next.set(String(t.ref), {
-        reward: Number(t.reward) || 0,
-        watchDone: !!(t.done && t.done.watch),
-      });
+      next.set(String(t.ref), { remaining: remainingFor(t, data) });
     }
     eligible = next;
     targetsAt = now;
@@ -187,7 +261,7 @@
       if (!hit) continue;
       const el = ringBox(a);
       const rect = el.getBoundingClientRect();
-      if (rect.width < 40 || rect.height < 40) continue; // collapsed / not laid out yet
+      if (rect.width < MIN_BOX || rect.height < MIN_BOX) continue; // collapsed / not laid out yet
       seen.add(ref);
       out.push({
         ref, el,

@@ -37,6 +37,7 @@
       return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest('[data-e2e*="comment-input"], [contenteditable="true"], textarea') : null; },
+    composerSel: '[data-e2e*="comment-input"], [contenteditable="true"], textarea',
     commentText() {
       const el = document.querySelector('[data-e2e*="comment-input"]')
         || document.querySelector('[placeholder*="comment" i][contenteditable], [placeholder*="comment" i]');

@@ -45,6 +45,7 @@
       return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest(COMPOSER_SEL) : null; },
+    composerSel: COMPOSER_SEL,
     commentText() {
       // Instagram now renders the comment box as a contenteditable div (role="textbox"),
       // not a <textarea>. Reading only textarea returned '' forever, so the >5-char gate

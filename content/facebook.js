@@ -153,6 +153,7 @@
       return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest(COMPOSER_SEL) : null; },
+    composerSel: COMPOSER_SEL,
     commentText() {
       // FB's composer is a contenteditable div, so read textContent (value only for the odd
       // legacy textarea). Prefer a labelled composer, fall back to any contenteditable box.

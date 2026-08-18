@@ -35,6 +35,9 @@
     submitOnEnter: false,
     submitOnCtrlEnter: true,
     commentInputTarget(t) { return t && t.closest ? t.closest('[data-testid^="tweetTextarea_"], [role="textbox"]') : null; },
+    // Selector shared with commentInputTarget so the ring and the credit path can never
+    // disagree about what the composer is.
+    composerSel: '[data-testid^="tweetTextarea_"], [role="textbox"]',
     commentText() {
       for (const el of document.querySelectorAll('[data-testid^="tweetTextarea_"]')) {
         const v = (el.textContent || '').trim();

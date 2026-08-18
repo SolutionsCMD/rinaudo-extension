@@ -273,6 +273,31 @@ self.EngageCore = (function () {
     function ringCall(fn) {
       try { return typeof A[fn] === 'function' ? A[fn]() : null; } catch { return null; }
     }
+    // The comment composer, from the adapter's OWN selector (A.composerSel), so the ring
+    // and the credit path can never disagree about what the composer is. A composer inside
+    // an open dialog wins: X posts replies from a modal, and Instagram and Facebook open
+    // one over the feed, so the modal copy is the one the member is actually typing into.
+    // Returns null when nothing is laid out, which simply means no ring.
+    function composerEl() {
+      try {
+        const sel = A.composerSel;
+        if (!sel) return null;
+        const inDialog = sel.split(',')
+          .map((s) => '[role="dialog"] ' + s.trim()).join(', ');
+        const visible = (el) => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return (r.width > 20 && r.height > 10) ? el : null;
+        };
+        for (const q of [inDialog, sel]) {
+          for (const el of document.querySelectorAll(q)) {
+            const ok = visible(el);
+            if (ok) return ok;
+          }
+        }
+      } catch { /* safe degrade */ }
+      return null;
+    }
     // What SHOULD be ringed right now: [{ key, el, txt }].
     function ringSpecs() {
       const out = [];
@@ -287,6 +312,12 @@ self.EngageCore = (function () {
         if (A.actions.comment && state.commentEnabled !== false
             && rewards.commentReward > 0 && state.commentS !== 'done') {
           push('comment', ringCall('commentHighlightTarget'), rewards.commentReward);
+          // The BOX as well as the button (owner, 2026-08-18: highlight any button or input
+          // box that pays). On several platforms the Post control only appears once there is
+          // text in the composer, so ringing the button alone left nothing to aim at until
+          // after you had already started typing. pointer-events:none, so the ring never
+          // intercepts a click or a keystroke.
+          push('commentbox', composerEl(), rewards.commentReward);
         }
         if (state.canRepost === true && rewards.repostReward > 0
             && state.repostS !== 'done' && !shareHidden) {
