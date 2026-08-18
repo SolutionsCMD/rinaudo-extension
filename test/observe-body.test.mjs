@@ -96,3 +96,60 @@ test('a graphql POST with no readable name is recorded by shape, never by conten
   assert.equal(diag.meta.name, '(unnamed:string)');
   assert.equal(JSON.stringify(sent).includes('my private caption'), false);
 });
+
+// A JSON-bodied reshare. Some accounts get a Facebook variant that posts GraphQL as JSON,
+// where the mutation name reads "fb_api_req_friendly_name":"Name" instead of the
+// form-encoded &fb_api_req_friendly_name=Name. The form-only regex could not see those at
+// all: every request from such an account logged as (unnamed:string) and nothing they
+// reshared ever credited (member reports 2026-08-16 and 2026-08-18).
+test('a JSON-bodied reshare credits, and its content is still never read', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST',
+    body: JSON.stringify({
+      fb_api_req_friendly_name: 'ComposerStoryCreateMutation',
+      doc_id: '987654321',
+      variables: { message: { text: 'my private caption' } },
+    }),
+  });
+  const hit = sent.find((m) => m.platform === 'facebook' && m.kind === 'repost');
+  assert.ok(hit, 'a JSON-bodied reshare should be observed');
+  assert.equal(hit.ok, true);
+  assert.equal(JSON.stringify(sent).includes('my private caption'), false,
+    'member content must never leave the page');
+});
+
+test('a JSON-bodied like credits too', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST',
+    body: JSON.stringify({ fb_api_req_friendly_name: 'CometUFIFeedbackReactMutation' }),
+  });
+  assert.ok(sent.find((m) => m.platform === 'facebook' && m.kind === 'like'));
+});
+
+// The widening changes how the name is FOUND, never which name is accepted. A JSON body
+// naming some other mutation must still credit nothing.
+test('a JSON body naming a different mutation credits nothing', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST',
+    body: JSON.stringify({ fb_api_req_friendly_name: 'SomeOtherCreateMutation' }),
+  });
+  assert.equal(sent.some((m) => m.kind === 'repost'), false);
+  assert.equal(sent.some((m) => m.kind === 'like'), false);
+  // It is still worth a diagnostic: an unrecognised create is exactly what we want named.
+  const diag = sent.find((m) => m.kind === 'fbdiag');
+  assert.ok(diag, 'an unrecognised mutation should still be recorded by name');
+});
+
+// A JSON read query is still a read: skipped, so it cannot starve the probe's budget.
+test('a JSON-bodied read query is skipped like a form-encoded one', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST',
+    body: JSON.stringify({ fb_api_req_friendly_name: 'CometUnifiedShareSheetDialogQuery' }),
+  });
+  assert.equal(sent.some((m) => m.kind === 'repost'), false);
+  assert.equal(sent.some((m) => m.kind === 'fbdiag'), false);
+});

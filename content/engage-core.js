@@ -95,13 +95,32 @@ self.EngageCore = (function () {
       if (reward > 0) return `+${reward}`;
       return status === 'done' ? '' : 'Required';
     }
-    // The video's full-watch reward (based on its length), shown as the headline so a
-    // long video reads "+33" not "+5" (the floor). The amount actually credited comes
-    // from the claim and scales with how much was watched.
+    // The video's full-watch reward, shown as the headline so a long video reads "+33" not
+    // "+5" (the floor). The amount actually credited comes from the claim.
+    //
+    // The SERVER's per-target figure wins when we have it: it is the same formula plus
+    // anything this client cannot see, today the early-watch bonus (a video in its first
+    // half hour pays extra). Computing it locally understated that — the toast said 25 while
+    // this row said 15 for the same video (owner, 2026-08-18). The local calculation stays
+    // as the fallback for an older server that sends no per-target reward.
     function watchPotential() {
+      const srv = Number(state && state.targetReward);
+      if (Number.isFinite(srv) && srv > 0) return srv;
       const v = A.getVideoEl();
       const durMin = (v && isFinite(v.duration) && v.duration > 0) ? Math.floor(v.duration / 60) : 0;
       return Math.max(rewards.watchFloor || 5, durMin * (rewards.watchPerMinute || 1));
+    }
+    /** Is this video inside its early-watch window? Server-driven: the per-target reward
+     *  exceeds what length alone explains, by exactly the published bonus. */
+    function earlyBonusNow() {
+      const bonus = Number(rewards.watchEarlyBonus) || 0;
+      if (bonus <= 0) return 0;
+      const srv = Number(state && state.targetReward);
+      if (!Number.isFinite(srv) || srv <= 0) return 0;
+      const v = A.getVideoEl();
+      const durMin = (v && isFinite(v.duration) && v.duration > 0) ? Math.floor(v.duration / 60) : 0;
+      const base = Math.max(rewards.watchFloor || 5, durMin * (rewards.watchPerMinute || 1));
+      return srv - base === bonus ? bonus : 0;
     }
     function watchRow() {
       if (state.watchDone) return rowEl('Watched', `+${state.awarded != null ? state.awarded : watchPotential()}`, 'done');
@@ -109,7 +128,11 @@ self.EngageCore = (function () {
       const playing = state.watchPlaying;
       const suffix = playing ? '' : (state.watchMuted ? ' · unmute to earn' : ' · paused');
       const icon = playing ? '▶' : (state.watchMuted ? '🔇' : '⏸');
-      const label = `${icon} Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}${suffix}`;
+      // Say WHY it pays more while the early window is open, or the bigger number just
+      // reads as a mistake and nobody hurries for a bonus they cannot see.
+      const early = earlyBonusNow();
+      const label = `${icon} Watch ${fmt(state.watched || 0)} / ${fmt(state.target || 0)}${suffix}`
+        + (early > 0 ? ` · +${early} early bonus` : '');
       const r = rowEl(label, `+${watchPotential()}`, 'idle');
       if (!playing) r.classList.add('paused');
       return r;
@@ -973,6 +996,7 @@ self.EngageCore = (function () {
         likeReward: likeR || 0,
         commentReward: commentR || 0,
         watchVideoReward: (data && data.watchVideoReward) || 0,
+        watchEarlyBonus: (data && data.watchEarlyBonus) || 0,
         watchFloor: (data && data.watchVideoFloor) || 5,
         watchPerMinute: (data && data.watchTicketsPerMinute) || 1,
         // One global amount each, no per-platform override. All three are 0 until the
@@ -1046,6 +1070,9 @@ self.EngageCore = (function () {
         commentBannedWords: Array.isArray(target.commentBannedWords) ? target.commentBannedWords : [],
         replayEligible: !!(rep && rep.eligible), replayMax, replayUsed,
         replayReward: rep ? (rep.reward || 1) : 1,
+        // Server's exact payout for THIS video, including anything the client cannot
+        // compute (the early-watch bonus). Drives the watch row's headline number.
+        targetReward: Number(target.reward) || 0,
         replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
         baseTarget: 0 };
       lastHb = 0; hookComment(); hookLike(); hookIntent(); drawWidget();

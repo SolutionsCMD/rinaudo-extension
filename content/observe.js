@@ -52,6 +52,25 @@
     //                      world then falls back to the id it bound at click time)
     // kind is 'repost' or 'send'; the isolated world maps those to the server's
     // 'repost' and 'share_send' actions.
+    // Facebook and Instagram normally send GraphQL form-encoded, so the mutation name
+    // arrives as `&fb_api_req_friendly_name=Name`. Some accounts get a variant that posts a
+    // JSON body instead, where the same field reads `"fb_api_req_friendly_name":"Name"`.
+    // A form-only regex cannot see those AT ALL: every request from such an account was
+    // logged as (unnamed:string) and nothing they reshared ever credited (reported by a
+    // member 2026-08-16 and again 2026-08-18, with 15 unnamed samples and not one named
+    // mutation, while every other member's samples name themselves normally).
+    //
+    // This reads the name out of either encoding, from the URL or the body. It widens how
+    // the name is FOUND, never which name is accepted, so a matcher below still credits
+    // exactly the one mutation it always did.
+    function friendlyName(url, body) {
+      var hay = String(url || '') + '&' + String(body || '');
+      var m = hay.match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/);
+      if (m) return m[1];
+      m = hay.match(/"fb_api_req_friendly_name"\s*:\s*"([^"]+)"/);
+      return m ? m[1] : '';
+    }
+
     var SIGS = [
       {
         platform: 'x', kind: 'repost',
@@ -113,7 +132,7 @@
         // BOTH endpoints) and not the rotating doc_id. The un-repost is a DIFFERENT mutation
         // (usePolarisDeleteMediaRepostMutation), so it cannot match here.
         test: function (url, body) {
-          return /(?:^|&)fb_api_req_friendly_name=usePolarisCreateMediaRepostMutation(?:&|$)/.test(String(body || ''));
+          return friendlyName(url, body) === 'usePolarisCreateMediaRepostMutation';
         },
         // The mutation identifies the post by a NUMERIC media_id, not the instagram:<shortcode>
         // our targets use, and the two cannot be reconciled here. Return null: the isolated
@@ -129,7 +148,8 @@
         // there), so likes credit off the wire instead. Body match on the friendly name,
         // like the repost signal below.
         test: function (url, body) {
-          return /(?:^|&)fb_api_req_friendly_name=(?:CometUFIFeedbackReactMutation|useCometUFIFeedbackReactMutation)(?:&|$)/.test(String(body || ''));
+          var n = friendlyName(url, body);
+          return n === 'CometUFIFeedbackReactMutation' || n === 'useCometUFIFeedbackReactMutation';
         },
         ref: function () { return null; },
         // Reported 2026-08-13: a member opened a Facebook post and was credited the like
@@ -167,8 +187,7 @@
         // some routes, and a body-only test could not see those at all (2026-08-16). Reshare
         // is create-only: there is no "un-reshare" mutation, so nothing to exclude here.
         test: function (url, body) {
-          return /(?:[?&])fb_api_req_friendly_name=ComposerStoryCreateMutation(?:&|$)/.test(
-            String(url || '') + '&' + String(body || ''));
+          return friendlyName(url, body) === 'ComposerStoryCreateMutation';
         },
         // The mutation identifies the new story, not our numeric reel target, and the two
         // cannot be reconciled here. Return null: the isolated world credits the reel on screen
@@ -210,9 +229,9 @@
         // answer if that is what is happening.
         test: function (url, body) {
           var u = String(url || '');
-          var m = (u + '&' + String(body || '')).match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/);
-          if (m) {
-            var n = m[1];
+          var n0 = friendlyName(u, body);
+          if (n0) {
+            var n = n0;
             if (n === 'ComposerStoryCreateMutation') return false; // credited above
             if (/Query$/i.test(n)) return false;                   // a read: never the create
             return true;
@@ -224,8 +243,7 @@
         // no name, the body's TYPE only — never its contents.
         meta: function (url, body) {
           try {
-            var n = ((String(url || '') + '&' + String(body || ''))
-              .match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/) || [])[1] || '';
+            var n = friendlyName(url, body);
             if (n) return { name: n.slice(0, 80) };
             var kind = body == null ? 'empty'
               : typeof body === 'string' ? 'string'
@@ -233,7 +251,15 @@
               : (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) ? 'urlsearchparams'
               : (typeof Blob !== 'undefined' && body instanceof Blob) ? 'blob'
               : 'other';
-            return { name: '(unnamed:' + kind + ')' };
+            // Shape only, never contents: whether the body looks like JSON and whether the
+            // name field is present under ANY spelling. Together those say whether a future
+            // encoding is being missed or the name genuinely is not sent.
+            var str = typeof body === 'string' ? body : '';
+            return {
+              name: '(unnamed:' + kind + ')',
+              looksJson: /^\s*[{[]/.test(str),
+              hasNameToken: str.indexOf('fb_api_req_friendly_name') !== -1,
+            };
           } catch (e) { return null; }
         },
       },
