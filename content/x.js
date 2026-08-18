@@ -8,11 +8,27 @@
 //     the server validates the id is an active target (the 24h window), so non-target
 //     tweets are silently ignored.
 (function () {
+  // Last /status/ id we were actually on — see getRef(), which keeps reporting it while
+  // X's reply modal is open and the URL has moved off the tweet.
+  let lastStatusRef = '';
   const adapter = {
     platform: 'x',
     actions: { like: true, comment: true },
     refFromPath(path) { const m = (path || '').match(/\/status\/(\d+)/); return m ? m[1] : ''; },
-    getRef() { return this.refFromPath(location.pathname); },
+    getRef() {
+      const r = this.refFromPath(location.pathname);
+      if (r) { lastStatusRef = r; return r; }
+      // X moves the URL off /status/ while its reply modal is open, but the page underneath
+      // is still that tweet. Without this the ref vanishes mid-reply and engage-core clears
+      // the card, which is the "extension pop up disappears" members reported on 2026-08-18.
+      // Deliberately narrow: only while a modal dialog containing a tweet composer is open,
+      // so a composer on the home feed can never resurrect a stale ref.
+      if (lastStatusRef && document.querySelector('[role="dialog"][aria-modal="true"] [data-testid^="tweetTextarea_"]')) {
+        return lastStatusRef;
+      }
+      lastStatusRef = '';
+      return '';
+    },
     isLiked() { return !!document.querySelector('[data-testid="unlike"]'); },
     commentSubmitTarget(t) { return t && t.closest ? t.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]') : null; },
     // On X, plain Enter is a newline — replies post via the Reply button OR Cmd/Ctrl+Enter.
@@ -176,9 +192,20 @@
   // at reply-open and fire on the tweet-button submit.
   let replyRef = '';
   document.addEventListener('click', (e) => {
-    if (onStatusPage()) return;
     const reply = e.target.closest && e.target.closest('[data-testid="reply"]');
-    if (reply) { replyRef = cardRef(reply); return; }
+    if (reply) {
+      // Bind on EVERY page, a /status/ page INCLUDED. Clicking Reply there opens X's modal
+      // composer and swaps the URL off /status/, so by the time the reply is posted this is
+      // no longer a status page: engage-core has already torn its card down and the submit
+      // below finds nothing bound. That path credited NOTHING — 72 reply clicks on a status
+      // page against 78 modal submits with no ref bound, in ten hours of field diagnostics
+      // (2026-08-18, reported in Discord as "the extension pop up disappears and in turn
+      // doesn't register your reply"). cardRef first (it reads the card the click came
+      // from); the URL is the fallback for the focused tweet on its own page.
+      replyRef = cardRef(reply) || adapter.refFromPath(location.pathname);
+      return;
+    }
+    if (onStatusPage()) return; // engage-core owns the inline composer on the single-post page
     const submit = e.target.closest && e.target.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
     if (submit && replyRef) fireTimelineComment();
   }, true);
