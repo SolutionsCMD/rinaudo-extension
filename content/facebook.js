@@ -239,7 +239,32 @@
       } catch (e) { return null; }
     },
     commentHighlightTarget() {
-      try { return document.querySelector(COMPOSER_SEL) || null; } catch (e) { return null; }
+      try {
+        // The action-bar Comment control, NOT the composer. This used to return the
+        // composer, which is the very element engage-core already rings separately via
+        // composerSel, so both rings landed on the box and the BUTTON never got one
+        // (owner, 2026-08-19: "it highlighted the comment box but we need the button
+        // highlighted also").
+        for (const el of document.querySelectorAll('[role="button"][aria-label], button[aria-label]')) {
+          const label = (el.getAttribute('aria-label') || '').trim();
+          if (!/(^comments?$)|(^leave a comment)|(^write a comment)/i.test(label)) continue;
+          // Skip the in-composer SUBMIT control: it also answers to "Comment" but sits
+          // inside the composer's own container (same test commentSubmitTarget uses,
+          // inverted).
+          // Stop at body: EVERY ancestor up there contains the composer somewhere, so
+          // walking that far marked the action-bar button as in-composer and skipped it,
+          // which is how this returned the box again on the first attempt.
+          let inComposer = false, up = el;
+          for (let i = 0; i < 8 && up; i++) {
+            up = up.parentElement;
+            if (!up || up === document.body || up === document.documentElement) break;
+            if (up.querySelector && up.querySelector(COMPOSER_SEL)) { inComposer = true; break; }
+          }
+          if (!inComposer) return el;
+        }
+        // No action bar found: the composer is still a better ring than nothing.
+        return document.querySelector(COMPOSER_SEL) || null;
+      } catch (e) { return null; }
     },
     // Step two of a reshare: the options inside the open share sheet.
     repostDialogHighlightTargets() {
@@ -254,9 +279,21 @@
     repostHighlightTarget() {
       try {
         if (!this.getRef()) return null;
-        const entry = document.querySelector('[aria-label="Share"], [aria-label="Send this to friends or post it on your profile."]');
-        if (!entry) return null;
-        return entry.closest('[role="button"], button') || entry;
+        // Two exact labels only was too narrow: the control did not ring on a live reel
+        // even with the kill switch off (owner, 2026-08-19). Widened to any share/send
+        // control, still OUTSIDE the share dialog, since the dialog's own options are
+        // ringed separately by repostDialogHighlightTargets.
+        const exact = document.querySelector('[aria-label="Share"], [aria-label="Send this to friends or post it on your profile."]');
+        if (exact) return exact.closest('[role="button"], button') || exact;
+        for (const el of document.querySelectorAll('[role="button"][aria-label], button[aria-label], [aria-label]')) {
+          const label = (el.getAttribute('aria-label') || '').trim();
+          if (!/share|send this/i.test(label)) continue;
+          if (el.closest('[role="dialog"]')) continue;   // dialog options ring separately
+          const btn = el.closest('[role="button"], button') || el;
+          const r = btn.getBoundingClientRect();
+          if (r.width > 16 && r.height > 16) return btn;  // skip a bare icon node
+        }
+        return null;
       } catch (e) { return null; }
     },
   };
