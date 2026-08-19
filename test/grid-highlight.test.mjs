@@ -121,3 +121,28 @@ assert.equal(G.badgeText({ remaining: 0 }), '✓');
 assert.equal(G.badgeText(null), '✓');
 
 console.log('grid highlight OK');
+
+// Facebook links to the same reel under several shapes. His page renders reels in the
+// Posts feed as /<page>/videos/<id>, so a reel-only matcher highlighted nothing there
+// (owner, 2026-08-19).
+{
+  const FB = 'https://www.facebook.com';
+  const cases = [
+    ['/reel/4562594350730390', '4562594350730390'],
+    ['/realmizkif/videos/1093084896737669/', '1093084896737669'],
+    ['/watch/?v=1704437947504021', '1704437947504021'],
+    ['/permalink.php?story_fbid=2502817863524426&id=9', '2502817863524426'],
+    // A comment id in the query must not be mistaken for the post.
+    ['/realmizkif/videos/4442998209246170/?comment_id=99887766554433', '4442998209246170'],
+    ['/realmizkif/', ''],
+  ];
+  for (const [path, want] of cases) {
+    const got = G.refFor('facebook', FB + path, FB);
+    assert.equal(got, want, `facebook refFor(${path}) => ${got}, want ${want}`);
+  }
+  // The post's own page belongs to engage-core, so the grid module stays silent there.
+  assert.equal(G.isSingleVideoPath('facebook', '/reel/4562594350730390'), true);
+  assert.equal(G.isSingleVideoPath('facebook', '/realmizkif/videos/1093084896737669/'), true);
+  assert.equal(G.isSingleVideoPath('facebook', '/realmizkif/'), false);
+  console.log('ok facebook post shapes');
+}

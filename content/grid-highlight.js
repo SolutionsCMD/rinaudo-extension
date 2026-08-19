@@ -55,11 +55,31 @@
       card: 'article',
     },
     facebook: {
-      // Reels only. Facebook's feed markup is the most hostile of the five and our targets
-      // are reels, which send members to a /reel/ page where engage-core takes over anyway.
-      sel: 'a[href*="/reel/"]',
-      ref: (u) => (u.pathname.match(/\/reel\/(\d+)/) || [])[1] || '',
-      single: (p) => /^\/reel\/\d+/.test(p),
+      // Every post shape, not just /reel/. The targets ARE reels, but Facebook does not
+      // link to them as reels everywhere: on his page the same reel appears in the Posts
+      // feed as /<page>/videos/<id> or a ?v= watch link, so a reel-only selector matched
+      // nothing there and his profile highlighted none of them (owner, 2026-08-19).
+      // These are exactly the shapes facebook.js getRef already accepts, kept in step so
+      // a page the grid module rings is a page engage-core can then bind.
+      sel: 'a[href*="/reel/"], a[href*="/videos/"], a[href*="/posts/"], a[href*="v="], a[href*="story_fbid="]',
+      ref: (u) => {
+        const path = u.pathname || '';
+        let m = path.match(/\/reel\/(\d+)/);
+        if (m) return m[1];
+        m = path.match(/\/[^/]+\/videos\/(\d+)/);
+        if (m) return m[1];
+        m = path.match(/\/[^/]+\/posts\/([^/?#]+)/);
+        if (m) return m[1];
+        // Read from the URL's own params, never a regex over the whole href: a
+        // ?comment_id= or a tracking param carries digits too, and the last long number
+        // in a link is not the post.
+        const v = u.searchParams.get('v');
+        if (v && /^\d+$/.test(v)) return v;
+        const story = u.searchParams.get('story_fbid');
+        if (story && /^\d+$/.test(story)) return story;
+        return '';
+      },
+      single: (p) => /^\/reel\/\d+/.test(p) || /^\/[^/]+\/(videos|posts)\//.test(p) || /^\/watch\/?$/.test(p),
     },
   };
 
