@@ -67,6 +67,36 @@
     }, true);
   } catch { /* a listener that cannot bind must never break the adapter */ }
 
+  // Watch diagnostics. A member on 1.150 reported reels two and three never registering,
+  // with the row reading "paused" while the reel was unmuted and playing, which says the
+  // element being read is not the one on screen. getVideoEl now picks the playing video,
+  // but if that is still wrong the only way to know is to see what the page actually held.
+  // Reports every video in the document and which one was chosen. Throttled hard: this
+  // fires at most once every 30s and only while a watch session is open and not accruing.
+  let lastWatchDiag = 0;
+  function watchDiag(chosen) {
+    try {
+      if (Date.now() - lastWatchDiag < 30000) return;
+      lastWatchDiag = Date.now();
+      const vids = Array.from(document.querySelectorAll('video')).slice(0, 6);
+      const shot = vids.map((v, i) => {
+        const r = v.getBoundingClientRect();
+        return {
+          i,
+          paused: !!v.paused, ended: !!v.ended, muted: !!v.muted,
+          vol: Math.round((v.volume || 0) * 10) / 10,
+          t: Math.round(v.currentTime || 0),
+          dur: isFinite(v.duration) ? Math.round(v.duration) : null,
+          w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
+          picked: v === chosen,
+        };
+      });
+      chrome.runtime.sendMessage({ type: 's2Debug', kind: 'fbwatch',
+        data: { n: document.querySelectorAll('video').length, path: location.pathname, vids: shot } });
+    } catch { /* diagnostics must never break the watch loop */ }
+  }
+  self.RGCFbWatchDiag = watchDiag;
+
   const adapter = {
     platform: 'facebook',
     // HARD GATE: no tickets at all from Facebook without a signed-in session.
@@ -212,6 +242,7 @@
     // Prefer a video that is actually playing; among equals (or if none is playing yet,
     // which is the case for a reel still buffering when the card binds) take the one
     // filling most of the viewport. Falls back to the old read if anything throws.
+    watchDiag(chosen) { try { watchDiag(chosen); } catch { /* ignore */ } },
     getVideoEl() {
       try {
         const vids = Array.from(document.querySelectorAll('video'));

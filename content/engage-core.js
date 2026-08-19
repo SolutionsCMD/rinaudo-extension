@@ -1136,6 +1136,12 @@ self.EngageCore = (function () {
       const wasPlaying = state.watchPlaying;
       state.watchPlaying = !!(live && audible && visible);
       state.watchMuted = !!(live && visible && !audible);
+      // Not accruing while a session is open is exactly the case members report as "it is
+      // playing but nothing counts", and the row alone cannot say which video was read.
+      // Adapters that offer a diagnostic get asked; it throttles itself.
+      if (!state.watchPlaying && typeof A.watchDiag === 'function') {
+        try { A.watchDiag(v); } catch { /* never break accrual */ }
+      }
       if (state.watchPlaying) {
         state.watched = (state.watched || 0) + 5;
         const now = Date.now();
