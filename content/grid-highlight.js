@@ -55,18 +55,20 @@
       card: 'article',
     },
     facebook: {
-      // Reel links ONLY, and no card walk. Two wider attempts both failed on his profile
-      // (owner, 2026-08-19): enumerating URL shapes missed the feed's /posts/<pfbid>
-      // permalink, and scanning any long number in a link then ringed a COMMENT, because
-      // a comment's permalink legitimately carries the post's own id and Facebook marks
-      // comments [role="article"] just like stories. A ring on the wrong element is worse
-      // than no ring: its badge claims that element pays.
-      //
-      // So this stays narrow until someone can read a logged-in profile's DOM and say
-      // what the story actually links to. A reel link rings; anything else does not.
+      // The reel link was always correct: a story's permalink IS its timestamp, and it
+      // points at /reel/<id> (owner supplied the real URL, 2026-08-19). The reason his
+      // profile never highlighted was the RING BOX, not the match — that timestamp is a
+      // ~30x16px anchor, Facebook has no thumbnail inside it to grow to, and the caller
+      // silently drops any box under MIN_BOX. So it matched every time and was thrown
+      // away every time.
       sel: 'a[href*="/reel/"]',
       ref: (u) => (u.pathname.match(/\/reel\/(\d+)/) || [])[1] || '',
       single: (p) => /^\/reel\/\d+/.test(p) || /^\/[^/]+\/(videos|posts)\//.test(p) || /^\/watch\/?$/.test(p),
+      // Grow to the story by SIZE rather than by selector. [role="article"] was tried and
+      // resolved to a COMMENT, because Facebook tags comments that way too; there is no
+      // stable class or role for the story itself. Size is the one property that cannot
+      // be renamed out from under us.
+      grow: true,
     },
   };
 
@@ -180,6 +182,22 @@
   // the caller, so a layout we do not recognise simply does not ring.
   function ringBox(anchor) {
     try {
+      if (CFG.grow) {
+        // Walk up while the box still looks like ONE post: big enough to be a story
+        // rather than the header row it starts in, small enough not to have swallowed the
+        // feed around it. The largest box that still qualifies is the story.
+        // FIRST ancestor big enough to be a story, not the largest: the largest keeps
+        // growing through the feed column and into <body>, which a check against the
+        // viewport does not stop, because a two-post feed is still shorter than 1.8
+        // screens (measured, not assumed).
+        const vh = window.innerHeight || 800;
+        let el = anchor.parentElement;
+        for (let hops = 0; el && hops < 16; el = el.parentElement, hops++) {
+          const r = el.getBoundingClientRect();
+          if (r.height > vh * 1.8) break;      // nothing this tall is one post
+          if (r.width >= 260 && r.height >= 180) return el;
+        }
+      }
       if (CFG.card) {
         // OUTERMOST matching card: a quoted tweet nests an <article> inside the real one,
         // and ringing the quote block instead of the tweet would point at the wrong post.
