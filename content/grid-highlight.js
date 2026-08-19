@@ -182,10 +182,13 @@
   // the caller, so a layout we do not recognise simply does not ring.
   function ringBox(anchor) {
     try {
-      if (CFG.grow) {
-        // Walk up while the box still looks like ONE post: big enough to be a story
-        // rather than the header row it starts in, small enough not to have swallowed the
-        // feed around it. The largest box that still qualifies is the story.
+      // Grow ONLY from an anchor too small to ring on its own. Facebook is both layouts
+      // at once: on the reels grid the anchor IS the tile and needs no growing, while a
+      // feed story's permalink is a 21px timestamp that does. Growing unconditionally
+      // ringed the entire reels grid as a single tile (owner, 2026-08-19), because the
+      // first ancestor above a grid tile is the grid itself.
+      const own = anchor.getBoundingClientRect();
+      if (CFG.grow && (own.width < MIN_BOX || own.height < MIN_BOX)) {
         // FIRST ancestor big enough to be a story, not the largest: the largest keeps
         // growing through the feed column and into <body>, which a check against the
         // viewport does not stop, because a two-post feed is still shorter than 1.8
