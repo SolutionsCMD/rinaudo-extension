@@ -30,7 +30,11 @@ const PLATFORM_HOME = {
   youtube: 'https://www.youtube.com/@Mizkif',
   tiktok: 'https://www.tiktok.com/@realmizkif',
   instagram: 'https://www.instagram.com/realmizkif/',
-  facebook: 'https://www.facebook.com/realmizkif',
+  // The REELS TAB, not the profile: the grid module can only ring the reels grid, because
+  // on the profile feed a story's permalink is injected on hover and there is nothing to
+  // match until then (owner, 2026-08-19). Only reached as a fallback — a Facebook earn
+  // toast still opens the reel itself via postLink, which is where engage-core binds.
+  facebook: 'https://www.facebook.com/realmizkif/reels',
   twitter: 'https://x.com/REALMizkif',
   x: 'https://x.com/REALMizkif',
 };
