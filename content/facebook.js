@@ -202,7 +202,31 @@
       }
       return null;
     },
-    getVideoEl() { return document.querySelector('video'); },
+    // Facebook keeps the reels you have already scrolled past MOUNTED, so
+    // "the first <video> in the document" is the reel you left: paused, already watched,
+    // and never accruing again. Reported 2026-08-19 as "second reel is not registering at
+    // all", widget stuck on "Watch 0:00 / 0:19 paused" while the reel played. Instagram and
+    // TikTok keep the plain first-video read: their permalinks carry exactly one video, and
+    // this stacking is a Facebook reel-viewer behaviour.
+    //
+    // Prefer a video that is actually playing; among equals (or if none is playing yet,
+    // which is the case for a reel still buffering when the card binds) take the one
+    // filling most of the viewport. Falls back to the old read if anything throws.
+    getVideoEl() {
+      try {
+        const vids = Array.from(document.querySelectorAll('video'));
+        if (vids.length <= 1) return vids[0] || null;
+        const onScreen = (v) => {
+          const r = v.getBoundingClientRect();
+          const h = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+          const w = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+          return h * w;
+        };
+        const playing = vids.filter((v) => !v.paused && !v.ended);
+        const pool = playing.length ? playing : vids;
+        return pool.reduce((best, v) => (onScreen(v) > onScreen(best) ? v : best), pool[0]);
+      } catch (e) { return document.querySelector('video'); }
+    },
 
     // --- Repost ---------------------------------------------------------------
     // Reshare is a two-step gesture: open the post's Share affordance, then click "Share now"
