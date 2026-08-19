@@ -146,3 +146,21 @@ console.log('grid highlight OK');
   assert.equal(G.isSingleVideoPath('facebook', '/realmizkif/'), false);
   console.log('ok facebook post shapes');
 }
+
+// Candidate ids: enumerating Facebook's URL shapes did not hold, so any long number in
+// the href is tried and the one that IS a served target wins.
+{
+  const FB = 'https://www.facebook.com';
+  const c = (p) => G.refCandidates('facebook', FB + p, FB);
+  // The plain shapes still put the real id first.
+  assert.equal(c('/reel/4562594350730390')[0], '4562594350730390');
+  assert.equal(c('/realmizkif/videos/1093084896737669/')[0], '1093084896737669');
+  // A feed permalink whose path carries a pfbid token but whose query still holds the id.
+  assert.ok(c('/realmizkif/posts/pfbid02Xk?__cft__=1&story_fbid=2502817863524426')
+    .includes('2502817863524426'), 'id in query must be a candidate');
+  // A bare pfbid link offers no numeric id, which is not an error, just no match.
+  assert.deepEqual(c('/realmizkif/posts/pfbid02XkQq').filter((x) => /^\d+$/.test(x)), []);
+  // Other platforms keep exactly one candidate: the widening is Facebook-only.
+  assert.deepEqual(G.refCandidates('x', 'https://x.com/i/status/1899', 'https://x.com'), ['1899']);
+  console.log('ok facebook ref candidates');
+}

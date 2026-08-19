@@ -61,7 +61,10 @@
       // nothing there and his profile highlighted none of them (owner, 2026-08-19).
       // These are exactly the shapes facebook.js getRef already accepts, kept in step so
       // a page the grid module rings is a page engage-core can then bind.
-      sel: 'a[href*="/reel/"], a[href*="/videos/"], a[href*="/posts/"], a[href*="v="], a[href*="story_fbid="]',
+      sel: 'a[href*="/reel/"], a[href*="/videos/"], a[href*="/posts/"], a[href*="/watch"], a[href*="v="], a[href*="story_fbid="], a[href*="video_id"]',
+      // A feed post's permalink is its tiny timestamp, so ring the post itself. Facebook
+      // marks each feed story [role="article"], the same shape X and Instagram use.
+      card: '[role="article"]',
       ref: (u) => {
         const path = u.pathname || '';
         let m = path.match(/\/reel\/(\d+)/);
@@ -89,6 +92,25 @@
       if (!cfg) return '';
       return cfg.ref(new URL(href, origin || 'https://example.com')) || '';
     } catch { return ''; }
+  }
+  // Every id a link could be carrying, most specific first. Enumerating Facebook's URL
+  // shapes did not hold: the same reel is linked as /reel/<id>, /<page>/videos/<id>, a
+  // ?v= watch link, a story_fbid permalink, and inside the feed as a /posts/<pfbid>
+  // token that contains no id at all, while OTHER links in the same post still carry the
+  // numeric one (owner, 2026-08-19: a post that is a live target still did not ring).
+  //
+  // So the caller tries every long number in the href and keeps the one that IS a served
+  // target. A stray number cannot produce a false ring, because it has to equal a target
+  // id exactly, and comment or profile ids never do.
+  function refCandidates(platform, href, origin) {
+    const primary = refFor(platform, href, origin);
+    if (platform !== 'facebook') return primary ? [primary] : [];
+    const out = primary ? [primary] : [];
+    try {
+      const digits = String(href).match(/\d{8,}/g) || [];
+      for (const d of digits) if (!out.includes(d)) out.push(d);
+    } catch { /* ignore */ }
+    return out;
   }
   // On a single-post page engage-core binds the post and draws the button rings, so the
   // grid module stays silent there and the two never double-ring one page.
@@ -122,7 +144,7 @@
     const left = hit && Number(hit.remaining) > 0 ? Number(hit.remaining) : 0;
     return left > 0 ? '+' + left : '✓';
   }
-  try { self.RGC_GRID_HIGHLIGHT = { refFor, isSingleVideoPath, badgeText, remainingFor }; } catch { /* ignore */ }
+  try { self.RGC_GRID_HIGHLIGHT = { refFor, refCandidates, isSingleVideoPath, badgeText, remainingFor }; } catch { /* ignore */ }
 
   const HOST = location.hostname;
   const PLATFORM =
@@ -161,6 +183,7 @@
   // names constantly, but these URL shapes are effectively permanent.
   const isSingleVideoPage = () => isSingleVideoPath(PLATFORM, location.pathname);
   const refFromHref = (href) => refFor(PLATFORM, href, location.origin);
+  const refsFromHref = (href) => refCandidates(PLATFORM, href, location.origin);
 
   const TILE_SELECTOR = CFG.sel;
 
@@ -275,10 +298,14 @@
     let anchors;
     try { anchors = document.querySelectorAll(TILE_SELECTOR); } catch { return out; }
     for (const a of anchors) {
-      const ref = refFromHref(a.getAttribute('href') || '');
-      if (!ref || seen.has(ref)) continue;      // one ring per video, not per nested anchor
-      const hit = eligible.get(ref);
-      if (!hit) continue;
+      // First candidate that is actually a served target wins; a link carrying none is
+      // simply not one of ours.
+      let ref = '', hit = null;
+      for (const cand of refsFromHref(a.getAttribute('href') || '')) {
+        const h = eligible.get(cand);
+        if (h) { ref = cand; hit = h; break; }
+      }
+      if (!ref || !hit || seen.has(ref)) continue; // one ring per video, not per nested anchor
       const el = ringBox(a);
       const rect = el.getBoundingClientRect();
       if (rect.width < MIN_BOX || rect.height < MIN_BOX) continue; // collapsed / not laid out yet
