@@ -187,6 +187,15 @@ self.EngageCore = (function () {
       } catch { return false; }
     };
     const adapterReposted = () => { try { return typeof A.isReposted === 'function' && !!A.isReposted(); } catch { return false; } };
+    // Same rule for the like self-heal as focalReposted: with no click behind it, a poll
+    // must not credit off a control it cannot attribute to THIS post. Adapters without a
+    // focal read keep the document-wide one they have always used.
+    const focalLiked = () => {
+      try {
+        if (typeof A.isLikedFocal !== 'function') return !!A.isLiked();
+        return A.isLikedFocal() === true;
+      } catch { return false; }
+    };
     // The all-done bonus pays only for the COMPLETE set, so the row may only appear when
     // every action the server counts on this platform is reachable in this build. TikTok
     // and Instagram advertise repost / send in their capability matrix, but their adapters
@@ -1086,7 +1095,7 @@ self.EngageCore = (function () {
       // watch loop below.
       try { ensureShareRing(); } catch { /* safe degrade: no ring */ }
       if (!state || state.ref !== A.getRef()) return;
-      if (A.actions.like && state.likeS === 'idle' && A.isLiked()) fireEngagement('like');
+      if (A.actions.like && state.likeS === 'idle' && focalLiked()) fireEngagement('like');
       // Self-heal a repost the platform shows as done but the server never recorded: the
       // credit request failed (network blip, token refresh, a 500), or the member reposted
       // before this card finished setting up. Same idea as the like poll above, and the
@@ -1100,6 +1109,13 @@ self.EngageCore = (function () {
       if (repostCapable() && state.repostS === 'idle' && Date.now() >= (state.repostHealAt || 0)
           && focalReposted()) {
         state.repostHealAt = Date.now() + 60000;
+        try {
+          if (A.platform === 'x' && typeof self.RGCXRepostDbg === 'function') {
+            self.RGCXRepostDbg({ path: 'self-heal', ref: state.ref, url: location.pathname,
+                                 focal: typeof A.isRepostedFocal === 'function' ? A.isRepostedFocal() : null,
+                                 docWide: adapterReposted() });
+          }
+        } catch { /* diagnostics must never block a credit */ }
         fireEngagement('repost');
       }
       if (!A.actions.watch) return;

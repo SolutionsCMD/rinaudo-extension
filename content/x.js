@@ -30,6 +30,18 @@
       return '';
     },
     isLiked() { return !!document.querySelector('[data-testid="unlike"]'); },
+    // Strict focal read for the like SELF-HEAL, the same shape as isRepostedFocal below.
+    // isLiked() above is document-wide, which is fine for the click-driven path (a click
+    // says which post is meant) but wrong for a poll that credits with no click behind it:
+    // a /status/ page carries the whole reply thread, and once the reply-modal fallback in
+    // getRef() keeps a ref alive on the HOME FEED, "any [data-testid=unlike] in the
+    // document" is true as soon as the member has liked anything on screen. That credited
+    // the focal post for a like it never got. Null means "cannot judge, do not heal".
+    isLikedFocal() {
+      const card = articleForRef(this.getRef());
+      if (!card) return null;
+      try { return !!card.querySelector('[data-testid="unlike"]'); } catch { return null; }
+    },
     commentSubmitTarget(t) { return t && t.closest ? t.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]') : null; },
     // On X, plain Enter is a newline — replies post via the Reply button OR Cmd/Ctrl+Enter.
     submitOnEnter: false,
@@ -157,6 +169,12 @@
   // While a reply is being composed, report what the user clicks/keys so we can see which
   // control X uses to submit — element testids + lengths ONLY, never the comment text.
   function dbg(data) { try { chrome.runtime.sendMessage({ type: 's2Debug', kind: 'xcomment', data }); } catch { /* ignore */ } }
+  // Repost diagnostics. X reposts started crediting 2026-08-17 and immediately ran ~80% of
+  // likers, well above the repost count on the posts themselves, with no way to tell which
+  // code path claimed each one. Every repost credit now records the path and what the DOM
+  // said at that moment, the same way xcomment made the reply bug visible.
+  function rdbg(data) { try { chrome.runtime.sendMessage({ type: 's2Debug', kind: 'xrepost', data }); } catch { /* ignore */ } }
+  self.RGCXRepostDbg = rdbg;
   document.addEventListener('click', (e) => {
     const txt = (adapter.commentText() || '').trim();
     if (!txt) return; // only while writing a reply
@@ -316,6 +334,9 @@
       whenReposted(ref, () => {
         if (firedRepost.has(ref)) return;
         firedRepost.add(ref);
+        rdbg({ path: 'feed-confirm', ref, onStatus: onStatusPage(),
+               cardFound: !!articleForRef(ref), focal: adapter.isRepostedFocal(),
+               docWide: adapter.isReposted() });
         if (pendingRepost && pendingRepost.ref === ref) pendingRepost = null;
         chrome.runtime.sendMessage({ type: 's2Engagement', platform: 'x', action: 'repost', ref })
           .then((r) => {
