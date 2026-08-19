@@ -100,10 +100,10 @@ async function initNotifToggles() {
 }
 
 // "Earn now": the live earn targets, fetched through the service worker (it holds the token).
-// ONLY targets the server marks `listed` are drawn. Unlisted means hidden or honeypot, and a
-// honeypot is bait for scripted claimers: showing one to an honest member with an Open button
-// would walk them into a trap. A payload with no `listed` field is treated as unlisted, so an
-// older or partial response hides rows instead of exposing them.
+// ONLY targets the server marks `listed` are drawn. The server decides what a member may be
+// shown; anything it has not listed stays out of this list. A payload with no `listed` field
+// is treated as unlisted, so an older or partial response hides rows instead of exposing
+// them.
 const EARN_PLATFORM = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', x: 'X' };
 const EARN_MAX_ROWS = 6;
 const EARN_LABEL_CHARS = 40;

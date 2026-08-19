@@ -15,8 +15,7 @@ work earlier today).
   has no repost hook because YouTube has no repost action. So "buttons that pay" is DONE
   on the post page — this plan does not touch that machinery except task 3.
 - **Grid rings on YouTube + TikTok** (content/grid-highlight.js, shipped 1.139): rings
-  eligible video tiles on profiles/feeds/search, `+N` or `✓` badge, `listed===true`
-  honeypot gate, MAX 12 rings, href-shape matching, silent on single-post pages.
+  eligible video tiles on profiles/feeds/search, `+N` or `✓` badge, `listed===true` gate, MAX 12 rings, href-shape matching, silent on single-post pages.
 
 ## The gaps this plan closes
 
@@ -97,7 +96,7 @@ which also gives the modal a visible ring for the path fixed in 1.140.
 
 ### Explicitly kept rules
 
-- `listed === true` only — a honeypot or hidden post must never ring anywhere.
+- `listed === true` only — anything the server has not listed must never ring anywhere.
 - MAX_RINGS 12 per page, nearest-viewport first (grid module).
 - Any throw tears all rings down. No ring beats a broken page.
 - Single-post pages: grid module silent, engage-core owns.

@@ -606,9 +606,8 @@ async function checkNewTargets() {
     const t = (data.targets || []).find((x) => `${x.platform}:${x.ref}` === key);
     if (!t) continue;
     // Only targets the server marks `listed` may be advertised, the same filter the
-    // popup's Earn now list uses. Unlisted means hidden or honeypot, and a honeypot is
-    // bait for scripted claimers: a toast with a working "Open post" button would walk an
-    // honest member straight into one. A payload with no `listed` field counts as
+    // popup's Earn now list uses. The server decides what a member may be shown; anything
+    // it has not listed must never be surfaced. A payload with no `listed` field counts as
     // unlisted, so an older or partial response stays quiet instead of exposing a target.
     // Not marked seen, so a target that is listed later can still announce itself then.
     if (t.listed !== true) continue;

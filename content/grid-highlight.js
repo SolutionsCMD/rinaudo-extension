@@ -198,10 +198,10 @@
     if (!data || !Array.isArray(data.targets)) return; // keep whatever we had; never clear on a blip
     const next = new Map();
     for (const t of data.targets) {
-      // `listed === true` ONLY. A hidden target is deliberately unadvertised and a honeypot
-      // is bait for scripted claimers — a gold ring on either would advertise exactly what
-      // must stay quiet. Same gate engage-core uses before binding a post, and a payload
-      // with no `listed` field counts as unlisted.
+      // `listed === true` ONLY. The server decides what may be shown to a member, and a
+      // target it has not listed must never be surfaced anywhere in the UI. Same gate
+      // engage-core uses before binding a post, and a payload with no `listed` field
+      // counts as unlisted.
       if (t.platform !== PLATFORM || t.listed !== true || !t.ref) continue;
       next.set(String(t.ref), { remaining: remainingFor(t, data) });
     }

@@ -14,7 +14,7 @@
 //
 // The isolated world holds the other half, the click intent. Neither signal credits alone.
 // A console user can forge the postMessage, which puts a repost at the same trust tier as
-// a like (client attested); honeypot targets and the server's repost burst sweep are the
+// a like (client attested); unlisted target targets and the server's repost burst sweep are the
 // backstop. What this makes impossible is UI level faking: opening the repost menu and
 // clicking nothing, which is the cheat that matters here.
 //

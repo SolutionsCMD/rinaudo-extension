@@ -1,5 +1,5 @@
 // Grid highlight: the parts that break when a site changes a URL shape, plus the two
-// rules that carry real consequences (never ring a honeypot, never double-ring a page).
+// rules that carry real consequences (never ring an unlisted target, never double-ring).
 // The ring drawing itself needs a real browser and is checked by hand on release.
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -47,14 +47,13 @@ assert.equal(G.isSingleVideoPath('tiktok', '/@realmizkif/video/76750445157611963
 assert.equal(G.isSingleVideoPath('tiktok', '/@realmizkif'), false);
 assert.equal(G.isSingleVideoPath('tiktok', '/'), false);
 
-// --- The honeypot gate. This is the rule with teeth: ringing an unlisted target would
-// advertise a hidden post, and ringing a honeypot would walk an honest member into a trap
-// built to catch scripted claimers. Mirrors the filter in loadTargets, and a payload with
-// no `listed` field must count as unlisted.
+// --- The listed gate. This is the rule with teeth: the server decides what a member may
+// be shown, and anything it has not listed must never be surfaced. Mirrors the filter in
+// loadTargets, and a payload with no `listed` field must count as unlisted.
 const PLATFORM = 'youtube';
 const keep = (t) => t.platform === PLATFORM && t.listed === true && !!t.ref;
 assert.equal(keep({ platform: 'youtube', ref: 'a', listed: true }), true);
-assert.equal(keep({ platform: 'youtube', ref: 'b', listed: false }), false, 'honeypot / hidden must never ring');
+assert.equal(keep({ platform: 'youtube', ref: 'b', listed: false }), false, 'an unlisted target must never ring');
 assert.equal(keep({ platform: 'youtube', ref: 'c' }), false, 'no listed field counts as unlisted');
 assert.equal(keep({ platform: 'tiktok', ref: 'd', listed: true }), false, 'other platform');
 assert.equal(keep({ platform: 'youtube', ref: '', listed: true }), false);

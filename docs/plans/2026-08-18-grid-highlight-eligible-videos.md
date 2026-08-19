@@ -43,9 +43,9 @@ Behaviour:
 
 1. On load and on SPA navigation, fetch `s2Targets` once, build
    `Map<ref, {reward, watchDone}>` from targets where `platform` matches AND
-   `listed === true`. The `listed` gate is non-negotiable: ringing a hidden target or a
-   honeypot on the public grid would advertise exactly what must stay unadvertised
-   (engage-core.js:953 documents the same rule for binding).
+   `listed === true`. The `listed` gate is non-negotiable: the server decides what may be shown, and a
+   target it has not listed must never be surfaced (engage-core.js:953 documents the
+   same rule for binding).
 2. Scan the page for anchor tiles by HREF SHAPE, never by class name (both sites churn
    class names; href shapes are stable):
    - YouTube: `a[href*="/watch?v="]`, `a[href^="/shorts/"]` — dedupe per enclosing
