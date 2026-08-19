@@ -45,6 +45,28 @@
     return 'unknown';
   }
 
+  // When the member last pressed a share control OUTSIDE any dialog, which is what opens
+  // the share sheet. Used only to decide whether an open dialog is that sheet.
+  //
+  // LANGUAGE: the label test is English-only, same limit as repostTarget's "Share now". On a
+  // localised build this simply never arms and the sheet's options are not ringed. That is
+  // the safe direction: no ring beats a ring on the wrong thing, and the ring has never been
+  // required to earn (crediting is the two-signal path, untouched by this).
+  let shareClickAt = 0;
+  const SHARE_SHEET_MS = 20000;
+  function isShareControl(t) {
+    try {
+      const el = t && t.closest ? t.closest('[role="button"], button, [aria-label]') : null;
+      if (!el || el.closest('[role="dialog"]')) return false; // a click inside a sheet is not what opened it
+      return /share|send this/i.test((el.getAttribute('aria-label') || '').trim());
+    } catch { return false; }
+  }
+  try {
+    document.addEventListener('click', (e) => {
+      try { if (isShareControl(e.target)) shareClickAt = Date.now(); } catch { /* selector drift */ }
+    }, true);
+  } catch { /* a listener that cannot bind must never break the adapter */ }
+
   const adapter = {
     platform: 'facebook',
     // HARD GATE: no tickets at all from Facebook without a signed-in session.
@@ -269,6 +291,13 @@
     // Step two of a reshare: the options inside the open share sheet.
     repostDialogHighlightTargets() {
       try {
+        if (!this.getRef()) return null;
+        // Facebook gives EVERY popover role="dialog", the account switcher included, so
+        // "the first dialog on the page" painted three gold +5 rings over a member's list
+        // of accounts (reported 2026-08-19). A dialog counts as the share sheet only when
+        // the member has just clicked a share control, so the ring follows the action
+        // instead of guessing from the container.
+        if (Date.now() - shareClickAt > SHARE_SHEET_MS) return null;
         const dlg = document.querySelector('[role="dialog"]');
         if (!dlg) return null;
         return Array.from(dlg.querySelectorAll('[role="button"], button'))
