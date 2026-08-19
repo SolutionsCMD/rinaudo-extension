@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.148",
+  "version": "1.149",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "permissions": [
     "storage",

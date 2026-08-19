@@ -598,6 +598,7 @@ async function checkNewTargets() {
   const seen = new Set(store.seenTargets || []);
   const notifUrls = store.notifUrls || {};
   const prefs = store.notifPrefs;
+  const fire = [];
   const firstRun = seen.size === 0;
   // On the very first load, silently seed everything as seen (no install spam).
   if (firstRun) { refs.forEach((k) => seen.add(k)); await chrome.storage.local.set({ seenTargets: [...seen], notifUrls }); return; }
@@ -623,6 +624,17 @@ async function checkNewTargets() {
     if (inNightWindow()) continue;
     const id = `target-${key}`;
     notifUrls[id] = postLink(t.url, t.platform, t.channel);
+    fire.push({ id, t });
+  }
+  // CLAIM BEFORE TOASTING. This write used to happen after the whole loop, with a network
+  // fetch (earnToastImage) awaited inside it. An MV3 service worker can be terminated at
+  // any await, and two polls 30s apart can overlap while one is still fetching — either
+  // way the next run re-read a `seen` set that never included what was already toasted and
+  // sent it again. Members reported 4-5 copies of the same notification, "always"
+  // (2026-08-19). Persisting first means a killed worker costs a toast rather than
+  // repeating one, which is the right way round.
+  await chrome.storage.local.set({ seenTargets: [...seen], notifUrls });
+  for (const { id, t } of fire) {
     // Exact ticket value comes from the server per target (watch payout). Fall back to a
     // generic line if it's missing (older server).
     const n = Number(t.reward) || 0;
@@ -637,7 +649,6 @@ async function checkNewTargets() {
       priority: 2,
     });
   }
-  await chrome.storage.local.set({ seenTargets: [...seen], notifUrls });
 }
 
 async function checkManualPush() {
@@ -655,6 +666,11 @@ async function checkManualPush() {
   const id = `manual-push-${push.id}`;
   const urls = notifUrls || {};
   urls[id] = homepageFor(push.url);
+  // Claim it BEFORE the toast, for the reason spelled out in checkNewTargets: the write
+  // used to land after notify(), so a terminated or overlapping worker re-sent the same
+  // push. A 24h TTL made that window large — the push stays offerable all day, so every
+  // lost write became another copy.
+  await chrome.storage.local.set({ seenPushIds: [...seen], notifUrls: urls });
 
   // Icon follows the pushed link's platform. It was hardcoded to YouTube, so an X post
   // went out wearing a YouTube icon (owner, 2026-08-17).
@@ -673,8 +689,6 @@ async function checkManualPush() {
     message: push.message || 'Open the app and search for it.',
     priority: 2,
   });
-
-  await chrome.storage.local.set({ seenPushIds: [...seen], notifUrls: urls });
 }
 
 // --- Update check: compare the server's latest published version to ours ---
@@ -765,8 +779,15 @@ async function sendSelectorHealth() {
 // 6 x 30s = roughly every 3 minutes.
 const OFFLINE_SKIP = 6;
 
+let polling = false;
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== 'poll') return;
+  // One poll at a time. The handler is async and Chrome does not serialise alarm
+  // invocations, so a slow run (an image fetch, a stalled request) was still in flight
+  // when the next 30s alarm started a second one, and both read the same pre-toast state.
+  if (polling) return;
+  polling = true;
+  try {
   // Run sequentially, NOT concurrently: checkSignals and checkNewTargets both
   // read-modify-write the shared notifUrls map in storage. Run in parallel, one writes
   // back a stale copy and clobbers the other's click-URL — so a target notification loses
@@ -799,6 +820,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   await checkLatestVersion();
   await checkS2Status();
   await sendSelectorHealth();
+  } finally { polling = false; }
 });
 // Also check right away on SW startup, so the badge appears without waiting for the alarm.
 checkLatestVersion();
