@@ -55,33 +55,17 @@
       card: 'article',
     },
     facebook: {
-      // Every post shape, not just /reel/. The targets ARE reels, but Facebook does not
-      // link to them as reels everywhere: on his page the same reel appears in the Posts
-      // feed as /<page>/videos/<id> or a ?v= watch link, so a reel-only selector matched
-      // nothing there and his profile highlighted none of them (owner, 2026-08-19).
-      // These are exactly the shapes facebook.js getRef already accepts, kept in step so
-      // a page the grid module rings is a page engage-core can then bind.
-      sel: 'a[href*="/reel/"], a[href*="/videos/"], a[href*="/posts/"], a[href*="/watch"], a[href*="v="], a[href*="story_fbid="], a[href*="video_id"]',
-      // A feed post's permalink is its tiny timestamp, so ring the post itself. Facebook
-      // marks each feed story [role="article"], the same shape X and Instagram use.
-      card: '[role="article"]',
-      ref: (u) => {
-        const path = u.pathname || '';
-        let m = path.match(/\/reel\/(\d+)/);
-        if (m) return m[1];
-        m = path.match(/\/[^/]+\/videos\/(\d+)/);
-        if (m) return m[1];
-        m = path.match(/\/[^/]+\/posts\/([^/?#]+)/);
-        if (m) return m[1];
-        // Read from the URL's own params, never a regex over the whole href: a
-        // ?comment_id= or a tracking param carries digits too, and the last long number
-        // in a link is not the post.
-        const v = u.searchParams.get('v');
-        if (v && /^\d+$/.test(v)) return v;
-        const story = u.searchParams.get('story_fbid');
-        if (story && /^\d+$/.test(story)) return story;
-        return '';
-      },
+      // Reel links ONLY, and no card walk. Two wider attempts both failed on his profile
+      // (owner, 2026-08-19): enumerating URL shapes missed the feed's /posts/<pfbid>
+      // permalink, and scanning any long number in a link then ringed a COMMENT, because
+      // a comment's permalink legitimately carries the post's own id and Facebook marks
+      // comments [role="article"] just like stories. A ring on the wrong element is worse
+      // than no ring: its badge claims that element pays.
+      //
+      // So this stays narrow until someone can read a logged-in profile's DOM and say
+      // what the story actually links to. A reel link rings; anything else does not.
+      sel: 'a[href*="/reel/"]',
+      ref: (u) => (u.pathname.match(/\/reel\/(\d+)/) || [])[1] || '',
       single: (p) => /^\/reel\/\d+/.test(p) || /^\/[^/]+\/(videos|posts)\//.test(p) || /^\/watch\/?$/.test(p),
     },
   };
@@ -103,15 +87,13 @@
   // target. A stray number cannot produce a false ring, because it has to equal a target
   // id exactly, and comment or profile ids never do.
   function refCandidates(platform, href, origin) {
+    // One parsed ref per link, every platform. The Facebook widening that lived here
+    // matched a comment's permalink and ringed the comment (owner, 2026-08-19); see the
+    // facebook entry above.
     const primary = refFor(platform, href, origin);
-    if (platform !== 'facebook') return primary ? [primary] : [];
-    const out = primary ? [primary] : [];
-    try {
-      const digits = String(href).match(/\d{8,}/g) || [];
-      for (const d of digits) if (!out.includes(d)) out.push(d);
-    } catch { /* ignore */ }
-    return out;
+    return primary ? [primary] : [];
   }
+
   // On a single-post page engage-core binds the post and draws the button rings, so the
   // grid module stays silent there and the two never double-ring one page.
   function isSingleVideoPath(platform, pathname) {
