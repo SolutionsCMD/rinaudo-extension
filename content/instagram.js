@@ -28,7 +28,37 @@
     },
     // Broad on purpose — any button/svg click arms the sampler, but isLiked() (red heart)
     // is what actually credits, so a click on a non-like control never fires a like.
-    likeTarget(t) { return t && t.closest ? t.closest('[role="button"], button, svg') : null; },
+    //
+    // EXCEPT the comment submit. engage-core uses likeTarget as an EARLY-RETURN GUARD in
+    // its click path (a TikTok like sits in the same action bar as the comment box, so a
+    // like click must not be read as a comment). Instagram's Post control is a
+    // role="button", so this broad match claimed it, the handler returned, and neither
+    // commentSubmitTarget nor the composer-cleared fallback ever ran: a comment posted by
+    // CLICKING never credited, while one posted by pressing Enter did, because that is a
+    // separate listener. Members saw it as "Instagram comments don't pay" — reported by
+    // Dodger and by WalcoholicWalrus, who had 0 of 9 Instagram comments credited while
+    // scoring 27/27 on YouTube, 12/12 on Facebook and 6/6 on X (2026-08-20).
+    //
+    // Deliberately narrow: only a control that IS the comment submit is refused, so every
+    // other button and svg still arms the like sampler exactly as before.
+    likeTarget(t) {
+      if (!t || !t.closest) return null;
+      const b = t.closest('[role="button"], button, svg');
+      if (!b) return null;
+      // Instagram's action-bar controls are ICONS (an svg heart, paper plane, bookmark);
+      // the comment submit is a TEXT button ("Post", "Plaatsen", "Publier"). So an
+      // icon-less control that also answers commentSubmitTarget is the submit, never a
+      // like. Checking for the icon rather than the label keeps this language-agnostic,
+      // and checking it BEFORE commentSubmitTarget matters: that helper only asks whether
+      // the button shares an ancestor with the composer within 8 levels, and on a post
+      // page the <article> contains both, so on its own it would disown the heart too
+      // (caught in test, 2026-08-20).
+      const isIcon = b.tagName.toLowerCase() === 'svg' || !!b.querySelector('svg');
+      if (!isIcon) {
+        try { if (this.commentSubmitTarget && this.commentSubmitTarget(t)) return null; } catch (e) { /* keep the like */ }
+      }
+      return b;
+    },
     commentSubmitTarget(t) {
       const b = t && t.closest ? t.closest('[role="button"], button') : null;
       if (!b) return null;
