@@ -53,24 +53,38 @@
       // the button shares an ancestor with the composer within 8 levels, and on a post
       // page the <article> contains both, so on its own it would disown the heart too
       // (caught in test, 2026-08-20).
+      // A real like click always carries the svg heart, so an ICON-LESS control is never
+      // a like on Instagram. Refused outright rather than by asking commentSubmitTarget:
+      // that helper is deliberately loose (see below) and consulting it here disowned the
+      // heart itself on the first attempt at this fix.
       const isIcon = b.tagName.toLowerCase() === 'svg' || !!b.querySelector('svg');
-      if (!isIcon) {
-        try { if (this.commentSubmitTarget && this.commentSubmitTarget(t)) return null; } catch (e) { /* keep the like */ }
-      }
-      return b;
+      return isIcon ? b : null;
     },
     commentSubmitTarget(t) {
       const b = t && t.closest ? t.closest('[role="button"], button') : null;
       if (!b) return null;
-      // Confirm the button shares a container with the composer (language-agnostic).
-      // Instagram doesn't use <form> or class="comment", so walk up ~8 levels. The
-      // composer is a contenteditable box on current Instagram, a <textarea> on older
-      // markup, so accept either or the button is never recognised.
+      // The submit sits BESIDE the composer, so look for an ancestor that holds the
+      // composer as a DIRECT CHILD rather than one that merely contains it somewhere.
+      //
+      // "Contains it within N levels" cannot work here at any N: on a post page the
+      // <article> holds the composer AND the header, the action bar and every comment, so
+      // Follow, Reageren and see-translation all answered "submit". That is the FAST path
+      // in engage-core, which credits with NO confirmation — a member typing a comment and
+      // then clicking Follow would have been paid for a comment they never posted.
+      //
+      // It was unreachable while Instagram's like guard claimed every button click, so
+      // fixing that guard is what exposed it (2026-08-20).
+      //
+      // Nothing is lost if Instagram nests the button further away: an unrecognised click
+      // falls through to watchForPostedComment, which credits only once the composer has
+      // actually emptied. Two signals rather than one, and a Follow click never empties it.
       let el = b;
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 4 && el; i++) {
         el = el.parentElement;
         if (!el) break;
-        if (el.querySelector(COMPOSER_SEL)) return b;
+        for (const child of el.children) {
+          try { if (child.matches && child.matches(COMPOSER_SEL)) return b; } catch (e) { /* ignore */ }
+        }
       }
       return null;
     },
