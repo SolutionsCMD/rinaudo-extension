@@ -68,7 +68,27 @@
       var m = hay.match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/);
       if (m) return m[1];
       m = hay.match(/"fb_api_req_friendly_name"\s*:\s*"([^"]+)"/);
-      return m ? m[1] : '';
+      if (m) return m[1];
+      // Two more encodings, added 2026-08-20. The fbrepost probe showed 42 requests
+      // logged as (unnamed:string) belonging to just TWO accounts, one of them a member
+      // who reported that Facebook reposts never credit for her: her click intent arms
+      // fine, so the missing half is naming the mutation. Everyone else's requests come
+      // back properly named and their reposts credit at 70%.
+      //
+      //  · JSON with escaped quotes, which is how the field survives being nested inside
+      //    another JSON string: \"fb_api_req_friendly_name\":\"Name\"
+      //  · the whole body percent-encoded, where the quotes arrive as %22
+      m = hay.match(/\\"fb_api_req_friendly_name\\"\s*:\s*\\"([^\\"]+)\\"/);
+      if (m) return m[1];
+      if (hay.indexOf('%22fb_api_req_friendly_name%22') !== -1 || hay.indexOf('fb_api_req_friendly_name%3D') !== -1) {
+        try {
+          var dec = decodeURIComponent(hay);
+          m = dec.match(/(?:[?&])fb_api_req_friendly_name=([^&]*)/)
+            || dec.match(/"fb_api_req_friendly_name"\s*:\s*"([^"]+)"/);
+          if (m) return m[1];
+        } catch (e) { /* undecodable: fall through to unnamed */ }
+      }
+      return '';
     }
 
     var SIGS = [

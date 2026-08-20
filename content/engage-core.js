@@ -610,6 +610,12 @@ self.EngageCore = (function () {
                   name: (d.meta && d.meta.name) || '',
                   ref: state.ref,
                   armed: Date.now() < pendingRepostUntil, // did they click inside the share sheet
+                  // observe.js already works these out for a body it could not name, and
+                  // this dropped them on the floor — which is why 42 (unnamed:string) rows
+                  // across two accounts told us a name was missing but not WHY. Booleans
+                  // only, no body content (2026-08-20).
+                  looksJson: (d.meta && d.meta.looksJson) === true,
+                  hasNameToken: (d.meta && d.meta.hasNameToken) === true,
                 },
               });
             }
