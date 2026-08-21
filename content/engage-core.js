@@ -718,24 +718,33 @@ self.EngageCore = (function () {
     // We no longer wait to confirm the box cleared (that re-derivation of platform state was
     // the brittle part that broke across UIs). We still read the typed text — but only to
     // enforce the "more than 5 characters" quality gate.
+    // Quality gate: YouTube (or any target) may require a minimum word count; else >5 chars.
+    // A target can also ban words outright (YouTube comments must never mention tickets).
+    // Matched whole-word and case-insensitively, with an optional trailing "s", so
+    // "ticket" / "Tickets" are blocked while a longer word like "ticketing" is not.
+    //
+    // DECLARED HERE, not inside hookComment. The MAIN-world message listener also gates on
+    // passesGate, and from inside hookComment it was out of scope: every network-confirmed
+    // comment threw a ReferenceError that the listener's own catch swallowed, so
+    // fireEngagement('comment') never ran. Dead since 2026-08-13. That path is the ONLY
+    // crediting route for members whose composer DOM never matches — localized layouts,
+    // mobile, sendBeacon YouTube — and for them every DOM route gate-fails too, so their
+    // comments could never credit at all (audit finding H5).
+    function bannedHit(text) {
+      const banned = (state && state.commentBannedWords) || [];
+      if (!banned.length) return null;
+      const lower = text.toLowerCase();
+      return banned.find((w) => new RegExp(`\\b${String(w).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?\\b`).test(lower)) || null;
+    }
+    function passesGate(text) {
+      if (bannedHit(text)) return false;
+      const minWords = (state && state.commentMinWords) || 0;
+      if (minWords > 0) return text.split(/\s+/).filter(Boolean).length > minWords;
+      return text.length > 5;
+    }
+
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
-      // Quality gate: YouTube (or any target) may require a minimum word count; else >5 chars.
-      // A target can also ban words outright (YouTube comments must never mention tickets).
-      // Matched whole-word and case-insensitively, with an optional trailing "s", so
-      // "ticket" / "Tickets" are blocked while a longer word like "ticketing" is not.
-      function bannedHit(text) {
-        const banned = (state && state.commentBannedWords) || [];
-        if (!banned.length) return null;
-        const lower = text.toLowerCase();
-        return banned.find((w) => new RegExp(`\\b${String(w).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?\\b`).test(lower)) || null;
-      }
-      function passesGate(text) {
-        if (bannedHit(text)) return false;
-        const minWords = (state && state.commentMinWords) || 0;
-        if (minWords > 0) return text.split(/\s+/).filter(Boolean).length > minWords;
-        return text.length > 5;
-      }
       function trySubmit() {
         if (!state || state.commentS !== 'idle') return;
         if (state.commentEnabled === false) return; // switched off server-side
