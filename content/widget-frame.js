@@ -15,7 +15,13 @@ self.RGCFrame = (function () {
     .dot{width:7px;height:7px;border-radius:50%;background:#53FC18;flex:none;box-shadow:0 0 8px rgba(83,252,24,.7)}
     .ttl{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#C9A766;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .ver{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.04em;color:#6B6960;flex:none}
-    .ver.upd{color:#E8B339;cursor:help}
+    /* An update waiting turns the version badge into a real button. It used to be a
+       tooltip telling members to go and open the extension icon, which is a menu almost
+       nobody opens, which is how a room ends up spread across eight releases. */
+    .ver.upd{color:#0E1B2C;background:#E8B339;border-radius:999px;padding:2px 7px;cursor:pointer;
+      font-weight:700;letter-spacing:.02em;border:0;font-family:inherit}
+    .ver.upd:hover{background:#F4C95A}
+    .ver.upd:disabled{opacity:.75;cursor:default}
     .min{cursor:pointer;color:#8A8678;font-size:17px;line-height:1;background:none;border:0;padding:0 3px;font-family:inherit}
     .min:hover{color:#F4EFE3}
     .body{padding:11px 14px 14px}
@@ -53,18 +59,66 @@ self.RGCFrame = (function () {
     const bar = document.createElement('div'); bar.className = 'bar';
     const bdot = document.createElement('span'); bdot.className = 'dot';
     const bttl = document.createElement('span'); bttl.className = 'ttl'; bttl.textContent = opts.title || '';
-    const bver = document.createElement('span'); bver.className = 'ver'; bver.textContent = VER ? 'v' + VER : '';
-    // If the SW has flagged a newer published version, mark the badge so users notice.
+    // Plain text normally; a button while an update is waiting. Built as a <button> up
+    // front so it can take a click without being swapped out later.
+    const bver = document.createElement('button'); bver.type = 'button';
+    bver.className = 'ver'; bver.textContent = VER ? 'v' + VER : '';
+    bver.disabled = true; bver.style.cursor = 'default'; bver.style.background = 'none';
+    bver.style.border = '0'; bver.style.padding = '0';
+    // UPDATE IN PLACE. The extension already knew a newer version was published and said so
+    // in a tooltip that told members to open the extension icon and hit Update now. Almost
+    // nobody opens that menu, which is why the room sits several releases behind while real
+    // ticket bugs stay fixed-but-undelivered. This is the same action on the surface people
+    // actually look at (owner, 2026-08-21).
+    //
+    // Chrome can genuinely self-update (requestUpdateCheck + reload, handled by the service
+    // worker). Firefox cannot: it installs only from AMO, so there the button opens the
+    // listing instead. The flag itself is driven by what the STORE has published, so this
+    // never offers an update that cannot actually be installed.
     try {
       chrome.storage.local.get('extUpdate').then((s) => {
         const u = s && s.extUpdate;
-        if (u && u.available) {
-          bver.textContent = 'v' + VER + ' · update ⬆';
-          bver.classList.add('upd');
-          // The popup now has a real "Update now" button, so point people there
-          // instead of telling them to go and reload the extension themselves.
-          bver.title = 'A newer version (v' + u.latest + ') is available. Open the Mizkif Global extension icon and hit Update now.';
-        }
+        if (!u || !u.available) return;
+        // Short label on purpose: the header is one narrow row and "Update to v1.156"
+        // pushed the title down to "EARN T…", which reads as a broken widget rather than
+        // an offer. The version lives in the tooltip, where it costs no width.
+        bver.textContent = 'Update ⬆';
+        bver.classList.add('upd');
+        bver.disabled = false;
+        bver.removeAttribute('style');
+        bver.title = 'Install v' + u.latest + ' now (you are on v' + VER + ')';
+        bver.addEventListener('click', async (e) => {
+          e.stopPropagation(); // the bar is the drag handle
+          if (bver.disabled) return;
+          bver.disabled = true;
+          bver.textContent = 'Updating…';
+          let r = null;
+          try { r = await chrome.runtime.sendMessage({ type: 'applyUpdate' }); } catch { r = null; }
+          // 'unsupported' is Firefox: no requestUpdateCheck, updates come from AMO only.
+          if (r && r.status === 'unsupported') {
+            bver.textContent = 'Open add-ons site';
+            bver.disabled = false;
+            bver.title = 'Firefox installs updates from addons.mozilla.org';
+            bver.onclick = () => { try { window.open(r.url || 'https://addons.mozilla.org/firefox/addon/rinaudo-capital/', '_blank', 'noopener'); } catch { /* ignore */ } };
+            return;
+          }
+          // Chrome found it: the worker reloads the extension 300ms later, which tears this
+          // page's content scripts down with it. Nothing more to say, and saying "failed"
+          // in that window would be a lie told right before the text disappears.
+          if (r && r.status === 'update_available') { bver.textContent = 'Installing…'; return; }
+          if (r && r.status === 'no_update') { bver.textContent = 'Already newest'; return; }
+          // Chrome rate-limits requestUpdateCheck, and a throttled check is not a failure:
+          // the browser will pick the update up on its own schedule.
+          if (r && r.status === 'throttled') {
+            bver.textContent = 'Try again shortly';
+            bver.disabled = false;
+            bver.title = 'Chrome limits how often an extension may check. It will update on its own soon.';
+            return;
+          }
+          bver.textContent = 'Update failed';
+          bver.disabled = false;
+          bver.title = 'Could not update from here. Open the extension icon and try Update now.';
+        });
       }).catch(() => {});
     } catch { /* ignore */ }
     const minBtn = document.createElement('button'); minBtn.className = 'min'; minBtn.type = 'button'; minBtn.textContent = '−'; minBtn.title = 'Minimize';
