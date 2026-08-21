@@ -31,6 +31,24 @@ self.RGCFrame = (function () {
     .hidden{display:none}`;
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // The card is position:fixed, so its viewport is the initial containing block, which does
+  // NOT include a classic scrollbar. window.innerWidth DOES include it, so clamping against
+  // innerWidth let the card slide roughly a scrollbar's width past the visible right edge
+  // and sit under the scrollbar: it reads as the card being cropped just before it reaches
+  // the edge, which is exactly what the owner described (2026-08-21). documentElement's
+  // clientWidth/clientHeight are the visible box, and they already account for page zoom.
+  // innerWidth is kept as a fallback for the case where the element is not laid out.
+  // Taken as the SMALLER of the two, never clientWidth/Height alone. In quirks mode (no
+  // doctype) documentElement's client box is the CONTENT box, not the viewport, so on a
+  // long page clientHeight is thousands of pixels and clamping to it would park the card
+  // far below the fold with no way back. min() picks the scrollbar-excluded viewport when
+  // that is what clientWidth means, and falls back to innerWidth/Height when it is not.
+  const viewW = () => Math.min(window.innerWidth || Infinity, document.documentElement.clientWidth || Infinity) || window.innerWidth;
+  const viewH = () => Math.min(window.innerHeight || Infinity, document.documentElement.clientHeight || Infinity) || window.innerHeight;
+  // Flush to the edge. This used to be 4px, so the card could never actually touch any
+  // edge; the owner wants to butt it right up against one. The card's drop shadow gets
+  // clipped at 0, which is the correct trade for being able to park it flush.
+  const EDGE = 0;
 
   // Extension version, shown in every frame header so users can report it from a screenshot.
   let VER = '';
@@ -153,8 +171,8 @@ self.RGCFrame = (function () {
     function placeXY(x, y) {
       const r = frame.getBoundingClientRect();
       const w = r.width || opts.width || 240, h = r.height || 80;
-      frame.style.left = clamp(x, 4, window.innerWidth - w - 4) + 'px';
-      frame.style.top = clamp(y, 4, window.innerHeight - h - 4) + 'px';
+      frame.style.left = clamp(x, EDGE, Math.max(EDGE, viewW() - w - EDGE)) + 'px';
+      frame.style.top = clamp(y, EDGE, Math.max(EDGE, viewH() - h - EDGE)) + 'px';
       frame.style.right = 'auto'; frame.style.bottom = 'auto';
     }
 
@@ -167,8 +185,8 @@ self.RGCFrame = (function () {
     function keepInView() {
       const r = frame.getBoundingClientRect();
       if (!r.width || !r.height) return; // hidden or not laid out yet
-      const nx = clamp(r.left, 4, Math.max(4, window.innerWidth - r.width - 4));
-      const ny = clamp(r.top, 4, Math.max(4, window.innerHeight - r.height - 4));
+      const nx = clamp(r.left, EDGE, Math.max(EDGE, viewW() - r.width - EDGE));
+      const ny = clamp(r.top, EDGE, Math.max(EDGE, viewH() - r.height - EDGE));
       if (Math.abs(nx - r.left) > 0.5 || Math.abs(ny - r.top) > 0.5) {
         frame.style.left = nx + 'px'; frame.style.top = ny + 'px';
         frame.style.right = 'auto'; frame.style.bottom = 'auto';
