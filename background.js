@@ -438,18 +438,6 @@ function isFresh(publishedAt) {
   return Number.isFinite(t) && Date.now() - t <= MAX_NOTIFY_AGE_MS;
 }
 
-// Is this YouTube upload a Short? The public feed only gives /watch URLs, so probe
-// youtube.com/shorts/<id> (host permission granted): a real Short serves 200, a regular
-// video 3xx-redirects to /watch (status 0 / opaqueredirect under manual). Errors → treat
-// as a normal video. Body is cancelled so nothing large downloads.
-async function isYouTubeShort(videoId) {
-  try {
-    const res = await fetch(`https://www.youtube.com/shorts/${videoId}`, { redirect: 'manual' });
-    try { if (res.body) res.body.cancel(); } catch { /* ignore */ }
-    return res.status === 200;
-  } catch { return false; }
-}
-
 // Build a crop-safe toast image from a YouTube thumbnail. Chrome cover-crops notification
 // images to ~2:1, lopping the top/bottom off a 16:9 thumb — so we letterbox it onto the
 // brand background at 2:1 first (via OffscreenCanvas in the worker). Tries maxres→mq→hq.
@@ -510,17 +498,26 @@ async function checkSignals() {
       notifUrls[id] = r.channelUrl;
       notify(id, { type: 'image', iconUrl: 'icons/kick.png', imageUrl: 'icons/notif-live.png', title: '🔴 Mizkif is LIVE on Kick', message: 'The stream just went live. Vote & earn while you watch.', buttons: [{ title: 'Watch now' }], priority: 2 });
     }
+    // YouTube uploads are announced by checkNewTargets, NOT here. This loop only records
+    // them as seen.
+    //
+    // Two independent systems used to announce the same upload: this one reads the S1
+    // video feed, checkNewTargets reads the S2 earn targets, and they keep separate seen
+    // sets so neither can tell the other has already spoken. Measured on the 2026-08-21
+    // upload: the feed had it at 00:00:09 and the target was published at 00:01:39, so a
+    // member got two notifications for one video about ninety seconds apart (owner
+    // reported exactly that gap).
+    //
+    // The target notification is the one worth keeping. It fires only once the video is
+    // actually EARNABLE, it names the exact ticket amount, and by the time it arrives the
+    // extension can ring the video gold — which is why the first notification led to a
+    // video that was not gold yet and the second one to a video that was.
+    //
+    // Marking them seen still matters: it stops this loop firing for the backlog if the
+    // rule is ever reverted, and keeps the seeding behaviour on a fresh install.
     for (const v of (r.latestVideos || [])) {
       if (!v.videoId || vidSeen.has(v.videoId)) continue;
-      vidSeen.add(v.videoId); // seen once judged, even when muted or stale: never fires later
-      if (seeding || !prefOn(prefs, 'youtube')) continue;
-      if (inNightWindow() || !isFresh(v.publishedAt)) continue;
-      const id = `vid-${v.videoId}`;
-      notifUrls[id] = postLink(v.url, 'youtube', v.channelName);
-      const kind = (await isYouTubeShort(v.videoId)) ? 'Short' : 'video';
-      const img = await youtubeThumbCard(v.videoId);
-      const base = { iconUrl: 'icons/youtube.png', title: `New YouTube ${kind}: ${v.channelName}`, message: v.title ? `${v.title}. Click to watch it.` : `New ${kind}. Click to watch it.`, priority: 2 };
-      notify(id, img ? { ...base, type: 'image', imageUrl: img } : { ...base, type: 'basic' });
+      vidSeen.add(v.videoId);
     }
     const SOCIAL_TITLES = { tiktok: 'New TikTok: Mizkif', instagram: 'New Instagram: Mizkif', twitter: 'New X post: Mizkif' };
     const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
