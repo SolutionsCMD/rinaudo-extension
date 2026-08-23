@@ -19,6 +19,11 @@
     // for the page's own digg mutation (observe.js). A signed-out click opens the login
     // sheet and no digg ever fires, so it can never credit.
     likeConfirmNetwork: true,
+    // Comments are two-signal as well (2026-08-23): observe.js matches TikTok's own
+    // /api/comment/publish/ request, carrying this video's aweme_id and the typed text,
+    // and engage-core credits on that alone. The DOM hooks below no longer credit here;
+    // see hookComment in engage-core for the three ways they paid for nothing.
+    commentConfirmNetwork: true,
     likeTarget(t) { return t && t.closest ? t.closest('[data-e2e*="like-icon"]') : null; },
     commentSubmitTarget(t) {
       if (!t || !t.closest) return null;
@@ -29,8 +34,12 @@
       const b = t.closest('[role="button"], button');
       if (!b) return null;
       if (b.closest('[data-e2e*="like-icon"]')) return null; // the like control is never a comment submit
+      // Two ancestors, not eight. Eight reached a container holding the whole video page,
+      // so the mute button, the player and most of the action bar all read as a comment
+      // submit. The Post button sits beside the editor inside one small flex row; two
+      // levels is all that relationship needs.
       let el = b;
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 2; i++) {
         el = el.parentElement; if (!el) break;
         if (el.querySelector('[data-e2e*="comment-input"], [contenteditable="true"], textarea')) return b;
       }
@@ -39,9 +48,15 @@
     commentInputTarget(t) { return t && t.closest ? t.closest('[data-e2e*="comment-input"], [contenteditable="true"], textarea') : null; },
     composerSel: '[data-e2e*="comment-input"], [contenteditable="true"], textarea',
     commentText() {
-      const el = document.querySelector('[data-e2e*="comment-input"]')
-        || document.querySelector('[placeholder*="comment" i][contenteditable], [placeholder*="comment" i]');
-      return el ? (el.textContent || el.value || el.innerText || '') : '';
+      // Read the EDITOR, never the wrapper. [data-e2e="comment-input"] is the DraftJS
+      // wrapper, and its textContent includes the placeholder ("Add comment...", 14
+      // characters), so an untouched box used to read as a comment long enough to pass
+      // the gate. No editor found reads as empty, never as the placeholder.
+      const wrap = document.querySelector('[data-e2e*="comment-input"]');
+      const ed = wrap ? wrap.querySelector('[contenteditable="true"], textarea') : null;
+      if (!ed) return '';
+      if (ed.tagName === 'TEXTAREA') return ed.value || '';
+      return ed.textContent || '';
     },
     getVideoEl() { return document.querySelector('video'); },
 

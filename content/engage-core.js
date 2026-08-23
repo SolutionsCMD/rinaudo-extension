@@ -537,6 +537,8 @@ self.EngageCore = (function () {
     // 88%. A capped counter costs nothing and makes that impossible to repeat.
     let fbDiagSent = 0;
     const FB_DIAG_MAX = 6;
+    let ttDiagSent = 0;
+    const TT_DIAG_MAX = 4;
     function hookIntent() {
       if (intentHooked) return; intentHooked = true;
       if (typeof A.repostTarget !== 'function' && typeof A.sendTarget !== 'function') return;
@@ -668,10 +670,25 @@ self.EngageCore = (function () {
           return;
         }
         if (d.kind === 'comment') {
-          if (A.actions.comment && state.commentEnabled !== false && state.commentS === 'idle'
+          // A comment confirmation that names a post must name THIS post. YouTube's is
+          // ref-less by nature and stays page-scoped; TikTok's carries aweme_id, and a
+          // comment on some other video in the feed must never credit the one bound here.
+          const okCommentRef = !d.ref || String(d.ref) === state.ref;
+          if (okCommentRef && A.actions.comment && state.commentEnabled !== false && state.commentS === 'idle'
               && typeof d.txt === 'string' && passesGate(d.txt.trim())) {
             fireEngagement('comment');
           }
+          return;
+        }
+        // TikTok comment endpoint probe (see observe.js probeUnmatched). Path only, capped.
+        if (d.kind === 'ttdiag') {
+          try {
+            if (ttDiagSent < TT_DIAG_MAX) {
+              ttDiagSent++;
+              chrome.runtime.sendMessage({ type: 's2Debug', kind: 'ttcomment',
+                data: { path: (d.meta && d.meta.path) || '', ref: state.ref } });
+            }
+          } catch (e) { /* diagnostics are optional, crediting is not */ }
           return;
         }
         let ref = d.ref == null ? '' : String(d.ref);
@@ -745,6 +762,20 @@ self.EngageCore = (function () {
 
     function hookComment() {
       if (commentHooked || !A.actions.comment) return; commentHooked = true;
+      // NETWORK-CONFIRMED COMMENTS (TikTok). None of the DOM paths below may credit on an
+      // adapter that sets commentConfirmNetwork: the platform's own comment-publish
+      // request, seen by observe.js and matched to this post's id, is the only signal.
+      //
+      // Why the DOM cannot be trusted there, each of which paid on its own:
+      //  · commentText() read the composer WRAPPER, whose textContent includes the
+      //    editor's placeholder ("Add comment..."), so an empty box passed the gate;
+      //  · commentSubmitTarget's fallback accepted nearly any button on the page;
+      //  · watchForPostedComment treats an EMPTY read as "posted", and the composer
+      //    re-mounts on every swipe to the next video, reading empty for a moment.
+      // Members were credited for comments they never wrote, 8 seconds after a target
+      // appeared (owner, 2026-08-23). Same model as TikTok's like: the click means
+      // nothing, the platform's request means everything.
+      if (A.commentConfirmNetwork) return;
       function trySubmit() {
         if (!state || state.commentS !== 'idle') return;
         if (state.commentEnabled === false) return; // switched off server-side

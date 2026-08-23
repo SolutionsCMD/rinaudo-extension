@@ -132,6 +132,29 @@
         },
       },
       {
+        platform: 'tiktok', kind: 'comment',
+        // POST https://www.tiktok.com/api/comment/publish/?...&aweme_id=<video id>&text=<typed>
+        // TikTok's own comment-publish request. The video id and the typed text both ride in
+        // the QUERY STRING (the body is normally empty), and the body is read too in case a
+        // variant moves them there. This is what makes TikTok comments two-signal, the same
+        // way /api/commit/item/digg/ does for its likes: the DOM path credited comments
+        // nobody wrote (owner, 2026-08-23: "comments are getting auto checked whenever i go
+        // to a tiktok video"; 2,148 tickets in two days), so on TikTok the DOM no longer
+        // credits at all and this request is the only thing that can.
+        // /api/comment/list/, /digg/ and /delete/ share the prefix and must not match: the
+        // test anchors on /publish/ with an end boundary.
+        test: function (url) { return /\/api\/comment\/publish\/?(\?|$)/.test(String(url)); },
+        ref: function (url, body) {
+          var m = /[?&]aweme_id=(\d+)/.exec(String(url)) || /(?:^|&)aweme_id=(\d+)/.exec(String(body || ''));
+          return m ? m[1] : null;
+        },
+        txt: function (url, body) {
+          var m = /[?&]text=([^&]*)/.exec(String(url)) || /(?:^|&)text=([^&]*)/.exec(String(body || ''));
+          if (!m) return null;
+          try { return decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return null; }
+        },
+      },
+      {
         platform: 'tiktok', kind: 'repost',
         // POST https://www.tiktok.com/tiktok/v1/upvote/publish?...&item_id=<video id>
         // TikTok calls a repost an "upvote" internally, and puts the video id in the QUERY
@@ -312,6 +335,25 @@
       return fn;
     }
 
+    // TikTok comment endpoint probe. The comment signature above is the only thing that can
+    // credit a TikTok comment, so if its path is wrong the feature is silently dead. Any
+    // POST on a TikTok host whose path mentions /comment/ but matched no signature gets its
+    // PATH (never query, never body) reported once, capped per page, so the real endpoint
+    // is in ext_debug_log after the first member comments on 1.161. /comment/list/ is the
+    // read that fires on every video and is excluded.
+    var ttProbeSent = 0, TT_PROBE_MAX = 4;
+    function probeUnmatched(url) {
+      try {
+        if (ttProbeSent >= TT_PROBE_MAX) return;
+        if (!/(^|\.)tiktok\.com$/.test(String(location.hostname || ''))) return;
+        var u = String(url || '');
+        var path = u.replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+        if (path.indexOf('/comment/') === -1 || path.indexOf('/comment/list') !== -1) return;
+        ttProbeSent++;
+        window.postMessage({ rgcObs: 1, platform: 'tiktok', kind: 'ttdiag', ref: null, ok: true, txt: null, meta: { path: path.slice(0, 80) } }, location.origin);
+      } catch (e) { /* diagnostics are optional */ }
+    }
+
     function matchSig(url, body) {
       for (var i = 0; i < SIGS.length; i++) {
         var s = SIGS[i];
@@ -377,6 +419,7 @@
         var p = oFetch.apply(this, arguments);
         try {
           var sig = url ? matchSig(url, body) : null;
+          if (!sig) probeUnmatched(url);
           if (sig && p && typeof p.then === 'function') {
             // Only a matched request's promise is ever observed (rule 5). res.ok is a
             // status flag, not the body; the body is never touched, so this reports
@@ -440,6 +483,7 @@
               try { u = xhrUrls.get(xhr) || ''; } catch (e) { u = ''; }
               var b = bodyText(body);
               var sig = u ? matchSig(u, b) : null;
+              if (!sig) probeUnmatched(u);
               // A listener is attached only to a matched request, and only reads status,
               // never responseText. Same meaning as the fetch path: 2xx says the platform
               // accepted the request, and the flipped control is what proves it happened.
