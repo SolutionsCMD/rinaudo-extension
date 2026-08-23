@@ -618,6 +618,11 @@ self.EngageCore = (function () {
                   // only, no body content (2026-08-20).
                   looksJson: (d.meta && d.meta.looksJson) === true,
                   hasNameToken: (d.meta && d.meta.hasNameToken) === true,
+                  // Added 2026-08-24 with the widened probe: the request's path and the
+                  // body's parameter NAMES (never values), so an unnamed encoding can be
+                  // identified instead of only counted. See observe.js fbdiag meta.
+                  path: (d.meta && d.meta.path) || '',
+                  keys: (d.meta && d.meta.keys) || '',
                 },
               });
             }

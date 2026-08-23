@@ -101,7 +101,34 @@
       }
       return '';
     },
-    getVideoEl() { return document.querySelector('video'); },
+    getVideoEl() {
+      const vids = Array.from(document.querySelectorAll('video'));
+      if (vids.length <= 1) return vids[0] || null;
+      // Instagram keeps more than one <video> alive: the neighbouring clips in the feed,
+      // and a second element for the expanded/theatre player. Taking the FIRST one in the
+      // document meant reading a preloaded, paused, off-screen video while the member
+      // watched a different one, so the timer sat at "paused" and never accrued. Reported
+      // twice: a stuck 0:05 counter (2026-08-22) and "it isnt saying im watching when they
+      // are in a bigger form, then when i reset the page it makes the video smaller and
+      // adds it" (2026-08-23) — reloading collapsed the extra element, which is why it
+      // started working again.
+      //
+      // Same scorer YouTube and Facebook already use: visible area, with a playing element
+      // beating any paused one. NOT currentTime, which resets to 0 at every loop boundary
+      // and would drop the active clip for a preloaded neighbour.
+      const visibleArea = (v) => {
+        const r = v.getBoundingClientRect();
+        const w = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+        const h = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+        return w * h;
+      };
+      let best = null, bestScore = -1;
+      for (const v of vids) {
+        const score = visibleArea(v) + (!v.paused ? 1e9 : 0);
+        if (score > bestScore) { bestScore = score; best = v; }
+      }
+      return best || vids[0] || null;
+    },
 
     // --- Repost ---------------------------------------------------------------
     // Credit reposts from the confirmed network mutation alone, no click intent needed.

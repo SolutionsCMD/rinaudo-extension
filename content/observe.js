@@ -298,10 +298,37 @@
             // name field is present under ANY spelling. Together those say whether a future
             // encoding is being missed or the name genuinely is not sent.
             var str = typeof body === 'string' ? body : '';
+            // Widened 2026-08-24. A member who reshares fine elsewhere but never on
+            // Facebook produced 12 unnamed requests on one share click, and the booleans
+            // alone could say THAT her requests are unnamed but never WHY. These add the
+            // request's PATH and the body's parameter NAMES, so the encoding she gets can
+            // actually be identified and taught to friendlyName.
+            //
+            // Names only, never values: keys are split off at '=' and the value is
+            // discarded before anything leaves the page. The path has its query string
+            // removed for the same reason. Both are capped.
+            var path = '';
+            try { path = String(url || '').replace(/^https?:\/\/[^/]+/, '').split('?')[0].slice(0, 80); } catch (e) { path = ''; }
+            // FORM-ENCODED ONLY, and every key must look like a key. A JSON body has no
+            // '&' and no '=', so a naive split returns the whole document: the first cut of
+            // this leaked {"secret":"my private caption"} verbatim, which the privacy test
+            // in observe-body.test.mjs caught. JSON bodies now yield no keys at all, and a
+            // token that is not a plain identifier is dropped rather than passed through.
+            var keys = '';
+            try {
+              if (str && !/^\s*[{[]/.test(str) && str.indexOf('=') !== -1) {
+                keys = str.split('&').slice(0, 12)
+                  .map(function (kv) { return kv.split('=')[0]; })
+                  .filter(function (k) { return k && k.length < 40 && /^[A-Za-z0-9_.[\]-]+$/.test(k); })
+                  .join(',').slice(0, 200);
+              }
+            } catch (e) { keys = ''; }
             return {
               name: '(unnamed:' + kind + ')',
               looksJson: /^\s*[{[]/.test(str),
               hasNameToken: str.indexOf('fb_api_req_friendly_name') !== -1,
+              path: path,
+              keys: keys,
             };
           } catch (e) { return null; }
         },

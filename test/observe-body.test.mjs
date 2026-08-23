@@ -153,3 +153,27 @@ test('a JSON-bodied read query is skipped like a form-encoded one', async () => 
   assert.equal(sent.some((m) => m.kind === 'repost'), false);
   assert.equal(sent.some((m) => m.kind === 'fbdiag'), false);
 });
+
+// The widened fbdiag probe (1.162) reports the request PATH and the body's parameter
+// NAMES so an unnamed encoding can be identified. Neither may ever carry a value: the
+// first cut split a JSON body on '&', found none, and returned the whole document.
+test('the widened probe reports key names for a form body, and none for JSON', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/?doc_id=1', {
+    method: 'POST', body: 'av=123&__user=456&variables=%7B%22text%22%3A%22my+private+caption%22%7D' });
+  const diag = sent.find((m) => m.kind === 'fbdiag');
+  assert.ok(diag);
+  assert.equal(diag.meta.path, '/api/graphql/');            // query string stripped
+  assert.equal(diag.meta.keys, 'av,__user,variables');      // names only
+  assert.equal(JSON.stringify(sent).includes('private'), false);
+  assert.equal(JSON.stringify(sent).includes('123'), false); // no values, not even harmless ones
+});
+
+test('a JSON body yields no keys at all', async () => {
+  const { win, sent } = loadObserver();
+  await win.fetch('https://www.facebook.com/api/graphql/', {
+    method: 'POST', body: JSON.stringify({ secret: 'my private caption' }) });
+  const diag = sent.find((m) => m.kind === 'fbdiag');
+  assert.equal(diag.meta.keys, '');
+  assert.equal(JSON.stringify(sent).includes('my private caption'), false);
+});
