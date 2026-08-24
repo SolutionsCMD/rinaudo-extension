@@ -159,6 +159,53 @@
       } catch (e) { return null; }
     },
   };
+  // CHANNEL DISCOVERY. TikTok reaches the server through an IFTTT webhook that misses
+  // posts: on 2026-08-23 it delivered the 20:00 video and never delivered the 23:44 one,
+  // so the feed sat stale for 14 hours and a real post earned nobody anything. Every
+  // server-side route to TikTok is gated from the server, so a member's own browser is the
+  // only thing that can see the channel.
+  //
+  // What is sent: video ids, and only from the CHANNEL's own pages (a /@handle profile or
+  // one of its video pages). Nothing about anything else the member looks at. The server
+  // publishes none of them directly; it re-checks each through oEmbed and requires the
+  // author to be the channel, so this can only ever surface a genuine post sooner.
+  //
+  // Once per page with a short settle for the grid to render, then on SPA navigation, and
+  // never more often than the cooldown, so browsing the profile is a handful of requests.
+  const CHANNEL = 'realmizkif';
+  let lastScan = 0;
+  function onChannelPage() {
+    try {
+      const p = (location.pathname || '').toLowerCase();
+      return p.startsWith('/@' + CHANNEL);
+    } catch (e) { return false; }
+  }
+  function scanChannel() {
+    try {
+      if (!onChannelPage()) return;
+      if (Date.now() - lastScan < 60000) return;
+      lastScan = Date.now();
+      const refs = [];
+      const seen = Object.create(null);
+      document.querySelectorAll('a[href*="/video/"]').forEach((a) => {
+        const m = String(a.getAttribute('href') || '').match(/\/@([^/]+)\/video\/(\d{15,25})/);
+        if (!m) return;
+        if (String(m[1]).toLowerCase() !== CHANNEL) return; // only this channel's posts
+        if (seen[m[2]]) return;
+        seen[m[2]] = 1;
+        refs.push(m[2]);
+      });
+      // The video page itself, which a member reaches straight from a notification.
+      const own = (location.pathname || '').match(/\/@([^/]+)\/video\/(\d{15,25})/);
+      if (own && String(own[1]).toLowerCase() === CHANNEL && !seen[own[2]]) refs.push(own[2]);
+      if (!refs.length) return;
+      chrome.runtime.sendMessage({ type: 's2Discover', platform: 'tiktok', refs: refs.slice(0, 30) })
+        .catch(() => {});
+    } catch (e) { /* discovery is optional; it must never break the page */ }
+  }
+  setTimeout(scanChannel, 4000);
+  setInterval(scanChannel, 60000);
+
   self.RGC_TIKTOK_ADAPTER = adapter;
   if (self.EngageCore) self.EngageCore.init(adapter);
 })();

@@ -206,6 +206,24 @@ async function s2Targets() {
 }
 
 // Fire-and-forget client diagnostics → server (bearer-auth). No PII (testids + lengths only).
+// Report the post ids a member can see on the channel. TikTok discovery runs through an
+// IFTTT webhook that misses posts (2026-08-23: the 23:44 video was never delivered and the
+// feed sat on the 20:00 one for 14 hours), and every server-side route to TikTok is gated,
+// so the only thing that can reliably see the channel is a member's own browser.
+//
+// Ids only, never anything about the member's browsing: the content script sends the ids on
+// the CHANNEL's own pages and nothing else. The server publishes none of them directly, it
+// re-checks each through TikTok's oEmbed and requires the author to be the channel, so this
+// cannot invent a target.
+async function s2Discover(platform, refs) {
+  const token = await getS2Token();
+  if (!token || !Array.isArray(refs) || !refs.length) return;
+  fetch(S2.API + S2.DISCOVER, {
+    method: 'POST', headers: await s2Headers(token, true),
+    body: JSON.stringify({ platform, refs: refs.slice(0, 30) }),
+  }).catch(() => {});
+}
+
 async function s2Debug(kind, data) {
   const token = await getS2Token();
   if (!token) return;
@@ -376,6 +394,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
     else if (msg.type === 's2Debug') { s2Debug(msg.kind || 'x', msg.data); reply({ ok: true }); }
+    else if (msg.type === 's2Discover') { s2Discover(msg.platform, msg.refs); reply({ ok: true }); }
     else if (msg.type === 's2LogUi') { s2LogUi(msg.event || {}); reply({ ok: true }); }
     else if (msg.type === 's2FlushUi') { await s2FlushUi(); reply({ ok: true }); }
     else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.platform, msg.videoRef, msg.playerDuration)); }

@@ -35,6 +35,7 @@ self.S2 = {
   WATCH_CLAIM: '/api/watch/claim',
   KICK_CHECKIN: '/api/extension/kick/checkin',
   PUSH: '/api/extension/push',
+  DISCOVER: '/api/extension/discover',
   VERSION: '/api/extension/version',
   DEBUG: '/api/extension/debug',
   // Selector-health reports (which adapter selectors failed to resolve on real pages).
