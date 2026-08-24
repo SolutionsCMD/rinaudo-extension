@@ -63,3 +63,28 @@ test('a channel video page reports its own id', () => {
 });
 
 console.log('tiktok-discovery: reports this channel only, ids only');
+
+test('a second scan of the same page sends nothing', () => {
+  // The scan runs on a timer; re-reporting settled ids is pure waste (31,605 upserts in
+  // nineteen hours from five members before this).
+  const { run, sent } = loadOnChannel('/@realmizkif', [
+    '/@realmizkif/video/7677377243076627726',
+    '/@realmizkif/video/7677319376030190862',
+  ]);
+  run();
+  assert.equal(sent.length, 1, 'first scan reports');
+  run();
+  run();
+  assert.equal(sent.length, 1, 'nothing new, so nothing sent');
+});
+
+test('a newly appearing id is sent, and only that one', () => {
+  const links = ['/@realmizkif/video/7677377243076627726'];
+  const { run, sent } = loadOnChannel('/@realmizkif', links);
+  run();
+  assert.deepEqual(sent[0].refs, ['7677377243076627726']);
+  links.push('/@realmizkif/video/7677690535569673486'); // he posts while the tab is open
+  run();
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[1].refs, ['7677690535569673486'], 'only the new one');
+});

@@ -174,6 +174,12 @@
   // never more often than the cooldown, so browsing the profile is a handful of requests.
   const CHANNEL = 'realmizkif';
   let lastScan = 0;
+  // Ids this page has already sent. The scan re-reads the whole visible grid every minute,
+  // and without this it re-sent the same settled ids forever: five members produced 31,605
+  // server-side upserts in nineteen hours, one id counted 4,679 times. The server now
+  // ignores ids it has already judged, and this stops them being sent in the first place.
+  // A page load starts with a clean set, which is exactly one report per channel visit.
+  const reported = Object.create(null);
   function onChannelPage() {
     try {
       const p = (location.pathname || '').toLowerCase();
@@ -198,8 +204,12 @@
       // The video page itself, which a member reaches straight from a notification.
       const own = (location.pathname || '').match(/\/@([^/]+)\/video\/(\d{15,25})/);
       if (own && String(own[1]).toLowerCase() === CHANNEL && !seen[own[2]]) refs.push(own[2]);
-      if (!refs.length) return;
-      chrome.runtime.sendMessage({ type: 's2Discover', platform: 'tiktok', refs: refs.slice(0, 30) })
+      // Only what this page has not sent yet. No new ids means no request at all, so a
+      // member sitting on the channel costs one report, not one a minute forever.
+      const fresh = refs.filter((r) => !reported[r]);
+      if (!fresh.length) return;
+      fresh.forEach((r) => { reported[r] = 1; });
+      chrome.runtime.sendMessage({ type: 's2Discover', platform: 'tiktok', refs: fresh.slice(0, 30) })
         .catch(() => {});
     } catch (e) { /* discovery is optional; it must never break the page */ }
   }
