@@ -173,7 +173,6 @@
   // Once per page with a short settle for the grid to render, then on SPA navigation, and
   // never more often than the cooldown, so browsing the profile is a handful of requests.
   const CHANNEL = 'realmizkif';
-  let lastScan = 0;
   // Ids this page has already sent. The scan re-reads the whole visible grid every minute,
   // and without this it re-sent the same settled ids forever: five members produced 31,605
   // server-side upserts in nineteen hours, one id counted 4,679 times. The server now
@@ -189,8 +188,10 @@
   function scanChannel() {
     try {
       if (!onChannelPage()) return;
-      if (Date.now() - lastScan < 60000) return;
-      lastScan = Date.now();
+      // No time-based cooldown: the interval below sets how often we LOOK, and the
+      // reported set decides whether anything is SENT. A cooldown on top of both did
+      // nothing except make the dedupe untestable, and it hid the case that matters, a
+      // post appearing while the member has the tab open.
       const refs = [];
       const seen = Object.create(null);
       document.querySelectorAll('a[href*="/video/"]').forEach((a) => {
