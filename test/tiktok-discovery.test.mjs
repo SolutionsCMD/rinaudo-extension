@@ -9,11 +9,14 @@ function loadOnChannel(pathname, links) {
   const sent = [];
   const code = readFileSync('content/tiktok.js', 'utf8');
   const self = {};
-  const anchors = links.map((href) => ({ getAttribute: () => href }));
+  // Built fresh on every query, the way a real DOM behaves. Snapshotting the list once
+  // made it impossible to model a post appearing while the tab is open: the second scan
+  // saw the same links, deduped correctly, and the test blamed the code.
   const document = {
     addEventListener() {}, removeEventListener() {},
     querySelector: () => null,
-    querySelectorAll: (sel) => (sel === 'a[href*="/video/"]' ? anchors : []),
+    querySelectorAll: (sel) => (sel === 'a[href*="/video/"]'
+      ? links.map((href) => ({ getAttribute: () => href })) : []),
     createElement: () => ({ style: {} }),
     documentElement: { appendChild() {} },
   };
