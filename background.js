@@ -352,6 +352,19 @@ async function s2PollVote(pollId, optionIdx) {
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
 
+// --- Amount vote (how much do we buy) ---
+// The READ rides s2Poll above; only casting needs its own call. A stale sessionId comes
+// back 409 rather than landing on whatever session is open now.
+async function s2AmountVote(sessionId, amountCents) {
+  const token = await getS2Token();
+  if (!token) return { ok: false, reason: 'not_connected' };
+  const r = await fetch(S2.API + S2.AMOUNT_VOTE, {
+    method: 'POST', headers: await s2Headers(token, true),
+    body: JSON.stringify({ sessionId, amountCents }),
+  }).catch(() => null);
+  return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
+}
+
 // --- Stake round module (the stake-on-a-ticker poll) ---
 async function s2Round() {
   const token = await getS2Token();
@@ -404,6 +417,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 'applyUpdate') { reply(await applyUpdate()); }
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
+    else if (msg.type === 's2AmountVote') { reply(await s2AmountVote(msg.sessionId, msg.amountCents)); }
     else if (msg.type === 's2Round') { reply(await s2Round()); }
     else if (msg.type === 's2RoundAction') { reply(await s2RoundAction(msg.action, msg.ticker, msg.amount)); }
     // 'resize' belonged to the detached vote window, which sent its measured height so

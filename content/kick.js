@@ -53,6 +53,9 @@ const WT_CSS = `
   .sub{font-size:11px;color:#8A8678;margin-top:4px}`;
 
 let frame = null, shownPollId = null, optimisticIdx = null;
+// Amount vote ("how much do we buy"): the member's own answer is held optimistically the
+// same way a poll option is, so tapping a preset lights up without waiting for the tick.
+let shownAmountId = null, optimisticAmount = null, amountDraft = '', lastAmountClosesAt = null;
 
 const POLL_CSS = `
   .q{font-size:14px;font-weight:600;margin:0 0 12px;line-height:1.35}
@@ -64,7 +67,27 @@ const POLL_CSS = `
   .check{position:relative;z-index:1;color:#86D6A4;font-weight:700;flex:none}
   .ltext{position:relative;z-index:1;flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cnt{position:relative;z-index:1;font-variant-numeric:tabular-nums;color:#A9A697;font-size:12px}
-  .hint{font-size:10px;letter-spacing:.06em;color:#8A8678;margin-top:10px;text-transform:uppercase}`;
+  .hint{font-size:10px;letter-spacing:.06em;color:#8A8678;margin-top:10px;text-transform:uppercase}
+  /* ── the amount vote. Same palette and chrome as the poll above it: the average is
+     the answer, so it is the biggest thing on the card, with the presets reading as
+     poll options because that is exactly what they are. ── */
+  .avg{font-family:ui-monospace,monospace;font-size:30px;font-weight:800;text-align:center;color:#F4EFE3;line-height:1.05;margin:2px 0 1px;font-variant-numeric:tabular-nums}
+  .avgsub{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:#8A8678;margin-bottom:9px}
+  .avgsub b{color:#C9A766;font-variant-numeric:tabular-nums;font-size:13px}
+  .avgsub b.hot{color:#E8B339}
+  .bar{position:relative;height:4px;border-radius:3px;background:rgba(244,239,227,.10);overflow:hidden;margin:0 0 10px}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:#C9A766;border-radius:3px;transition:width 1s linear}
+  .presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .amt{position:relative;padding:9px 8px;border:1px solid rgba(244,239,227,.12);border-radius:8px;background:rgba(255,255,255,.02);color:#F4EFE3;cursor:pointer;font:inherit;font-family:ui-monospace,monospace;font-size:13px;text-align:center}
+  .amt:hover{border-color:rgba(201,167,102,.4)}
+  .amt.mine{border-color:#86D6A4;background:rgba(134,214,164,.10);font-weight:700}
+  .amtrow{display:flex;gap:6px;margin-top:6px}
+  .amtin{flex:1;min-width:0;padding:9px 10px;border:1px solid rgba(244,239,227,.12);border-radius:8px;background:rgba(255,255,255,.02);color:#F4EFE3;font:inherit;font-family:ui-monospace,monospace;font-size:13px}
+  .amtin:focus{outline:none;border-color:rgba(201,167,102,.5)}
+  .amtgo{flex:none;padding:9px 14px;border:1px solid #C9A766;border-radius:8px;background:rgba(201,167,102,.14);color:#F4EFE3;font:inherit;font-weight:700;font-size:12px;cursor:pointer}
+  .amtgo:hover{background:rgba(201,167,102,.24)}
+  .mineline{font-size:11px;color:#86D6A4;text-align:center;margin-top:8px}
+  .sep{height:1px;background:rgba(201,167,102,.16);margin:13px 0 12px}`;
 
 function ensureWtFrame() {
   if (wtFrame) return;
@@ -192,10 +215,108 @@ function drawRound(data) {
   return shown;
 }
 
-function render(poll, tally, mine, connected) {
+const money = (cents) => '$' + Math.round(cents / 100).toLocaleString('en-US');
+/** $25k above a grand, plain dollars below it. */
+const shortMoney = (cents) => cents >= 100000 ? '$' + Math.round(cents / 100 / 1000) + 'k' : money(cents);
+
+/** The chat parser's shapes, for the card's own box: 25k, $25k, 12.5k, 1m, 25000, $500.
+ *  A plain number here is dollars as typed — this box is unambiguous, unlike chat. */
+function parseAmountInput(text) {
+  const t = String(text || '').trim().toLowerCase().replace(/[$,\s]/g, '');
+  const m = /^(\d+(?:\.\d+)?)(k|m)?$/.exec(t);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * (m[2] === 'k' ? 1000 : m[2] === 'm' ? 1000000 : 1) * 100);
+}
+
+/** Cast an amount. Clamped before it is sent: the engine REFUSES an out-of-range amount
+ *  rather than clamping it (a silent clamp would move the average with a number nobody
+ *  said), so the card must never be able to produce one. */
+function amountVote(av, cents, connected) {
+  if (!connected || shownAmountId == null) return;
+  const amount = Math.min(av.maxCents, Math.max(av.minCents, Math.round(cents)));
+  optimisticAmount = amount;
+  amountDraft = '';
+  chrome.runtime.sendMessage({ type: 's2AmountVote', sessionId: shownAmountId, amountCents: amount }).catch(() => {});
+  tick();
+}
+
+/** The "how much do we buy" block, drawn into the card body. */
+function drawAmountVote(body, av, mineCents, connected) {
+  const open = av.status === 'open';
+  const left = av.closesAt ? Math.max(0, Math.round((new Date(av.closesAt).getTime() - Date.now()) / 1000)) : null;
+
+  const q = document.createElement('div'); q.className = 'q'; q.textContent = av.question || 'How much do we buy'; body.append(q);
+
+  const avg = document.createElement('div'); avg.className = 'avg';
+  avg.textContent = av.avgCents == null ? '···' : money(av.avgCents);
+  body.append(avg);
+
+  const sub = document.createElement('div'); sub.className = 'avgsub';
+  const n = document.createElement('span'); n.textContent = av.votes + (av.votes === 1 ? ' vote' : ' votes');
+  const t = document.createElement('b');
+  if (!open) { t.textContent = 'final'; } else if (left === 0) { t.textContent = 'time up'; }
+  else { t.textContent = left + 's'; if (left != null && left <= 10) t.className = 'hot'; }
+  sub.append(n, t); body.append(sub);
+
+  if (open && left != null) {
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const i = document.createElement('i');
+    // Drains over whatever the timer was set to, worked out from what is left and the
+    // full minute, so an extended session refills rather than sitting empty.
+    i.style.width = Math.max(0, Math.min(100, Math.round(left / 60 * 100))) + '%';
+    bar.append(i); body.append(bar);
+  }
+
+  if (open && left !== 0) {
+    // A $0 floor makes a poor button, so the presets start where people actually aim.
+    const presets = [1000000, 2500000, 5000000, av.maxCents]
+      .filter((c, idx, a) => c >= av.minCents && c <= av.maxCents && a.indexOf(c) === idx);
+    const grid = document.createElement('div'); grid.className = 'presets';
+    presets.forEach((c) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'amt' + (mineCents === c ? ' mine' : '');
+      b.textContent = shortMoney(c);
+      b.addEventListener('click', () => amountVote(av, c, connected));
+      grid.append(b);
+    });
+    body.append(grid);
+
+    const row = document.createElement('div'); row.className = 'amtrow';
+    const input = document.createElement('input'); input.className = 'amtin'; input.type = 'text';
+    input.placeholder = 'or type an amount';
+    input.value = amountDraft;
+    input.addEventListener('input', () => { amountDraft = input.value; });
+    const send = () => {
+      const cents = parseAmountInput(input.value);
+      if (cents === null) return;
+      amountVote(av, cents, connected);
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    const go = document.createElement('button'); go.type = 'button'; go.className = 'amtgo'; go.textContent = 'Vote';
+    go.addEventListener('click', send);
+    row.append(input, go); body.append(row);
+  }
+
+  const line = document.createElement('div');
+  if (mineCents != null) {
+    line.className = 'mineline';
+    line.textContent = 'You said ' + money(mineCents) + (open ? ' (tap to change)' : '');
+  } else {
+    line.className = 'hint';
+    line.textContent = connected
+      ? (open ? 'Tap an amount, or type one in chat' : 'Voting closed')
+      : 'Connect with Kick (extension popup) to vote';
+  }
+  body.append(line);
+}
+
+function render(poll, tally, mine, connected, keep) {
   ensureFrame();
   const total = (tally || []).reduce((a, b) => a + b, 0);
-  const body = frame.body; body.replaceChildren();
+  const body = frame.body;
+  if (!keep) body.replaceChildren();
   const q = document.createElement('div'); q.className = 'q'; q.textContent = poll.question || 'Vote'; body.append(q);
   (poll.options || []).forEach((label, idx) => {
     const c = (tally && tally[idx]) || 0;
@@ -220,7 +341,11 @@ function vote(idx, connected) {
   tick();
 }
 
-function clear() { if (frame) { frame.destroy(); frame = null; } shownPollId = null; optimisticIdx = null; }
+function clear() {
+  if (frame) { frame.destroy(); frame = null; }
+  shownPollId = null; optimisticIdx = null;
+  shownAmountId = null; optimisticAmount = null; amountDraft = ''; lastAmountClosesAt = null;
+}
 
 async function tick() {
   // SPA guard + vote-card toggle: clear when navigated away or user has disabled the widget.
@@ -237,16 +362,70 @@ async function tick() {
   if (rd && drawRound(rd)) return;
   const data = await chrome.runtime.sendMessage({ type: 's2Poll' }).catch(() => null);
   const poll = data && data.poll;
-  if (!poll) return clear();
-  if (poll.id !== shownPollId) { shownPollId = poll.id; optimisticIdx = null; }
-  const serverMine = data.myVote == null ? null : Number(data.myVote);
-  if (optimisticIdx != null && serverMine === optimisticIdx) optimisticIdx = null;
-  const mine = optimisticIdx != null ? optimisticIdx : serverMine;
-  if (frame.setTitle) frame.setTitle('Live Vote');
-  render(poll, data.tally || [], mine, !!data.connected);
+  const av = data && data.amountVote;
+  if (!poll && !av) return clear();
+
+  // Both can be live at once. They share one card, amount vote on top, in the same
+  // order the stream overlay stacks them — a member seeing both places should not have
+  // to work out which is which.
+  ensureFrame();
+  const connected = !!(data && data.connected);
+  const body = frame.body; body.replaceChildren();
+
+  if (av) {
+    if (av.id !== shownAmountId) { shownAmountId = av.id; optimisticAmount = null; amountDraft = ''; }
+    const serverMineAmt = data.myAmountCents == null ? null : Number(data.myAmountCents);
+    // Drop the optimistic value once the server agrees, so a later change is not fought.
+    if (optimisticAmount != null && serverMineAmt === optimisticAmount) optimisticAmount = null;
+    const mineAmt = optimisticAmount != null ? optimisticAmount : serverMineAmt;
+    lastAmountClosesAt = av.status === 'open' ? av.closesAt : null;
+    drawAmountVote(body, av, mineAmt, connected);
+    if (poll) { const sep = document.createElement('div'); sep.className = 'sep'; body.append(sep); }
+  } else {
+    shownAmountId = null; optimisticAmount = null; lastAmountClosesAt = null;
+  }
+
+  if (poll) {
+    if (poll.id !== shownPollId) { shownPollId = poll.id; optimisticIdx = null; }
+    const serverMine = data.myVote == null ? null : Number(data.myVote);
+    if (optimisticIdx != null && serverMine === optimisticIdx) optimisticIdx = null;
+    const mine = optimisticIdx != null ? optimisticIdx : serverMine;
+    render(poll, data.tally || [], mine, connected, true);
+  } else {
+    shownPollId = null; optimisticIdx = null;
+  }
+
+  if (frame.setTitle) frame.setTitle(av && !poll ? 'How Much' : 'Live Vote');
+  if (av && av.status === 'open') frame.setPill('$ Vote');
 }
 
-setInterval(tick, (C && C.POLL_FAST_MS) || 5000);
+// The base cadence is deliberately slow — each tick costs the engine a request per
+// viewer. But an amount vote runs for about a minute and its average is the whole
+// point, so while one is open the card refreshes twice as often, and drops straight
+// back afterwards. The countdown itself ticks locally every second (below), so the
+// timer is smooth regardless.
+let tickTimer = null;
+function scheduleTick() {
+  if (tickTimer) clearTimeout(tickTimer);
+  const base = (C && C.POLL_FAST_MS) || 10000;
+  const ms = shownAmountId != null ? Math.max(4000, Math.round(base / 2)) : base;
+  tickTimer = setTimeout(() => { tick().finally(scheduleTick); }, ms);
+}
+scheduleTick();
+
+// Local countdown: redraw the timer and the bar every second from what the last tick
+// brought back. No network, and only while a session is actually open.
+setInterval(() => {
+  if (shownAmountId == null || !frame) return;
+  const b = frame.body.querySelector('.avgsub b');
+  const bar = frame.body.querySelector('.bar i');
+  if (!b || !lastAmountClosesAt) return;
+  const left = Math.max(0, Math.round((new Date(lastAmountClosesAt).getTime() - Date.now()) / 1000));
+  b.textContent = left === 0 ? 'time up' : left + 's';
+  b.className = left <= 10 ? 'hot' : '';
+  if (bar) bar.style.width = Math.max(0, Math.min(100, Math.round(left / 60 * 100))) + '%';
+}, 1000);
+
 tick();
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
 

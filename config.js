@@ -20,6 +20,9 @@ self.S2 = {
   UI_EVENTS: '/api/ui-events',
   POLL: '/api/extension/poll',
   POLL_VOTE: '/api/extension/poll-vote',
+  // "How much do we buy": chat and the site type an amount, the average is the buy.
+  // The session itself rides the POLL read above — one request feeds both cards.
+  AMOUNT_VOTE: '/api/extension/amount-vote',
   // Stake-on-a-ticker rounds: GET → {round, me, connected}, POST →
   // {action:'nominate'|'stake'|'join', ticker?, amount?}.
   ROUND: '/api/extension/round',
