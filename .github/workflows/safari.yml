@@ -146,12 +146,25 @@ jobs:
         working-directory: safari-build/Mizkif Global
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           set -euo pipefail
+          # The ASC API key does double duty: altool uploads with it below, and HERE it
+          # lets xcodebuild register the bundle ids and mint provisioning profiles on its
+          # own (-allowProvisioningUpdates). Without it a fresh account has no profiles
+          # and a headless archive has no way to ask for one.
+          mkdir -p ~/private_keys
+          echo "$ASC_KEY_P8" | base64 --decode > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
           SCHEME="$(xcodebuild -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=(d.get("project") or d.get("workspace") or {}).get("schemes") or []; print(next((x for x in s if "ios" in x.lower()), s[0] if s else ""))')"
           [ -n "$SCHEME" ] || { echo "no schemes found in the generated project"; exit 1; }
           xcodebuild -scheme "$SCHEME" -configuration Release \
             -archivePath build/app.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" archive
           cat > export.plist <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -162,7 +175,11 @@ jobs:
           </dict></plist>
           PLIST
           xcodebuild -exportArchive -archivePath build/app.xcarchive \
-            -exportOptionsPlist export.plist -exportPath build/export
+            -exportOptionsPlist export.plist -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
       - name: Upload to TestFlight
         if: steps.creds.outputs.have == 'yes'
