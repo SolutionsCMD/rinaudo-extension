@@ -2,7 +2,7 @@
   "update_url": "https://clients2.google.com/service/update2/crx",
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.165",
+  "version": "1.166",
   "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "minimum_chrome_version": "111",
   "permissions": [
@@ -24,6 +24,9 @@
     "https://www.facebook.com/*",
     "https://web.facebook.com/*",
     "https://m.facebook.com/*",
+    "https://www.reddit.com/*",
+    "https://reddit.com/*",
+    "https://old.reddit.com/*",
     "https://x.com/*",
     "https://twitter.com/*"
   ],
@@ -152,6 +155,20 @@
       ],
       "run_at": "document_start",
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.reddit.com/*",
+        "https://reddit.com/*",
+        "https://old.reddit.com/*"
+      ],
+      "js": [
+        "config.js",
+        "content/widget-frame.js",
+        "content/engage-core.js",
+        "content/reddit.js"
+      ],
+      "run_at": "document_idle"
     }
   ]
 }
