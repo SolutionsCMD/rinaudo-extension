@@ -30,31 +30,71 @@
   function nodeForRef(ref) {
     if (!ref) return null;
     try {
-      const direct = document.querySelector(
-        `shreddit-post[id="${ref}"], shreddit-comment[thingid="${ref}"], [data-fullname="${ref}"], #thing_${ref}`);
-      if (direct) return direct;
-      // Old reddit and some embeds hang the id off a permalink instead.
-      const bare = ref.replace(/^t[13]_/, '');
-      return document.querySelector(`shreddit-post[id$="${bare}"], [id$="${bare}"][class*="thing"]`) || null;
+      return document.querySelector(
+        `shreddit-post[id="${ref}"], shreddit-comment[thingid="${ref}"], [data-fullname="${ref}"], #thing_${ref}`)
+        || null;
     } catch { return null; }
   }
 
-  /** Is the vote control in its upvoted state? Null = cannot tell, never guess. */
-  function upvotedIn(scope) {
-    if (!scope) return null;
-    try {
-      const btn = scope.querySelector(
-        'button[aria-label*="pvote" i]:not([aria-label*="Down" i]),'
-        + ' [data-post-click-location="upvote"], .arrow.up, .arrow.upmod');
-      if (!btn) return null;
-      if (btn.getAttribute('aria-pressed') != null) return btn.getAttribute('aria-pressed') === 'true';
-      if (btn.classList && btn.classList.contains('upmod')) return true;
-      // Shreddit flips a CSS custom state rather than aria on some builds; the icon's fill
-      // is the only tell left, and an unreadable tell is null, not false.
-      const filled = btn.querySelector('svg[fill]:not([fill="none"]), .icon-upvote-fill');
-      return filled ? true : null;
-    } catch { return null; }
+  // SHADOW DOM. Reddit renders the vote controls inside <shreddit-post>'s shadow root, so
+  // document.querySelector cannot see them and a click on one retargets to the host
+  // element — which is why the first cut of this adapter never credited an upvote
+  // (2026-08-30). Both the state read and the click matcher have to descend deliberately.
+  //
+  // The discriminator is the button's `upvote` ATTRIBUTE, not its aria-label: Reddit ships
+  // these buttons with an EMPTY aria-label, and `<button upvote>` / `<button downvote>` is
+  // what tells the pair apart. aria-pressed carries the state.
+  function deepFind(root, match, depth) {
+    if (!root || depth > 5) return null;
+    let nodes;
+    try { nodes = root.querySelectorAll('*'); } catch { return null; }
+    for (const el of nodes) {
+      try { if (match(el)) return el; } catch { /* keep looking */ }
+      if (el.shadowRoot) {
+        const hit = deepFind(el.shadowRoot, match, depth + 1);
+        if (hit) return hit;
+      }
+    }
+    return null;
   }
+
+  const isUpvoteBtn = (el) =>
+    el.tagName === 'BUTTON' && el.hasAttribute && el.hasAttribute('upvote');
+
+  /** The upvote button for one thing, reached through its shadow root. */
+  function upvoteButton(ref) {
+    const host = nodeForRef(ref);
+    if (!host) return null;
+    return deepFind(host.shadowRoot || host, isUpvoteBtn, 0)
+      // Old reddit has no shadow DOM and no attribute, only a class on an <a>.
+      || (host.querySelector ? host.querySelector('.arrow.up, .arrow.upmod') : null);
+  }
+
+  /** Upvoted? true / false / null when it cannot be judged (never guess). */
+  function upvotedState(ref) {
+    const btn = upvoteButton(ref);
+    if (!btn) return null;
+    const pressed = btn.getAttribute && btn.getAttribute('aria-pressed');
+    if (pressed === 'true') return true;
+    if (pressed === 'false') return false;
+    if (btn.classList && btn.classList.contains('upmod')) return true;  // old reddit
+    return null;
+  }
+
+  // The click bridge. engage-core hands its matcher the RETARGETED event target (the shadow
+  // host), so the button itself never reaches it. This capture listener reads
+  // composedPath(), which does include the shadow-internal node, and remembers that an
+  // upvote was pressed a moment ago; likeTarget() below answers from that memory.
+  //
+  // Belt and braces on purpose: if this listener loses the race to register, engage-core's
+  // own 5s poll still credits off upvotedState() alone, just a few seconds later.
+  let lastUpvoteAt = 0;
+  document.addEventListener('click', (e) => {
+    try {
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      if (path.some(isUpvoteBtn)) lastUpvoteAt = Date.now();
+    } catch { /* ignore */ }
+  }, true);
 
   const adapter = {
     platform: 'reddit',
@@ -66,16 +106,19 @@
 
     // The upvote is the like. Document-wide read for the click path (a click says which
     // thing is meant); the focal read below is what the self-heal poll uses.
-    isLiked() {
-      const scoped = upvotedIn(nodeForRef(this.getRef()));
-      if (scoped != null) return scoped;
-      return upvotedIn(document) === true;
-    },
-    isLikedFocal() { return upvotedIn(nodeForRef(this.getRef())); },
+    isLiked() { return upvotedState(this.getRef()) === true; },
+    // Null means "cannot judge, do not self-heal", which is what engage-core wants when a
+    // poll credits with no click behind it.
+    isLikedFocal() { return upvotedState(this.getRef()); },
+    // Answers from the composedPath listener above rather than the retargeted node: a click
+    // that landed on the upvote within the last two seconds counts as this post's upvote.
+    // Scoped to the focal thing so an upvote on a COMMENT further down the page can never
+    // credit the post.
     likeTarget(t) {
-      return t && t.closest
-        ? t.closest('button[aria-label*="pvote" i]:not([aria-label*="Down" i]), [data-post-click-location="upvote"], .arrow.up, .arrow.upmod')
-        : null;
+      if (Date.now() - lastUpvoteAt > 2000) return null;
+      const host = nodeForRef(this.getRef());
+      if (!host) return null;
+      return (t && host.contains && host.contains(t)) || t === host ? host : null;
     },
 
     // Comments: Reddit posts a reply with the "Comment"/"Reply" button; Enter is a newline.
