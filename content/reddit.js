@@ -143,18 +143,36 @@
       return '';
     },
 
-    // ---- highlight rings -----------------------------------------------------
-    likeHighlightTarget() {
-      try {
-        const scope = nodeForRef(this.getRef()) || document;
-        return scope.querySelector(
-          'button[aria-label*="pvote" i]:not([aria-label*="Down" i]), [data-post-click-location="upvote"], .arrow.up') || null;
-      } catch { return null; }
+    // Advisory line above the rows. Reddit is the one platform here where the earning does
+    // not stop at the post: his replies in the thread are targets of their own, and their
+    // upvote pays the same. Nothing on the page says so, and a member who upvotes the post
+    // and leaves never finds out (owner, 2026-08-30).
+    notice() {
+      const ref = this.getRef();
+      if (!ref) return null;
+      return ref.startsWith('t1_')
+        ? 'This is one of his comments. The upvote pays here too.'
+        : 'Check the comments for his replies. Upvoting those pays tickets as well.';
     },
+
+    // ---- highlight rings -----------------------------------------------------
+    // The ring goes on the REAL button, shadow root and all. The first cut queried the
+    // light DOM, which finds nothing on shreddit, so the upvote credited (the state read
+    // descends) while no gold ring ever appeared (owner, 2026-08-30).
+    // getBoundingClientRect works through a shadow boundary, so the overlay lands right.
+    likeHighlightTarget() { return upvoteButton(this.getRef()); },
+    // Same shadow-root descent as the upvote: Reddit's composer sits inside
+    // <shreddit-composer>, so a light-DOM query finds nothing and the gold ring never
+    // appears. The plain query stays first for old reddit, which has no shadow DOM.
     commentHighlightTarget() {
       try {
-        return document.querySelector(this.composerSel)
-          || document.querySelector('button[aria-label*="omment" i], a[data-click-id="comments"]') || null;
+        const light = document.querySelector(this.composerSel);
+        if (light) return light;
+        const deep = deepFind(document, (el) =>
+          (el.getAttribute && el.getAttribute('contenteditable') === 'true')
+          || el.tagName === 'TEXTAREA', 0);
+        if (deep) return deep;
+        return document.querySelector('button[aria-label*="omment" i], a[data-click-id="comments"]') || null;
       } catch { return null; }
     },
     getVideoEl() { return null; },
