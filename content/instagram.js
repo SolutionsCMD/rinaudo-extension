@@ -160,6 +160,60 @@
       try { return !!document.querySelector('svg[aria-label="Repost"]'); }
       catch (e) { return false; }
     },
+
+    // --- Share (the paper plane), 8 tickets, separate from the Repost above -------------
+    //
+    // Owner, 2026-08-30: sharing pays on its own, and Instagram desktop has roughly ten
+    // affordances that all count as sharing, so this is DELIBERATELY LOOSE: the paper
+    // plane, the sheet's Send, Copy link, and the handoffs to X/Facebook. It cannot
+    // overpay however loose it gets, because a share is one per member per post and the
+    // server dedups it regardless.
+    //
+    // Click-only (see sendClickOnly): a share leaves nothing behind to confirm. Copying a
+    // link never touches the network and a handoff just navigates away, so there is no
+    // mutation to wait for the way the repost waits for CreateMediaRepost.
+    //
+    // Anchored on aria-labels and SVG <title>s, never the hashed classnames, which change
+    // between deploys. Aria-labels DO localize (a French viewer's repost silently stopped
+    // paying on 2026-08-11 for exactly that reason), so the href-based matches below carry
+    // the language-independent half and selector_health reports what stops matching.
+    sendClickOnly: true,
+    sendTarget(t) {
+      if (!t || !t.closest) return null;
+      try {
+        // The paper plane itself, or the button wrapping it.
+        const svg = t.closest('svg[aria-label="Share Post"], svg[aria-label="Share"], svg[aria-label="Copy link"]');
+        if (svg) return svg;
+        // A handoff link out of the share sheet: language independent.
+        const a = t.closest('a[href*="twitter.com/share"], a[href*="x.com/share"], a[href*="facebook.com/sharer"], a[href*="api.whatsapp.com/send"]');
+        if (a) return a;
+        const btn = t.closest('[role="button"], button, a');
+        if (!btn) return null;
+        // A wrapper only counts when it CONTAINS one of the share icons, so a click on
+        // like/comment/menu can never be read as a share.
+        if (btn.querySelector('svg[aria-label="Share Post"], svg[aria-label="Share"], svg[aria-label="Copy link"]')) return btn;
+        // The sheet's own rows, matched on their visible label. Kept last and kept tight:
+        // an exact-word test, so a caption containing the word "send" cannot arm it.
+        const label = (btn.textContent || '').trim().toLowerCase();
+        if (label === 'send' || label === 'copy link' || label === 'share to feed') return btn;
+        return null;
+      } catch (e) { return null; }
+    },
+    /** Is any share control on the page at all? Drives the "refresh" hint below. */
+    sendPresent() {
+      try {
+        return !!document.querySelector(
+          'svg[aria-label="Share Post"], svg[aria-label="Share"], svg[aria-label="Copy link"]');
+      } catch (e) { return false; }
+    },
+    sendHighlightTarget() {
+      try {
+        if (!this.getRef()) return null;
+        const svg = document.querySelector('svg[aria-label="Share Post"], svg[aria-label="Share"]');
+        if (!svg) return null;
+        return svg.closest('[role="button"], button') || svg;
+      } catch (e) { return null; }
+    },
     // The native control to ring for the FOCAL post: the same svg[aria-label="Repost"] that
     // repostTarget/repostPresent trust, preferring its clickable wrapper button so the ring
     // sits over what the user actually clicks. Instagram post pages are single-post surfaces,

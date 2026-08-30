@@ -255,7 +255,18 @@ self.EngageCore = (function () {
         body.append(rowEl('Repost it', `+${rewards.repostReward}`, state.repostS));
       }
       if (sendCapable() && rewards.shareSendReward > 0) {
-        body.append(rowEl('Send it to a friend', `+${rewards.shareSendReward}`, state.sendS));
+        // "Share it" rather than "Send it to a friend": on Instagram this pays for any
+        // share, copying the link included, and the old label described only one of them.
+        body.append(rowEl('Share it', `+${rewards.shareSendReward}`, state.sendS));
+        // Instagram moves its share control around and sometimes renders a post without
+        // one until the page settles. When the row is unearned and nothing shareable is on
+        // screen, say the one thing that fixes it rather than leaving a task that looks
+        // broken (owner, 2026-08-30).
+        if (state.sendS !== 'done' && typeof A.sendPresent === 'function') {
+          let present = true;
+          try { present = A.sendPresent(); } catch { present = true; }
+          if (!present) body.append(hint('No share button? Refresh the page'));
+        }
       }
       // All-done bonus. The server computes and pays it; this row only reports it. Shown
       // only when the whole set is actually reachable here (or has already been earned,
@@ -350,6 +361,9 @@ self.EngageCore = (function () {
           // after you had already started typing. pointer-events:none, so the ring never
           // intercepts a click or a keystroke.
           push('commentbox', composerEl(), rewards.commentReward);
+        }
+        if (state.canSend === true && rewards.shareSendReward > 0 && state.sendS !== 'done') {
+          push('send', ringCall('sendHighlightTarget'), rewards.shareSendReward);
         }
         if (state.canRepost === true && rewards.repostReward > 0
             && state.repostS !== 'done' && !shareHidden) {
@@ -544,7 +558,21 @@ self.EngageCore = (function () {
       if (typeof A.repostTarget !== 'function' && typeof A.sendTarget !== 'function') return;
       document.addEventListener('click', (e) => {
         try { if (typeof A.repostTarget === 'function' && A.repostTarget(e.target)) pendingRepostUntil = Date.now() + CONFIRM_WINDOW_MS; } catch { /* selector drift must never throw */ }
-        try { if (typeof A.sendTarget === 'function' && A.sendTarget(e.target)) pendingSendUntil = Date.now() + CONFIRM_WINDOW_MS; } catch { /* same */ }
+        try {
+          if (typeof A.sendTarget === 'function' && A.sendTarget(e.target)) {
+            // CLICK-ONLY SHARES. The two-signal path waits for the platform's own mutation,
+            // and a share has none to wait for: copying a link never touches the network and
+            // a handoff to another site just navigates away. So an adapter that sets
+            // sendClickOnly credits on the gesture, the same trust level as an X like.
+            // fireEngagement's own guards make that safe: one per post, idle-only, and the
+            // server dedups regardless (owner, 2026-08-30).
+            if (A.sendClickOnly) {
+              if (sendCapable() && state && state.sendS === 'idle') fireEngagement('share_send');
+            } else {
+              pendingSendUntil = Date.now() + CONFIRM_WINDOW_MS;
+            }
+          }
+        } catch { /* same */ }
       }, true);
     }
     // What this surface has taken responsibility for, so another surface running the same
