@@ -1079,7 +1079,15 @@ self.EngageCore = (function () {
       // Show the per-platform amount so an X post reads "+3 / +2", not "Required".
       const isX = A.platform === 'x';
       const likeR = isX && data && data.xLikeReward != null ? data.xLikeReward : (data && data.likeReward);
-      const commentR = isX && data && data.xCommentReward != null ? data.xCommentReward : (data && data.commentReward);
+      // PER-TARGET comment rate when the server sends one, which it has since 2026-08-30:
+      // comments pay 1 everywhere and Facebook keeps 2, and there is no per-platform field
+      // for Facebook the way there is for X. Reading it off the target means the client
+      // never has to know the override table, and a server that omits it (or a platform
+      // with no override) falls back exactly as before.
+      const tgt = data && (data.targets || []).find((t) => t.platform === A.platform && t.ref === ref);
+      const perTarget = tgt && tgt.commentReward != null ? Number(tgt.commentReward) : null;
+      const commentR = perTarget != null ? perTarget
+        : (isX && data && data.xCommentReward != null ? data.xCommentReward : (data && data.commentReward));
       rewards = {
         likeReward: likeR || 0,
         commentReward: commentR || 0,
