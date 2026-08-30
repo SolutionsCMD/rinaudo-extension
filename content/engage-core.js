@@ -283,7 +283,14 @@ self.EngageCore = (function () {
       // shareHidden toggle, ref change, etc.). Never let a ring error break the widget.
       try { ensureShareRing(); } catch { /* safe degrade: no ring */ }
     }
-    function clearWidget() { try { teardownShareRing(); } catch { /* safe degrade */ } if (frame) { frame.destroy(); frame = null; } state = null; }
+    function clearWidget() {
+      try { teardownShareRing(); } catch { /* safe degrade */ }
+      // An armed click-only share must not survive the post it belongs to: navigating away
+      // mid-wait would otherwise land its credit on whatever the widget shows next.
+      try { cancelClickOnlyShare(); } catch { /* declared below; ignore before first use */ }
+      if (frame) { frame.destroy(); frame = null; }
+      state = null;
+    }
 
     // --- On-page SHARE-HIGHLIGHT ring -------------------------------------------
     // A gold ring + "+N" badge drawn OVER the platform's own Share / Repost control so
@@ -553,6 +560,32 @@ self.EngageCore = (function () {
     const FB_DIAG_MAX = 6;
     let ttDiagSent = 0;
     const TT_DIAG_MAX = 4;
+    // A click-only share does not credit on the click. It ARMS, and the credit lands a few
+    // seconds later if the member is still on the same post (owner, 2026-08-30).
+    //
+    // The delay is what a share has instead of a confirmation. A brush past the paper
+    // plane, a sheet opened and shut, or a click immediately followed by navigating away
+    // all resolve to nothing, because the post under the member has to still be the post
+    // they clicked on when the timer fires. It is not proof they shared - nothing on the
+    // page can prove that - but it removes the cheapest accidents.
+    const SHARE_CREDIT_DELAY_MS = 5000;
+    let shareTimer = null;
+    function cancelClickOnlyShare() {
+      if (shareTimer) { clearTimeout(shareTimer); shareTimer = null; }
+    }
+    function armClickOnlyShare() {
+      if (!sendCapable() || !state || state.sendS !== 'idle') return;
+      const ref = state.ref;
+      cancelClickOnlyShare();               // a second click just restarts the wait
+      shareTimer = setTimeout(() => {
+        shareTimer = null;
+        // Re-read everything: five seconds is long enough for the member to have moved to
+        // another post, earned it by another path, or for the widget to have been cleared.
+        if (!sendCapable() || !state || state.ref !== ref || state.sendS !== 'idle') return;
+        fireEngagement('share_send');
+      }, SHARE_CREDIT_DELAY_MS);
+    }
+
     function hookIntent() {
       if (intentHooked) return; intentHooked = true;
       if (typeof A.repostTarget !== 'function' && typeof A.sendTarget !== 'function') return;
@@ -567,7 +600,7 @@ self.EngageCore = (function () {
             // fireEngagement's own guards make that safe: one per post, idle-only, and the
             // server dedups regardless (owner, 2026-08-30).
             if (A.sendClickOnly) {
-              if (sendCapable() && state && state.sendS === 'idle') fireEngagement('share_send');
+              armClickOnlyShare();
             } else {
               pendingSendUntil = Date.now() + CONFIRM_WINDOW_MS;
             }
