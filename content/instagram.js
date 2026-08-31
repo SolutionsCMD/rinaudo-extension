@@ -254,4 +254,62 @@
   };
   self.RGC_IG_ADAPTER = adapter;
   if (self.EngageCore) self.EngageCore.init(adapter);
+
+  // ---- discovery scan -------------------------------------------------------------
+  //
+  // Instagram was the ONLY platform with a single discovery lane: IFTTT, and nothing
+  // behind it. On 2026-08-31 IFTTT silently failed to deliver a post and it earned
+  // nothing for 43 minutes until the owner noticed and it was published by hand, while
+  // TikTok from the same minute came through fine. TikTok and Reddit already have this
+  // fallback for exactly that reason; Instagram now has it too.
+  //
+  // Shortcodes only, only from HIS profile, and only what this page has not sent. The
+  // server publishes none of them directly: social_poll re-checks each against Instagram
+  // before it can become a target, so a hostile client can queue ids and never invent one.
+  const IG_HANDLE = 'realmizkif';
+  const igReported = Object.create(null);
+
+  const onHisProfile = () => {
+    const p = (location.pathname || '').toLowerCase();
+    return p === '/' + IG_HANDLE || p === '/' + IG_HANDLE + '/' || p.startsWith('/' + IG_HANDLE + '/reels');
+  };
+
+  function igScan() {
+    try {
+      if (document.visibilityState === 'hidden') return;
+      const refs = [];
+      const seen = Object.create(null);
+      const take = (href) => {
+        const m = String(href || '').match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]{5,})/);
+        if (!m || seen[m[1]]) return;
+        seen[m[1]] = 1; refs.push(m[1]);
+      };
+      // The profile grid, when the member is on his page.
+      if (onHisProfile()) {
+        document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"], a[href*="/tv/"]').forEach((a) => take(a.getAttribute('href')));
+      }
+      // A single post page reached straight from a notification counts too, but ONLY when
+      // the page says it is his: on a permalink the grid is absent and the author is the
+      // only thing tying the post to him.
+      const own = adapter.refFromPath(location.pathname);
+      if (own) {
+        let mine = false;
+        try {
+          mine = !!document.querySelector('a[href="/' + IG_HANDLE + '/"], a[href="/' + IG_HANDLE + '"]');
+        } catch { mine = false; }
+        if (mine) take(location.pathname);
+      }
+      const fresh = refs.filter((r) => !igReported[r]).slice(0, 30);
+      if (!fresh.length) return;
+      // Marked reported only once the server took the batch, so a report dropped for want
+      // of a token or a network blip is retried rather than lost (the TikTok rule).
+      fresh.forEach((r) => { igReported[r] = 1; });
+      chrome.runtime.sendMessage({ type: 's2Discover', platform: 'instagram', refs: fresh })
+        .then((r) => { if (!r || !r.ok) fresh.forEach((x) => { delete igReported[x]; }); })
+        .catch(() => { fresh.forEach((x) => { delete igReported[x]; }); });
+    } catch (e) { /* discovery is optional; it must never break the page */ }
+  }
+  setTimeout(igScan, 4000);
+  setInterval(igScan, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') igScan(); });
 })();
