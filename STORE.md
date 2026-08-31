@@ -38,6 +38,11 @@ turned on, and only X has the confirmation signature today.
   game can credit them.
 - **host: https://x.com/, https://twitter.com/** - detect the member's likes, replies, and reposts
   on his promoted posts, so the game can credit them, including the repost check below.
+- **host: https://www.facebook.com/, https://web.facebook.com/, https://m.facebook.com/** - detect
+  the member's likes, comments, and reshares on his promoted reels, so the game can credit them.
+- **host: https://www.reddit.com/, https://reddit.com/, https://old.reddit.com/** - detect the
+  member's upvotes and replies on his promoted posts, and notice his newest posts from his own
+  profile page so the game learns about them promptly.
 
 ## The X repost check (reviewers will ask about `"world": "MAIN"`)
 `content/observe.js` is the only content script that runs in the page's own world, and it is
@@ -91,10 +96,11 @@ so this script watches the requests the X page itself sends:
 
 ## Before submitting
 - Host `privacy.html` at a public URL and put it in the listing's privacy field. It must stay in
-  sync with the code: it now names x.com / twitter.com and describes the repost check.
-- Confirm the host permissions list matches `manifest.json` (**12 hosts**: rinaudoglobal.com,
+  sync with the code: it now names every host through reddit.com and describes the repost check and the reddit profile scan.
+- Confirm the host permissions list matches `manifest.json` (**18 hosts**: rinaudoglobal.com,
   s2.jsolutions.dev, kick.com, www.youtube.com, m.youtube.com, www.tiktok.com, m.tiktok.com,
-  www.instagram.com, instagram.com, instagr.am, x.com, twitter.com).
+  www.instagram.com, instagram.com, instagr.am, www.facebook.com, web.facebook.com,
+  m.facebook.com, www.reddit.com, reddit.com, old.reddit.com, x.com, twitter.com).
 - Bump `version` in both `manifest.json` and `manifest.firefox.json` (`./build.sh --set-version`),
   and run `node scripts/release-checks.mjs` before packaging.
 - **Chrome Web Store -> Privacy practices:** declare the anti-fraud data collection (device

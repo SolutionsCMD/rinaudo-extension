@@ -89,10 +89,21 @@
   // Belt and braces on purpose: if this listener loses the race to register, engage-core's
   // own 5s poll still credits off upvotedState() alone, just a few seconds later.
   let lastUpvoteAt = 0;
+  let lastUpvoteRef = '';
   document.addEventListener('click', (e) => {
     try {
       const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-      if (path.some(isUpvoteBtn)) lastUpvoteAt = Date.now();
+      if (!path.some(isUpvoteBtn)) return;
+      lastUpvoteAt = Date.now();
+      // WHICH thing was upvoted, not just when: a timestamp alone let an upvote on any
+      // comment in the thread be attributed to the focal post by the next click (review
+      // finding, 2026-08-31). The host element in the same composed path names it.
+      lastUpvoteRef = '';
+      for (const el of path) {
+        const tag = el && el.tagName;
+        if (tag === 'SHREDDIT-POST' && el.getAttribute) { lastUpvoteRef = String(el.getAttribute('id') || '').toLowerCase(); break; }
+        if (tag === 'SHREDDIT-COMMENT' && el.getAttribute) { lastUpvoteRef = String(el.getAttribute('thingid') || '').toLowerCase(); break; }
+      }
     } catch { /* ignore */ }
   }, true);
 
@@ -116,7 +127,11 @@
     // credit the post.
     likeTarget(t) {
       if (Date.now() - lastUpvoteAt > 2000) return null;
-      const host = nodeForRef(this.getRef());
+      const ref = this.getRef();
+      // The recorded upvote must be THIS thing's. An empty record (old-reddit markup with
+      // no host element in the path) falls back to the containment check alone.
+      if (lastUpvoteRef && lastUpvoteRef !== ref) return null;
+      const host = nodeForRef(ref);
       if (!host) return null;
       return (t && host.contains && host.contains(t)) || t === host ? host : null;
     },
@@ -150,9 +165,12 @@
     notice() {
       const ref = this.getRef();
       if (!ref) return null;
+      // Truthful about WHERE the credit lands: an in-thread upvote of a reply does not
+      // credit (the widget binds to this page's own thing), so the member is sent to the
+      // reply's page rather than promised something the thread view will not pay.
       return ref.startsWith('t1_')
         ? 'This is one of his comments. The upvote pays here too.'
-        : 'Check the comments for his replies. Upvoting those pays tickets as well.';
+        : 'His replies pay too. Open a reply from the earn page to collect on it.';
     },
 
     // ---- highlight rings -----------------------------------------------------
@@ -225,7 +243,11 @@
     const key = refs.join(',');
     if (key === lastSent) return;
     lastSent = key;
-    chrome.runtime.sendMessage({ type: 's2Discover', platform: 'reddit', refs }).catch(() => {});
+    // On failure the watermark resets so the next scan retries, instead of the set being
+    // considered sent forever (same rule as the TikTok scanner, review 2026-08-31).
+    chrome.runtime.sendMessage({ type: 's2Discover', platform: 'reddit', refs })
+      .then((r) => { if (!r || !r.ok) lastSent = ''; })
+      .catch(() => { lastSent = ''; });
   }
 
   setInterval(scan, 60_000);

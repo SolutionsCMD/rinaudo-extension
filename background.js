@@ -217,11 +217,15 @@ async function s2Targets() {
 // cannot invent a target.
 async function s2Discover(platform, refs) {
   const token = await getS2Token();
-  if (!token || !Array.isArray(refs) || !refs.length) return;
-  fetch(S2.API + S2.DISCOVER, {
+  if (!token || !Array.isArray(refs) || !refs.length) return { ok: false };
+  // The caller marks ids as reported only on an OK answer: fire-and-forget meant a batch
+  // dropped for want of a token (a fresh install) or a network blip was marked reported
+  // anyway and that client never re-sent it (review finding, 2026-08-31).
+  const r = await fetch(S2.API + S2.DISCOVER, {
     method: 'POST', headers: await s2Headers(token, true),
     body: JSON.stringify({ platform, refs: refs.slice(0, 30) }),
-  }).catch(() => {});
+  }).catch(() => null);
+  return { ok: !!(r && r.ok) };
 }
 
 async function s2Debug(kind, data) {
@@ -369,12 +373,12 @@ async function s2AmountVote(sessionId, amountCents) {
 // A battle is NOT a round, so the stake panel never shows one and this is its own call.
 // 'all' is sent as the literal string and resolved server-side against the real balance,
 // so the card never has to guess a number it read a moment ago.
-async function s2AiBattleStake(sideIdx, tickets) {
+async function s2AiBattleStake(battleId, sideIdx, tickets) {
   const token = await getS2Token();
   if (!token) return { ok: false, reason: 'not_connected' };
   const r = await fetch(S2.API + S2.AI_BATTLE, {
     method: 'POST', headers: await s2Headers(token, true),
-    body: JSON.stringify({ sideIdx, tickets }),
+    body: JSON.stringify({ battleId, sideIdx, tickets }),
   }).catch(() => null);
   return r ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
@@ -421,7 +425,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
     else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
     else if (msg.type === 's2Debug') { s2Debug(msg.kind || 'x', msg.data); reply({ ok: true }); }
-    else if (msg.type === 's2Discover') { s2Discover(msg.platform, msg.refs); reply({ ok: true }); }
+    else if (msg.type === 's2Discover') { reply(await s2Discover(msg.platform, msg.refs)); }
     else if (msg.type === 's2LogUi') { s2LogUi(msg.event || {}); reply({ ok: true }); }
     else if (msg.type === 's2FlushUi') { await s2FlushUi(); reply({ ok: true }); }
     else if (msg.type === 's2WatchSession') { reply(await s2WatchSession(msg.platform, msg.videoRef, msg.playerDuration)); }
@@ -432,7 +436,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
     else if (msg.type === 's2AmountVote') { reply(await s2AmountVote(msg.sessionId, msg.amountCents)); }
-    else if (msg.type === 's2AiBattleStake') { reply(await s2AiBattleStake(msg.sideIdx, msg.tickets)); }
+    else if (msg.type === 's2AiBattleStake') { reply(await s2AiBattleStake(msg.battleId, msg.sideIdx, msg.tickets)); }
     else if (msg.type === 's2Round') { reply(await s2Round()); }
     else if (msg.type === 's2RoundAction') { reply(await s2RoundAction(msg.action, msg.ticker, msg.amount)); }
     // 'resize' belonged to the detached vote window, which sent its measured height so

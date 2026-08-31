@@ -195,7 +195,10 @@
         // The sheet's own rows, matched on their visible label. Kept last and kept tight:
         // an exact-word test, so a caption containing the word "send" cannot arm it.
         const label = (btn.textContent || '').trim().toLowerCase();
-        if (label === 'send' || label === 'copy link' || label === 'share to feed') return btn;
+        // NOT 'share to feed': that row is the REPOST confirmation, already credited +5
+        // through its own CreateMediaRepost mutation. Matching it here paid 13 tickets
+        // for one click (review finding, 2026-08-31).
+        if (label === 'send' || label === 'copy link') return btn;
         return null;
       } catch (e) { return null; }
     },
@@ -209,7 +212,11 @@
     sendHighlightTarget() {
       try {
         if (!this.getRef()) return null;
-        const svg = document.querySelector('svg[aria-label="Share Post"], svg[aria-label="Share"]');
+        // The open modal first: in the feed->modal flow, a document-wide first match rings
+        // a dimmed background post's share button instead of the one in front of the
+        // member (review finding, 2026-08-31).
+        const scope = document.querySelector('[role="dialog"]') || document;
+        const svg = scope.querySelector('svg[aria-label="Share Post"], svg[aria-label="Share"]');
         if (!svg) return null;
         return svg.closest('[role="button"], button') || svg;
       } catch (e) { return null; }

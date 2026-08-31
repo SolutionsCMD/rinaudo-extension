@@ -501,6 +501,10 @@ self.EngageCore = (function () {
       // while credited:false means the server already has this one.
       const failed = !r || !!r.error;
       if (!failed && r.credited) { state[key] = 'done'; setDone(ref, { [ACTION_FLAG[action]]: true }); }
+      // A version-gated refusal is not "already earned": marking done here would burn the
+      // action at zero tickets forever on a build the gate exists to protect (review
+      // finding, 2026-08-31). Idle keeps it earnable after the update.
+      else if (!failed && r.reason === 'update_required') { state[key] = 'idle'; drawWidget(); return; }
       // Already-earned (HTTP 200, credited:false) on a like or a repost → show done.
       // Repost needs this as much as like does: without it the repost self-heal in the
       // poll below would re-fire forever at a server that already recorded the credit.
@@ -1121,8 +1125,12 @@ self.EngageCore = (function () {
       const perTarget = tgt && tgt.commentReward != null ? Number(tgt.commentReward) : null;
       const commentR = perTarget != null ? perTarget
         : (isX && data && data.xCommentReward != null ? data.xCommentReward : (data && data.commentReward));
+      // The like gets the same per-target treatment: reddit pays its own rate, and quoting
+      // the global was right only while the two numbers happened to agree.
+      const perTargetLike = tgt && tgt.likeReward != null ? Number(tgt.likeReward) : null;
+      const likeFinal = perTargetLike != null ? perTargetLike : likeR;
       rewards = {
-        likeReward: likeR || 0,
+        likeReward: likeFinal || 0,
         commentReward: commentR || 0,
         watchVideoReward: (data && data.watchVideoReward) || 0,
         watchEarlyBonus: (data && data.watchEarlyBonus) || 0,

@@ -244,3 +244,41 @@ initNotifToggles();
 initWidgetToggles();
 initEarnNow();
 if (self.renderRates) renderRates($('rates'));
+
+// --- Host permissions the browser did not grant --------------------------------------
+// Firefox MV3 treats host permissions as OPTIONAL and does NOT grant origins an UPDATE
+// adds: a member updating into the release that added reddit.com would have Reddit
+// earning silently dead, with content/reddit.js never injected and nothing anywhere
+// saying so (review finding, 2026-08-31; two independent verifications). Chrome grants
+// update-added hosts, so this section simply never appears there.
+//
+// permissions.request must run from a user gesture, which is exactly what a popup click
+// is. The list asked for is the manifest's own host_permissions, so this can never
+// request more than the store listing already declares.
+(async () => {
+  try {
+    const wanted = (chrome.runtime.getManifest().host_permissions || []).filter((o) => /^https:/.test(o));
+    if (!wanted.length || !chrome.permissions || !chrome.permissions.contains) return;
+    const have = await chrome.permissions.contains({ origins: wanted }).catch(() => true);
+    if (have) return;
+    const box = document.getElementById('hostgrant');
+    const text = document.getElementById('hostgrantText');
+    const btn = document.getElementById('hostgrantBtn');
+    if (!box || !btn) return;
+    // Name what is actually missing, so the prompt reads as the feature it unlocks.
+    const missing = [];
+    for (const o of wanted) {
+      const ok = await chrome.permissions.contains({ origins: [o] }).catch(() => true);
+      if (!ok) missing.push(o.replace('https://', '').replace('/*', ''));
+    }
+    text.textContent = 'Your browser has not switched on earning for: '
+      + [...new Set(missing.map((h) => h.replace(/^(www|m|web|old)\./, '')))].join(', ')
+      + '. One click fixes it.';
+    box.hidden = false;
+    btn.addEventListener('click', async () => {
+      const granted = await chrome.permissions.request({ origins: wanted }).catch(() => false);
+      if (granted) { box.hidden = true; }
+      else { text.textContent = 'The browser said no. You can also allow the sites from the extension\u2019s settings page.'; }
+    });
+  } catch { /* the prompt is best-effort; earning elsewhere is unaffected */ }
+})();

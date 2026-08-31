@@ -59,6 +59,9 @@ let shownAmountId = null, optimisticAmount = null, amountDraft = '', lastAmountC
 // The AI battle's staking window. Its own state because a battle is not a round and never
 // appears in the stake panel.
 let shownBattleId = null, battleDraft = '', lastBattleClosesAt = null, battleBusy = false;
+// The last stake attempt's outcome, drawn under the card. '' = nothing to say.
+let battleStatusMsg = '';
+let amountStatusMsg = '';
 
 const POLL_CSS = `
   .q{font-size:14px;font-weight:600;margin:0 0 12px;line-height:1.35}
@@ -78,8 +81,10 @@ const POLL_CSS = `
   .avgsub{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:#8A8678;margin-bottom:9px}
   .avgsub b{color:#C9A766;font-variant-numeric:tabular-nums;font-size:13px}
   .avgsub b.hot{color:#E8B339}
-  .bar{position:relative;height:4px;border-radius:3px;background:rgba(244,239,227,.10);overflow:hidden;margin:0 0 10px}
-  .bar i{position:absolute;left:0;top:0;bottom:0;background:#C9A766;border-radius:3px;transition:width 1s linear}
+  /* .avbar, NOT .bar: RGCFrame's own header uses .bar in the same shadow root, and the
+     shared name squashed the drag handle on every card (review finding, 2026-08-31). */
+  .avbar{position:relative;height:4px;border-radius:3px;background:rgba(244,239,227,.10);overflow:hidden;margin:0 0 10px}
+  .avbar i{position:absolute;left:0;top:0;bottom:0;background:#C9A766;border-radius:3px;transition:width 1s linear}
   .presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .amt{position:relative;padding:9px 8px;border:1px solid rgba(244,239,227,.12);border-radius:8px;background:rgba(255,255,255,.02);color:#F4EFE3;cursor:pointer;font:inherit;font-family:ui-monospace,monospace;font-size:13px;text-align:center}
   .amt:hover{border-color:rgba(201,167,102,.4)}
@@ -101,7 +106,8 @@ const POLL_CSS = `
   .brow{display:flex;gap:6px}
   .bin{flex:1;min-width:0;padding:8px 10px;border:1px solid rgba(244,239,227,.12);border-radius:8px;background:rgba(255,255,255,.02);color:#F4EFE3;font:inherit;font-family:ui-monospace,monospace;font-size:13px}
   .ball{flex:none;padding:8px 12px;border:1px solid rgba(244,239,227,.18);border-radius:8px;background:none;color:#F4EFE3;font:inherit;font-size:12px;cursor:pointer}
-  .bmine{font-size:11px;color:#86D6A4;text-align:center;margin-top:8px}`;
+  .bmine{font-size:11px;color:#86D6A4;text-align:center;margin-top:8px}
+  .bstatus{font-size:11px;color:#F0A15E;text-align:center;margin-top:8px}`;
 
 function ensureWtFrame() {
   if (wtFrame) return;
@@ -232,12 +238,25 @@ function drawRound(data) {
 const money = (cents) => '$' + Math.round(cents / 100).toLocaleString('en-US');
 const tix = (n) => Number(n || 0).toLocaleString('en-US');
 
-/** Stake on a side. The amount is whatever is typed, or every ticket for All. */
+/** Stake on a side. The amount is whatever is typed, or every ticket for All.
+ *
+ *  The server's answer is READ, not discarded: a refused stake used to just clear the box
+ *  with nothing said, so a member typing more tickets than they held believed they had
+ *  staked (review finding, 2026-08-31). The card now says why in one short line. */
 function battleStake(sideIdx, tickets) {
   if (battleBusy || shownBattleId == null) return;
   battleBusy = true;
-  chrome.runtime.sendMessage({ type: 's2AiBattleStake', sideIdx, tickets })
-    .catch(() => {})
+  battleStatusMsg = '';
+  chrome.runtime.sendMessage({ type: 's2AiBattleStake', battleId: shownBattleId, sideIdx, tickets })
+    .then((r) => {
+      if (r && r.ok) { battleStatusMsg = ''; return; }
+      const reason = r && r.reason;
+      battleStatusMsg = reason === 'insufficient' ? 'Not enough tickets for that'
+        : reason === 'closed' || reason === 'not_staking' ? 'Staking has closed'
+        : reason === 'not_connected' ? 'Connect the extension (its icon) to stake'
+        : 'That did not go through, try again';
+    })
+    .catch(() => { battleStatusMsg = 'That did not go through, try again'; })
     .finally(() => { battleBusy = false; battleDraft = ''; tick(); });
 }
 
@@ -255,8 +274,12 @@ function drawBattle(body, b, mine) {
   const n = document.createElement('span');
   n.textContent = (b.sides[0].backers + b.sides[1].backers) + ' staked';
   const t = document.createElement('b');
+  // Its own class: with a battle and an amount vote stacked on one card, both countdowns
+  // used to write into the FIRST '.avgsub b', so the battle's header ran the amount
+  // vote's clock and read 'time up' with staking wide open (review finding, 2026-08-31).
+  t.classList.add('btimer');
   if (left === 0) t.textContent = 'closed';
-  else { t.textContent = left + 's'; if (left != null && left <= 10) t.className = 'hot'; }
+  else { t.textContent = left + 's'; if (left != null && left <= 10) t.classList.add('hot'); }
   sub.append(n, t); body.append(sub);
 
   const grid = document.createElement('div'); grid.className = 'bsides';
@@ -268,9 +291,15 @@ function drawBattle(body, b, mine) {
     pot.textContent = tix(side.pot) + ' 🎟';
     btn.append(nm, pot);
     btn.addEventListener('click', () => {
+      // 'all' rides through as the literal string the server resolves; anything else must
+      // be a whole number. parseInt('all') is NaN, which is exactly the bug that made
+      // All-then-pick-a-side stake nothing (review finding, 2026-08-31).
+      if (battleDraft === 'all') { battleStake(i, 'all'); return; }
       const amount = parseInt(battleDraft, 10);
-      // A side with no amount typed is not a stake; the box is where the number comes from.
-      if (!Number.isInteger(amount) || amount < 1) { battleDraft = ''; tick(); return; }
+      if (!Number.isInteger(amount) || amount < 1) {
+        battleStatusMsg = 'Type an amount (or All) first, then pick a side';
+        battleDraft = ''; tick(); return;
+      }
       battleStake(i, amount);
     });
     grid.append(btn);
@@ -282,7 +311,10 @@ function drawBattle(body, b, mine) {
     const input = document.createElement('input'); input.className = 'bin'; input.type = 'text';
     input.placeholder = 'tickets, then pick a side';
     input.value = battleDraft;
-    input.addEventListener('input', () => { battleDraft = input.value.replace(/[^0-9]/g, ''); });
+    // 'all' survives the numeric filter so the All button's draft is not eaten.
+    input.addEventListener('input', () => {
+      battleDraft = input.value.toLowerCase() === 'all' ? 'all' : input.value.replace(/[^0-9]/g, '');
+    });
     const all = document.createElement('button'); all.type = 'button'; all.className = 'ball';
     all.textContent = 'All';
     // 'all' is resolved by the server against the real balance, so this cannot be stale.
@@ -293,6 +325,10 @@ function drawBattle(body, b, mine) {
     row.append(input, all); body.append(row);
   }
 
+  if (battleStatusMsg) {
+    const st = document.createElement('div'); st.className = 'bstatus'; st.textContent = battleStatusMsg;
+    body.append(st);
+  }
   const line = document.createElement('div');
   if (mine) {
     line.className = 'bmine';
@@ -325,7 +361,18 @@ function amountVote(av, cents, connected) {
   const amount = Math.min(av.maxCents, Math.max(av.minCents, Math.round(cents)));
   optimisticAmount = amount;
   amountDraft = '';
-  chrome.runtime.sendMessage({ type: 's2AmountVote', sessionId: shownAmountId, amountCents: amount }).catch(() => {});
+  amountStatusMsg = '';
+  // A failed cast must CLEAR the optimism: 'You said $25,000' sticking on the card after
+  // a refused or lost request meant the member never re-tapped and their number never
+  // counted (review finding, 2026-08-31).
+  chrome.runtime.sendMessage({ type: 's2AmountVote', sessionId: shownAmountId, amountCents: amount })
+    .then((r) => {
+      if (r && r.ok) return;
+      optimisticAmount = null;
+      amountStatusMsg = 'That did not count, tap it again';
+    })
+    .catch(() => { optimisticAmount = null; amountStatusMsg = 'That did not count, tap it again'; })
+    .finally(() => tick());
   tick();
 }
 
@@ -343,12 +390,13 @@ function drawAmountVote(body, av, mineCents, connected) {
   const sub = document.createElement('div'); sub.className = 'avgsub';
   const n = document.createElement('span'); n.textContent = av.votes + (av.votes === 1 ? ' vote' : ' votes');
   const t = document.createElement('b');
+  t.classList.add('atimer'); // scoped: see the battle timer's note on the countdown collision
   if (!open) { t.textContent = 'final'; } else if (left === 0) { t.textContent = 'time up'; }
-  else { t.textContent = left + 's'; if (left != null && left <= 10) t.className = 'hot'; }
+  else { t.textContent = left + 's'; if (left != null && left <= 10) t.classList.add('hot'); }
   sub.append(n, t); body.append(sub);
 
   if (open && left != null) {
-    const bar = document.createElement('div'); bar.className = 'bar';
+    const bar = document.createElement('div'); bar.className = 'avbar';
     const i = document.createElement('i');
     // Drains over whatever the timer was set to, worked out from what is left and the
     // full minute, so an extended session refills rather than sitting empty.
@@ -445,6 +493,16 @@ async function tick() {
   // visibilitychange handler below ticks immediately when the tab comes back,
   // so the card is current by the time it is on screen.
   if (document.visibilityState === 'hidden') return;
+  // NEVER REBUILD UNDER A MEMBER'S FINGERS. The tick replaces the whole card body, and
+  // with an input focused that stole the caret mid-keystroke: typing 500 could become a
+  // committed 50 (review finding, 2026-08-31). While one of our inputs holds focus the
+  // redraw is skipped; the 1s countdown intervals keep the timers honest meanwhile, and
+  // the next tick after blur repaints everything.
+  if (frame && frame.body) {
+    const root = frame.body.getRootNode ? frame.body.getRootNode() : document;
+    const ae = root.activeElement;
+    if (ae && ae.tagName === 'INPUT' && frame.body.contains(ae)) return;
+  }
   // A live stake round takes the card over (it reverts to polls when it ends).
   const rd = await chrome.runtime.sendMessage({ type: 's2Round' }).catch(() => null);
   if (rd && drawRound(rd)) return;
@@ -518,20 +576,20 @@ setInterval(() => {
   // The battle's own countdown, same reason the amount vote has one: the data poll is
   // seconds apart and a staking window is only minutes long.
   if (shownBattleId != null && frame && lastBattleClosesAt) {
-    const b = frame.body.querySelector('.avgsub b');
+    const b = frame.body.querySelector('b.btimer');
     if (b) {
       const left = Math.max(0, Math.round((new Date(lastBattleClosesAt).getTime() - Date.now()) / 1000));
       b.textContent = left === 0 ? 'closed' : left + 's';
-      b.className = left <= 10 ? 'hot' : '';
+      b.className = 'btimer' + (left <= 10 ? ' hot' : '');
     }
   }
   if (shownAmountId == null || !frame) return;
-  const b = frame.body.querySelector('.avgsub b');
-  const bar = frame.body.querySelector('.bar i');
+  const b = frame.body.querySelector('b.atimer');
+  const bar = frame.body.querySelector('.avbar i');
   if (!b || !lastAmountClosesAt) return;
   const left = Math.max(0, Math.round((new Date(lastAmountClosesAt).getTime() - Date.now()) / 1000));
   b.textContent = left === 0 ? 'time up' : left + 's';
-  b.className = left <= 10 ? 'hot' : '';
+  b.className = 'atimer' + (left <= 10 ? ' hot' : '');
   if (bar) bar.style.width = Math.max(0, Math.min(100, Math.round(left / 60 * 100))) + '%';
 }, 1000);
 

@@ -209,9 +209,14 @@
       // member sitting on the channel costs one report, not one a minute forever.
       const fresh = refs.filter((r) => !reported[r]);
       if (!fresh.length) return;
+      // Marked reported ONLY when the server took the batch: marking first meant a report
+      // dropped for want of a token (fresh install, not yet connected) or a network blip
+      // was never re-sent by this client (review finding, 2026-08-31). On failure the ids
+      // stay fresh and the next 60s pass retries.
       fresh.forEach((r) => { reported[r] = 1; });
       chrome.runtime.sendMessage({ type: 's2Discover', platform: 'tiktok', refs: fresh.slice(0, 30) })
-        .catch(() => {});
+        .then((r) => { if (!r || !r.ok) fresh.forEach((x) => { delete reported[x]; }); })
+        .catch(() => { fresh.forEach((x) => { delete reported[x]; }); });
     } catch (e) { /* discovery is optional; it must never break the page */ }
   }
   setTimeout(scanChannel, 4000);
