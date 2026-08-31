@@ -365,6 +365,20 @@ async function s2AmountVote(sessionId, amountCents) {
   return r && r.ok ? r.json().catch(() => ({ ok: false })) : { ok: false };
 }
 
+// --- AI battle stake ---
+// A battle is NOT a round, so the stake panel never shows one and this is its own call.
+// 'all' is sent as the literal string and resolved server-side against the real balance,
+// so the card never has to guess a number it read a moment ago.
+async function s2AiBattleStake(sideIdx, tickets) {
+  const token = await getS2Token();
+  if (!token) return { ok: false, reason: 'not_connected' };
+  const r = await fetch(S2.API + S2.AI_BATTLE, {
+    method: 'POST', headers: await s2Headers(token, true),
+    body: JSON.stringify({ sideIdx, tickets }),
+  }).catch(() => null);
+  return r ? r.json().catch(() => ({ ok: false })) : { ok: false };
+}
+
 // --- Stake round module (the stake-on-a-ticker poll) ---
 async function s2Round() {
   const token = await getS2Token();
@@ -418,6 +432,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2Poll') { reply(await s2Poll()); }
     else if (msg.type === 's2PollVote') { reply(await s2PollVote(msg.pollId, msg.optionIdx)); }
     else if (msg.type === 's2AmountVote') { reply(await s2AmountVote(msg.sessionId, msg.amountCents)); }
+    else if (msg.type === 's2AiBattleStake') { reply(await s2AiBattleStake(msg.sideIdx, msg.tickets)); }
     else if (msg.type === 's2Round') { reply(await s2Round()); }
     else if (msg.type === 's2RoundAction') { reply(await s2RoundAction(msg.action, msg.ticker, msg.amount)); }
     // 'resize' belonged to the detached vote window, which sent its measured height so

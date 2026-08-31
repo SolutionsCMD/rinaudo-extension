@@ -23,6 +23,9 @@ self.S2 = {
   // "How much do we buy": chat and the site type an amount, the average is the buy.
   // The session itself rides the POLL read above — one request feeds both cards.
   AMOUNT_VOTE: '/api/extension/amount-vote',
+  // The AI battle: two AIs trade, chat stakes tickets on which one profits more. Only the
+  // STAKE needs its own call; the battle itself rides the POLL read above.
+  AI_BATTLE: '/api/extension/ai-battle',
   // Stake-on-a-ticker rounds: GET → {round, me, connected}, POST →
   // {action:'nominate'|'stake'|'join', ticker?, amount?}.
   ROUND: '/api/extension/round',

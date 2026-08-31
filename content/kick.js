@@ -56,6 +56,9 @@ let frame = null, shownPollId = null, optimisticIdx = null;
 // Amount vote ("how much do we buy"): the member's own answer is held optimistically the
 // same way a poll option is, so tapping a preset lights up without waiting for the tick.
 let shownAmountId = null, optimisticAmount = null, amountDraft = '', lastAmountClosesAt = null;
+// The AI battle's staking window. Its own state because a battle is not a round and never
+// appears in the stake panel.
+let shownBattleId = null, battleDraft = '', lastBattleClosesAt = null, battleBusy = false;
 
 const POLL_CSS = `
   .q{font-size:14px;font-weight:600;margin:0 0 12px;line-height:1.35}
@@ -87,7 +90,18 @@ const POLL_CSS = `
   .amtgo{flex:none;padding:9px 14px;border:1px solid #C9A766;border-radius:8px;background:rgba(201,167,102,.14);color:#F4EFE3;font:inherit;font-weight:700;font-size:12px;cursor:pointer}
   .amtgo:hover{background:rgba(201,167,102,.24)}
   .mineline{font-size:11px;color:#86D6A4;text-align:center;margin-top:8px}
-  .sep{height:1px;background:rgba(201,167,102,.16);margin:13px 0 12px}`;
+  .sep{height:1px;background:rgba(201,167,102,.16);margin:13px 0 12px}
+  /* ── the AI battle: two sides, two pots, one stake ── */
+  .bsides{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:2px 0 8px}
+  .bside{padding:9px 8px;border:1px solid rgba(244,239,227,.12);border-radius:8px;background:rgba(255,255,255,.02);color:#F4EFE3;cursor:pointer;font:inherit;text-align:center}
+  .bside:hover{border-color:rgba(201,167,102,.4)}
+  .bside.mine{border-color:#86D6A4;background:rgba(134,214,164,.10)}
+  .bside .bnm{font-weight:700;font-size:13px}
+  .bside .bpot{display:block;margin-top:3px;font-family:ui-monospace,monospace;font-size:11px;color:#A9A697}
+  .brow{display:flex;gap:6px}
+  .bin{flex:1;min-width:0;padding:8px 10px;border:1px solid rgba(244,239,227,.12);border-radius:8px;background:rgba(255,255,255,.02);color:#F4EFE3;font:inherit;font-family:ui-monospace,monospace;font-size:13px}
+  .ball{flex:none;padding:8px 12px;border:1px solid rgba(244,239,227,.18);border-radius:8px;background:none;color:#F4EFE3;font:inherit;font-size:12px;cursor:pointer}
+  .bmine{font-size:11px;color:#86D6A4;text-align:center;margin-top:8px}`;
 
 function ensureWtFrame() {
   if (wtFrame) return;
@@ -216,6 +230,79 @@ function drawRound(data) {
 }
 
 const money = (cents) => '$' + Math.round(cents / 100).toLocaleString('en-US');
+const tix = (n) => Number(n || 0).toLocaleString('en-US');
+
+/** Stake on a side. The amount is whatever is typed, or every ticket for All. */
+function battleStake(sideIdx, tickets) {
+  if (battleBusy || shownBattleId == null) return;
+  battleBusy = true;
+  chrome.runtime.sendMessage({ type: 's2AiBattleStake', sideIdx, tickets })
+    .catch(() => {})
+    .finally(() => { battleBusy = false; battleDraft = ''; tick(); });
+}
+
+/** "How much do we buy" it is not: this is a stake ON A SIDE, and the tickets are spent
+ *  whichever way it goes. The card says so plainly rather than reading like a vote. */
+function drawBattle(body, b, mine) {
+  const left = b.closesAt
+    ? Math.max(0, Math.round((new Date(b.closesAt).getTime() - Date.now()) / 1000)) : null;
+
+  const q = document.createElement('div'); q.className = 'q';
+  q.textContent = b.name || 'Which AI wins?';
+  body.append(q);
+
+  const sub = document.createElement('div'); sub.className = 'avgsub';
+  const n = document.createElement('span');
+  n.textContent = (b.sides[0].backers + b.sides[1].backers) + ' staked';
+  const t = document.createElement('b');
+  if (left === 0) t.textContent = 'closed';
+  else { t.textContent = left + 's'; if (left != null && left <= 10) t.className = 'hot'; }
+  sub.append(n, t); body.append(sub);
+
+  const grid = document.createElement('div'); grid.className = 'bsides';
+  b.sides.forEach((side, i) => {
+    const btn = document.createElement('button'); btn.type = 'button';
+    btn.className = 'bside' + (mine && mine.sideIdx === i ? ' mine' : '');
+    const nm = document.createElement('span'); nm.className = 'bnm'; nm.textContent = side.label;
+    const pot = document.createElement('span'); pot.className = 'bpot';
+    pot.textContent = tix(side.pot) + ' 🎟';
+    btn.append(nm, pot);
+    btn.addEventListener('click', () => {
+      const amount = parseInt(battleDraft, 10);
+      // A side with no amount typed is not a stake; the box is where the number comes from.
+      if (!Number.isInteger(amount) || amount < 1) { battleDraft = ''; tick(); return; }
+      battleStake(i, amount);
+    });
+    grid.append(btn);
+  });
+  body.append(grid);
+
+  if (left !== 0) {
+    const row = document.createElement('div'); row.className = 'brow';
+    const input = document.createElement('input'); input.className = 'bin'; input.type = 'text';
+    input.placeholder = 'tickets, then pick a side';
+    input.value = battleDraft;
+    input.addEventListener('input', () => { battleDraft = input.value.replace(/[^0-9]/g, ''); });
+    const all = document.createElement('button'); all.type = 'button'; all.className = 'ball';
+    all.textContent = 'All';
+    // 'all' is resolved by the server against the real balance, so this cannot be stale.
+    all.addEventListener('click', () => {
+      if (mine && mine.sideIdx != null) battleStake(mine.sideIdx, 'all');
+      else { battleDraft = 'all'; tick(); }
+    });
+    row.append(input, all); body.append(row);
+  }
+
+  const line = document.createElement('div');
+  if (mine) {
+    line.className = 'bmine';
+    line.textContent = 'You staked ' + tix(mine.tickets) + ' on ' + b.sides[mine.sideIdx].label;
+  } else {
+    line.className = 'hint';
+    line.textContent = left === 0 ? 'Staking is closed' : 'Tickets are spent either way';
+  }
+  body.append(line);
+}
 /** $25k above a grand, plain dollars below it. */
 const shortMoney = (cents) => cents >= 100000 ? '$' + Math.round(cents / 100 / 1000) + 'k' : money(cents);
 
@@ -345,6 +432,7 @@ function clear() {
   if (frame) { frame.destroy(); frame = null; }
   shownPollId = null; optimisticIdx = null;
   shownAmountId = null; optimisticAmount = null; amountDraft = ''; lastAmountClosesAt = null;
+  shownBattleId = null; battleDraft = ''; lastBattleClosesAt = null;
 }
 
 async function tick() {
@@ -363,7 +451,8 @@ async function tick() {
   const data = await chrome.runtime.sendMessage({ type: 's2Poll' }).catch(() => null);
   const poll = data && data.poll;
   const av = data && data.amountVote;
-  if (!poll && !av) return clear();
+  const battle = data && data.aiBattle;
+  if (!poll && !av && !battle) return clear();
 
   // Both can be live at once. They share one card, amount vote on top, in the same
   // order the stream overlay stacks them — a member seeing both places should not have
@@ -371,6 +460,15 @@ async function tick() {
   ensureFrame();
   const connected = !!(data && data.connected);
   const body = frame.body; body.replaceChildren();
+
+  if (battle) {
+    if (battle.id !== shownBattleId) { shownBattleId = battle.id; battleDraft = ''; }
+    lastBattleClosesAt = battle.closesAt || null;
+    drawBattle(body, battle, data.myBattleStake || null);
+    if (av || poll) { const sep = document.createElement('div'); sep.className = 'sep'; body.append(sep); }
+  } else {
+    shownBattleId = null; battleDraft = ''; lastBattleClosesAt = null;
+  }
 
   if (av) {
     if (av.id !== shownAmountId) { shownAmountId = av.id; optimisticAmount = null; amountDraft = ''; }
@@ -395,8 +493,9 @@ async function tick() {
     shownPollId = null; optimisticIdx = null;
   }
 
-  if (frame.setTitle) frame.setTitle(av && !poll ? 'How Much' : 'Live Vote');
-  if (av && av.status === 'open') frame.setPill('$ Vote');
+  if (frame.setTitle) frame.setTitle(battle ? 'AI Battle' : av && !poll ? 'How Much' : 'Live Vote');
+  if (battle) frame.setPill('⚔ Stake');
+  else if (av && av.status === 'open') frame.setPill('$ Vote');
 }
 
 // The base cadence is deliberately slow — each tick costs the engine a request per
@@ -408,7 +507,7 @@ let tickTimer = null;
 function scheduleTick() {
   if (tickTimer) clearTimeout(tickTimer);
   const base = (C && C.POLL_FAST_MS) || 10000;
-  const ms = shownAmountId != null ? Math.max(4000, Math.round(base / 2)) : base;
+  const ms = (shownAmountId != null || shownBattleId != null) ? Math.max(4000, Math.round(base / 2)) : base;
   tickTimer = setTimeout(() => { tick().finally(scheduleTick); }, ms);
 }
 scheduleTick();
@@ -416,6 +515,16 @@ scheduleTick();
 // Local countdown: redraw the timer and the bar every second from what the last tick
 // brought back. No network, and only while a session is actually open.
 setInterval(() => {
+  // The battle's own countdown, same reason the amount vote has one: the data poll is
+  // seconds apart and a staking window is only minutes long.
+  if (shownBattleId != null && frame && lastBattleClosesAt) {
+    const b = frame.body.querySelector('.avgsub b');
+    if (b) {
+      const left = Math.max(0, Math.round((new Date(lastBattleClosesAt).getTime() - Date.now()) / 1000));
+      b.textContent = left === 0 ? 'closed' : left + 's';
+      b.className = left <= 10 ? 'hot' : '';
+    }
+  }
   if (shownAmountId == null || !frame) return;
   const b = frame.body.querySelector('.avgsub b');
   const bar = frame.body.querySelector('.bar i');
