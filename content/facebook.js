@@ -278,7 +278,15 @@
       // ComposerStoryCreateMutation only fires on a real reshare. A looser intent therefore
       // cannot create a false credit, it can only let a genuine reshare be recognised.
       const dlg = btn.closest('[role="dialog"]');
-      return dlg ? btn : null;
+      if (dlg) return btn;
+      // THE REELS PLAYER'S SHARE SHEET IS NOT A DIALOG. On that surface the sheet is a
+      // menu/listbox, so nothing armed and the reshare could not credit however many
+      // times the member did it (superchelseatv, four repairs 08-12 through 08-31; her
+      // own probe showed armed:false at the moment of the share). Same safety argument as
+      // the dialog widening above: Facebook is two-signal, so a looser intent cannot
+      // invent a credit, it can only let a real reshare be seen.
+      const sheet = btn.closest('[role="menu"], [role="listbox"], [data-visualcompletion="ignore-dynamic"]');
+      return sheet ? btn : null;
     },
     // Whether the post's Share affordance exists at all, the honest answer to "could this
     // build repost here" and what the selector-health probe reports on. FB labels it "Share"
@@ -290,6 +298,20 @@
         return !!document.querySelector('[aria-label="Share"], [aria-label="Share now"], [aria-label="Send this to friends or post it on your profile."], [role="button"][aria-haspopup="dialog"]');
       } catch (e) { return false; }
     },
+    // THE TOAST AS A SECOND SIGNAL.
+    //
+    // The network confirmation is unreadable on some Facebook builds: her probe recorded
+    // name:"(unnamed:string)", looksJson:false, hasNameToken:false — the reshare's body is
+    // not JSON and carries no friendly-name token anywhere, so ComposerStoryCreateMutation
+    // can never be matched there (2026-08-31). Facebook's own success toast is the only
+    // other thing that says the reshare landed, and it is what the member screenshots.
+    //
+    // Kept as a SECOND signal, not a first: it only counts inside the window an armed
+    // click intent opened, so a toast from some other action cannot credit a reshare.
+    // English-only, like the labels above; a localised member still has the network path
+    // where it is readable, and selector_health reports if this stops matching.
+    repostToastRe: /shared to your (profile|story|feed)|shared to news ?feed|posted to your (profile|story)/i,
+
     // NO isReposted / isRepostedFocal by choice, same as Instagram: the owner declined a
     // reposted-state DOM marker to keep maintenance low, so Facebook credits on two signals
     // (the click intent plus the confirmed ComposerStoryCreateMutation). engage-core treats

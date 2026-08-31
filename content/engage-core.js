@@ -288,6 +288,7 @@ self.EngageCore = (function () {
       // An armed click-only share must not survive the post it belongs to: navigating away
       // mid-wait would otherwise land its credit on whatever the widget shows next.
       try { cancelClickOnlyShare(); } catch { /* declared below; ignore before first use */ }
+      try { stopRepostToast(); } catch { /* same */ }
       if (frame) { frame.destroy(); frame = null; }
       state = null;
     }
@@ -590,11 +591,52 @@ self.EngageCore = (function () {
       }, SHARE_CREDIT_DELAY_MS);
     }
 
+    // THE PLATFORM'S OWN SUCCESS TOAST, as the second signal when the network one cannot be
+    // read. Facebook serves some members a reshape body that is not JSON and carries no
+    // friendly-name token, so ComposerStoryCreateMutation is unmatchable there and the
+    // credit never arrived however many times they reshared (2026-08-31).
+    //
+    // Armed only by a click intent and only for that window, so a toast on its own can
+    // never credit: this is the same two-signal rule, with the DOM standing in for the
+    // network. An adapter without repostToastRe is untouched.
+    let toastObs = null, toastTimer = null;
+    function stopRepostToast() {
+      if (toastObs) { try { toastObs.disconnect(); } catch { /* ignore */ } toastObs = null; }
+      if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    }
+    function watchRepostToast() {
+      if (!A.repostToastRe || toastObs) return;
+      const seen = () => {
+        if (!state || state.repostS !== 'idle' || Date.now() >= pendingRepostUntil) return false;
+        // Read the whole visible page once per batch rather than per node: the toast is
+        // rendered in a portal at the end of body, not inside the post.
+        let txt = '';
+        try { txt = document.body ? document.body.innerText.slice(0, 20000) : ''; } catch { return false; }
+        return A.repostToastRe.test(txt);
+      };
+      try {
+        toastObs = new MutationObserver(() => {
+          if (!seen()) return;
+          stopRepostToast();
+          pendingRepostUntil = 0;
+          fireEngagement('repost');
+        });
+        toastObs.observe(document.body, { childList: true, subtree: true });
+      } catch { toastObs = null; return; }
+      // Never leave an observer running past the intent window it belongs to.
+      toastTimer = setTimeout(stopRepostToast, CONFIRM_WINDOW_MS + 1000);
+    }
+
     function hookIntent() {
       if (intentHooked) return; intentHooked = true;
       if (typeof A.repostTarget !== 'function' && typeof A.sendTarget !== 'function') return;
       document.addEventListener('click', (e) => {
-        try { if (typeof A.repostTarget === 'function' && A.repostTarget(e.target)) pendingRepostUntil = Date.now() + CONFIRM_WINDOW_MS; } catch { /* selector drift must never throw */ }
+        try {
+          if (typeof A.repostTarget === 'function' && A.repostTarget(e.target)) {
+            pendingRepostUntil = Date.now() + CONFIRM_WINDOW_MS;
+            watchRepostToast();
+          }
+        } catch { /* selector drift must never throw */ }
         try {
           if (typeof A.sendTarget === 'function' && A.sendTarget(e.target)) {
             // CLICK-ONLY SHARES. The two-signal path waits for the platform's own mutation,
