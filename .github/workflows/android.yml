@@ -67,6 +67,11 @@ jobs:
             ln -sfn "$ANDROID_HOME/cmdline-tools/$NEWEST" "$ANDROID_HOME/cmdline-tools/latest"
           fi
           ls "$ANDROID_HOME/cmdline-tools/latest/bin" || true
+          # Bubblewrap validates an SDK by requiring a `tools` or `bin` directory
+          # (AndroidSdkTools.js:224). Google retired `tools` years ago and the runner
+          # image no longer ships it, so the check fails on a perfectly good SDK. An
+          # empty directory satisfies it; the real binaries are found via cmdline-tools.
+          mkdir -p "$ANDROID_HOME/tools"
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<JSON
           { "jdkPath": "$JAVA_HOME", "androidSdkPath": "$ANDROID_HOME" }
