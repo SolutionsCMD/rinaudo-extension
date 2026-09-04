@@ -63,28 +63,83 @@ jobs:
       # A throwaway key, so the unsigned lane can produce something installable for
       # testing. It is NEVER the key that signs a release: that one is a secret.
       - name: Generate a scratch signing key
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/scratch.keystore
         run: |
-          keytool -genkeypair -v -keystore scratch.keystore -alias scratch \
+          keytool -genkeypair -v -keystore "$PWD/scratch.keystore" -alias scratch \
             -keyalg RSA -keysize 2048 -validity 30 \
             -storepass scratchpass -keypass scratchpass \
             -dname "CN=Mizkif Global Scratch, O=Mizkif Global, C=US"
 
-      - name: Initialise the TWA from the live web manifest
+      # Bubblewrap's `init` is an interactive questionnaire and ignores piped answers
+      # (it aborted at the first prompt on the first run). Its answers all end up in one
+      # file, so the file is written directly from the site's own web manifest and the
+      # questionnaire is skipped entirely.
+      - name: Write twa-manifest.json from the live web manifest
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/scratch.keystore
+          KEY_ALIAS: scratch
         run: |
-          bubblewrap init --manifest "$MANIFEST" --directory twa \
-            --packageId "$APP_ID" \
-            --signingKeyPath "$PWD/scratch.keystore" --signingKeyAlias scratch \
-            --skipPwaValidation false <<< $'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n'
-        env:
-          BUBBLEWRAP_KEYSTORE_PASSWORD: scratchpass
-          BUBBLEWRAP_KEY_PASSWORD: scratchpass
+          node <<'NODE'
+          const fs = require('fs');
+          (async () => {
+            const m = await (await fetch(process.env.MANIFEST)).json();
+            const icon = (p) => {
+              const hit = m.icons.find((i) => (i.purpose || 'any').includes(p) && i.sizes === '512x512')
+                       || m.icons.find((i) => (i.purpose || 'any').includes(p));
+              return hit ? new URL(hit.src, `https://${process.env.HOST}`).href : undefined;
+            };
+            const twa = {
+              packageId: process.env.APP_ID,
+              host: process.env.HOST,
+              name: m.name,
+              launcherName: m.short_name || m.name,
+              display: m.display || 'standalone',
+              orientation: m.orientation || 'default',
+              themeColor: m.theme_color || '#08101E',
+              themeColorDark: m.theme_color || '#08101E',
+              navigationColor: m.theme_color || '#08101E',
+              navigationColorDark: m.theme_color || '#08101E',
+              navigationDividerColor: '#000000',
+              navigationDividerColorDark: '#000000',
+              backgroundColor: m.background_color || '#08101E',
+              enableNotifications: true,
+              startUrl: m.start_url || '/',
+              iconUrl: icon('any'),
+              maskableIconUrl: icon('maskable'),
+              splashScreenFadeOutDuration: 300,
+              signingKey: { path: process.env.KEYSTORE_PATH, alias: process.env.KEY_ALIAS },
+              appVersionName: '1.0.0',
+              appVersionCode: Number(process.env.GITHUB_RUN_NUMBER || 1),
+              shellVersion: '1.0.0',
+              webManifestUrl: process.env.MANIFEST,
+              fallbackType: 'customtabs',
+              features: {},
+              enableSiteSettingsShortcut: true,
+              isChromeOSOnly: false,
+              isMetaQuest: false,
+              fullScopeUrl: `https://${process.env.HOST}/`,
+              minSdkVersion: 23,
+              shortcuts: (m.shortcuts || []).slice(0, 4).map((s, i) => ({
+                name: s.name, shortName: s.short_name || s.name,
+                url: s.url, chosenIconUrl: icon('any'), chosenMaskableIconUrl: icon('maskable'),
+              })),
+              generatorApp: 'bubblewrap-cli',
+            };
+            fs.mkdirSync('twa', { recursive: true });
+            fs.writeFileSync('twa/twa-manifest.json', JSON.stringify(twa, null, 2));
+            console.log(JSON.stringify({ name: twa.name, startUrl: twa.startUrl, icon: twa.iconUrl, shortcuts: twa.shortcuts.length }, null, 2));
+          })();
+          NODE
 
-      - name: Build
+      - name: Generate the Android project and build
         working-directory: twa
-        run: bubblewrap build --skipPwaValidation
         env:
           BUBBLEWRAP_KEYSTORE_PASSWORD: scratchpass
           BUBBLEWRAP_KEY_PASSWORD: scratchpass
+        run: |
+          bubblewrap update --skipVersionUpgrade
+          bubblewrap build --skipPwaValidation
 
       # The fingerprint of whatever key signed this build. For the scratch lane it is
       # only informational; for a release it is the value that must appear in the site's
@@ -143,11 +198,9 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          bubblewrap init --manifest "$MANIFEST" --directory twa \
-            --packageId "$APP_ID" \
-            --signingKeyPath "$PWD/release.keystore" \
-            --signingKeyAlias "${{ secrets.ANDROID_KEY_ALIAS }}" <<< $'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n'
-          cd twa && bubblewrap build
+          KEYSTORE_PATH="$PWD/release.keystore" KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}" \
+            node .github/scripts/twa-manifest.cjs
+          cd twa && bubblewrap update --skipVersionUpgrade && bubblewrap build
 
       - name: Fingerprint for assetlinks.json
         if: steps.gate.outputs.ready == 'true'
