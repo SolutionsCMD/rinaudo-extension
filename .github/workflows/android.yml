@@ -52,8 +52,21 @@ jobs:
 
       # Bubblewrap prompts for a JDK and SDK path on first run. The runner already has
       # both, so the config is written directly and it never asks.
+      #
+      # It validates the SDK by looking for cmdline-tools/latest, which the runner does
+      # not provide — its command line tools sit in a VERSIONED directory. A symlink is
+      # enough; nothing is downloaded.
       - name: Point Bubblewrap at the runner's toolchain
         run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME"
+          echo "--- cmdline-tools ---"; ls "$ANDROID_HOME/cmdline-tools" || true
+          if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
+            NEWEST="$(ls -1 "$ANDROID_HOME/cmdline-tools" | grep -vi latest | sort -V | tail -1)"
+            echo "linking cmdline-tools/latest -> $NEWEST"
+            ln -sfn "$ANDROID_HOME/cmdline-tools/$NEWEST" "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          ls "$ANDROID_HOME/cmdline-tools/latest/bin" || true
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<JSON
           { "jdkPath": "$JAVA_HOME", "androidSdkPath": "$ANDROID_HOME" }
