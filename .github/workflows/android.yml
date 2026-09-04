@@ -1,0 +1,164 @@
+# Android build: the website as a Play Store app.
+#
+# This is NOT the extension. It wraps mizkif.com as a Trusted Web Activity — Chrome
+# rendering the real site full-screen with no browser chrome, listed on Play like any
+# other app. Google supports this explicitly, which is why Android needs no native code
+# while Safari needs a whole Xcode project.
+#
+# It builds here rather than on the server for two reasons: the server's egress to
+# dl.google.com/android is filtered (every SDK download 404s), and GitHub's Linux runners
+# already have the Android SDK installed, so there is nothing to download at all.
+#
+# Two lanes, mirroring safari.yml:
+#   unsigned  every push. Produces an installable debug APK, so the whole chain is
+#             provable before anyone spends the $25 on a Play account.
+#   signed    on a v* tag AND only when ANDROID_KEYSTORE exists, so it stays dormant
+#             until the account is real, then lights up with no edit here.
+name: android
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  # The site being wrapped. Its web manifest supplies the name, icons, colours and
+  # start_url, so this workflow holds almost no configuration of its own.
+  HOST: mizkif.com
+  MANIFEST: https://mizkif.com/manifest.webmanifest
+  # Must match the package_name in the site's /.well-known/assetlinks.json, or Chrome
+  # shows its URL bar over the app and the illusion breaks.
+  APP_ID: com.mizkifglobal.app
+
+jobs:
+  unsigned:
+    name: build (unsigned APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      # Bubblewrap prompts for a JDK and SDK path on first run. The runner already has
+      # both, so the config is written directly and it never asks.
+      - name: Point Bubblewrap at the runner's toolchain
+        run: |
+          mkdir -p ~/.bubblewrap
+          cat > ~/.bubblewrap/config.json <<JSON
+          { "jdkPath": "$JAVA_HOME", "androidSdkPath": "$ANDROID_HOME" }
+          JSON
+          cat ~/.bubblewrap/config.json
+
+      # A throwaway key, so the unsigned lane can produce something installable for
+      # testing. It is NEVER the key that signs a release: that one is a secret.
+      - name: Generate a scratch signing key
+        run: |
+          keytool -genkeypair -v -keystore scratch.keystore -alias scratch \
+            -keyalg RSA -keysize 2048 -validity 30 \
+            -storepass scratchpass -keypass scratchpass \
+            -dname "CN=Mizkif Global Scratch, O=Mizkif Global, C=US"
+
+      - name: Initialise the TWA from the live web manifest
+        run: |
+          bubblewrap init --manifest "$MANIFEST" --directory twa \
+            --packageId "$APP_ID" \
+            --signingKeyPath "$PWD/scratch.keystore" --signingKeyAlias scratch \
+            --skipPwaValidation false <<< $'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n'
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: scratchpass
+          BUBBLEWRAP_KEY_PASSWORD: scratchpass
+
+      - name: Build
+        working-directory: twa
+        run: bubblewrap build --skipPwaValidation
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: scratchpass
+          BUBBLEWRAP_KEY_PASSWORD: scratchpass
+
+      # The fingerprint of whatever key signed this build. For the scratch lane it is
+      # only informational; for a release it is the value that must appear in the site's
+      # assetlinks.json.
+      - name: Report the signing fingerprint
+        run: |
+          echo "### Android build" >> $GITHUB_STEP_SUMMARY
+          keytool -list -v -keystore scratch.keystore -alias scratch -storepass scratchpass \
+            | grep -A1 "SHA256:" | tee -a $GITHUB_STEP_SUMMARY || true
+          ls -la twa/*.apk twa/*.aab 2>/dev/null | tee -a $GITHUB_STEP_SUMMARY || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-unsigned
+          path: |
+            twa/*.apk
+            twa/*.aab
+            twa/twa-manifest.json
+          if-no-files-found: warn
+
+  signed:
+    name: build (signed AAB for Play)
+    runs-on: ubuntu-latest
+    # Dormant until the keystore secret exists. Same pattern as the Safari signed lane:
+    # the workflow ships complete and lights up the day the account is real.
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is the keystore configured?
+        id: gate
+        run: echo "ready=${{ secrets.ANDROID_KEYSTORE != '' }}" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-java@v4
+        if: steps.gate.outputs.ready == 'true'
+        with: { distribution: temurin, java-version: '17' }
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
+        with: { node-version: '20' }
+
+      - name: Install Bubblewrap
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          npm install -g @bubblewrap/cli
+          mkdir -p ~/.bubblewrap
+          echo "{ \"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$ANDROID_HOME\" }" > ~/.bubblewrap/config.json
+
+      - name: Restore the release keystore
+        if: steps.gate.outputs.ready == 'true'
+        run: echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > release.keystore
+
+      - name: Build the AAB
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          bubblewrap init --manifest "$MANIFEST" --directory twa \
+            --packageId "$APP_ID" \
+            --signingKeyPath "$PWD/release.keystore" \
+            --signingKeyAlias "${{ secrets.ANDROID_KEY_ALIAS }}" <<< $'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n'
+          cd twa && bubblewrap build
+
+      - name: Fingerprint for assetlinks.json
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          echo "Put this SHA-256 in the site's android_cert_fingerprints setting" >> $GITHUB_STEP_SUMMARY
+          keytool -list -v -keystore release.keystore -alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" | grep -A1 "SHA256:" >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          name: android-release
+          path: twa/*.aab
+          if-no-files-found: error
