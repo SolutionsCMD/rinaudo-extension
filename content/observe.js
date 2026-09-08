@@ -132,6 +132,17 @@
         },
       },
       {
+        platform: 'youtube', kind: 'comment_action',
+        // POST /youtubei/v1/comment/perform_comment_action carries a DELETE of the
+        // member's own comment. It also carries like, dislike, pin, heart and report, so
+        // on its own it proves nothing: engage-core treats it as one of three signals and
+        // credits nothing without a confirmed dialog AND a comment leaving the page.
+        // Matched here rather than sniffed from the body because the action itself is an
+        // opaque protobuf token that changes shape, while the endpoint does not.
+        test: function (url) { return /\/youtubei\/v1\/comment\/perform_comment_action(\b|\?|$)/.test(String(url)); },
+        ref: function () { return null; },
+      },
+      {
         platform: 'tiktok', kind: 'comment',
         // POST https://www.tiktok.com/api/comment/publish/?...&aweme_id=<video id>&text=<typed>
         // TikTok's own comment-publish request. The video id and the typed text both ride in

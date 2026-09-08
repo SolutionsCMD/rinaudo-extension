@@ -46,6 +46,7 @@ self.EngageCore = (function () {
 
   function init(A) {
     let frame = null, state = null, commentHooked = false, likeHooked = false, lastHb = 0;
+    let commentDeleteHooked = false;
     let rewards = { likeReward: 0, commentReward: 0, watchVideoReward: 0, watchFloor: 5, watchPerMinute: 1,
       repostReward: 0, shareSendReward: 0, engageBonusReward: 0 };
 
@@ -241,7 +242,13 @@ self.EngageCore = (function () {
       // not shown as off, so nothing dangles a reward nobody can collect. Undefined
       // means an older server, so default to enabled.
       if (A.actions.comment && state.commentEnabled !== false) {
-        body.append(rowEl('Comment something meaningful', socialAmt(rewards.commentReward, state.commentS), state.commentS));
+        // 'voided' = the member deleted the comment we already credited, and the server
+        // has taken the ticket back. Say so rather than quietly showing the row as
+        // earnable again: it is not, one comment per post, and a silent reset would read
+        // as the ticket still being available.
+        body.append(state.commentS === 'voided'
+          ? rowEl('Comment deleted, ticket returned', '', 'voided')
+          : rowEl('Comment something meaningful', socialAmt(rewards.commentReward, state.commentS), state.commentS));
         // No hint line: the row label itself is the owner's full instruction ("Comment
         // something meaningful"). The word-count floor and the banned-words list are
         // enforced silently by passesGate; naming them was bad optics and a dodge guide.
@@ -490,12 +497,16 @@ self.EngageCore = (function () {
     // Server action name -> widget state key and local-cache flag.
     const ACTION_KEY = { like: 'likeS', comment: 'commentS', repost: 'repostS', share_send: 'sendS' };
     const ACTION_FLAG = { like: 'like', comment: 'comment', repost: 'repost', share_send: 'send' };
-    async function fireEngagement(action) {
+    async function fireEngagement(action, extra) {
       const ref = state && state.ref; if (!ref) return;
       const key = ACTION_KEY[action]; if (!key) return;
       if (state[key] !== 'idle') return; // already pending or done
       state[key] = 'pending'; drawWidget();
-      const r = await chrome.runtime.sendMessage({ type: 's2Engagement', platform: A.platform, action, ref }).catch(() => null);
+      const msg = { type: 's2Engagement', platform: A.platform, action, ref };
+      // Optional audit id for the thing that was just created (today: the comment's own
+      // id, so a later delete can be tied to the credit it undoes). Never the text.
+      if (extra && typeof extra.commentId === 'string' && extra.commentId) msg.commentId = extra.commentId;
+      const r = await chrome.runtime.sendMessage(msg).catch(() => null);
       // Response contract (background.js s2Engagement): a FAILURE always carries `error`
       // and never `credited`; a success is the server's own JSON and always carries
       // `credited`. So an error means "we do not know" and must stay idle and retryable,
@@ -788,10 +799,25 @@ self.EngageCore = (function () {
           const okCommentRef = !d.ref || String(d.ref) === state.ref;
           if (okCommentRef && A.actions.comment && state.commentEnabled !== false && state.commentS === 'idle'
               && typeof d.txt === 'string' && passesGate(d.txt.trim())) {
-            fireEngagement('comment');
+            // A new comment reopens the delete detector: the member may post again after
+            // deleting, and the second comment deserves the same watch as the first.
+            deleteReported = false;
+            // Read the posted comment's id when the adapter can, but never make the
+            // credit wait on it: commentIdFor resolves null after a few seconds and the
+            // ticket lands either way.
+            if (A.commentIdFromDom) {
+              const txt = d.txt.trim();
+              commentIdFor(txt).then((id) => fireEngagement('comment', { commentId: id }));
+            } else {
+              fireEngagement('comment');
+            }
           }
           return;
         }
+        // The platform's own comment-action request (YouTube: perform_comment_action).
+        // That endpoint also serves like / pin / report, so on its own it means nothing;
+        // it is the third of the three signals a delete needs.
+        if (d.kind === 'comment_action') { noteCommentDelete({ net: true }); return; }
         // TikTok comment endpoint probe (see observe.js probeUnmatched). Path only, capped.
         if (d.kind === 'ttdiag') {
           try {
@@ -870,6 +896,108 @@ self.EngageCore = (function () {
       const minWords = (state && state.commentMinWords) || 0;
       if (minWords > 0) return text.split(/\s+/).filter(Boolean).length > minWords;
       return text.length > 5;
+    }
+
+    // --- Comment identity + deletion (owner, 2026-09-08) ------------------------------
+    //
+    // Two jobs, both optional per adapter so nothing changes on a platform that has not
+    // opted in:
+    //
+    //   commentIdFor(text)  read back the id of the comment the member just posted, so
+    //                       the credit can be tied to a specific comment.
+    //   hookCommentDelete() notice that comment being deleted and tell the server, which
+    //                       takes the ticket back.
+    //
+    // The id is best effort on purpose. If the platform stops exposing it the credit
+    // still lands and the delete detector still works: one comment per target means the
+    // server can find the credit from the target alone.
+    const COMMENT_ID_WAIT_MS = 6000;
+
+    /** Poll briefly for the freshly posted comment and return its id, or null. */
+    function commentIdFor(text) {
+      if (!A.commentIdFromDom) return Promise.resolve(null);
+      const started = Date.now();
+      return new Promise((resolve) => {
+        (function look() {
+          let id = null;
+          try { id = A.commentIdFromDom(text); } catch (e) { id = null; }
+          if (id) return resolve(String(id));
+          if (Date.now() - started > COMMENT_ID_WAIT_MS) return resolve(null);
+          setTimeout(look, 400);
+        })();
+      });
+    }
+
+    // A delete is only reported when SEVERAL independent things agree inside this window.
+    // Any one of them alone is ordinary browsing: menus get opened and closed, comments
+    // leave the DOM on every re-render, and the endpoint that carries a delete carries
+    // likes and reports too.
+    const DELETE_WINDOW_MS = 10000;
+    let delMenuAt = 0, delMenuId = null;   // an action menu was opened on one of MY comments
+    let delConfirmAt = 0;                   // a confirmation dialog was confirmed
+    let delRemovedAt = 0, delRemovedId = null; // a comment element left the DOM
+    let delNetAt = 0;                       // the platform's own comment-action request
+    let deleteReported = false;
+
+    function noteCommentDelete(part) {
+      const now = Date.now();
+      if (part.menuId !== undefined) { delMenuAt = now; delMenuId = part.menuId; }
+      if (part.confirm) delConfirmAt = now;
+      if (part.removedId !== undefined) { delRemovedAt = now; delRemovedId = part.removedId; }
+      if (part.net) delNetAt = now;
+      maybeReportDelete();
+    }
+
+    function maybeReportDelete() {
+      if (deleteReported) return;
+      if (!state || !state.ref || state.commentS !== 'done') return; // nothing of ours to undo
+      const now = Date.now();
+      const fresh = (t) => t > 0 && now - t < DELETE_WINDOW_MS;
+      // All three required. The dialog says the member meant it, the removal says a
+      // comment actually went, and the request says the platform agreed.
+      if (!(fresh(delConfirmAt) && fresh(delRemovedAt) && fresh(delNetAt))) return;
+      deleteReported = true;
+      const commentId = delRemovedId || delMenuId || null;
+      const ref = state.ref;
+      state.commentS = 'voided';
+      drawWidget();
+      setDone(ref, { comment: false, commentVoided: true });
+      chrome.runtime.sendMessage({
+        type: 's2CommentDeleted', platform: A.platform, ref,
+        commentId: typeof commentId === 'string' ? commentId : null,
+      }).catch(() => {});
+    }
+
+    function hookCommentDelete() {
+      if (!A.commentDeleteHooks || commentDeleteHooked) return;
+      commentDeleteHooked = true;
+      // Signal one: the member opened the menu on a comment (gives us its id), and later
+      // confirmed a dialog. Both are read structurally, never by button TEXT, because the
+      // label is localized and the composer selectors already taught us what that costs.
+      document.addEventListener('click', (e) => {
+        try {
+          const t = e.target;
+          if (!t || !t.closest) return;
+          const menu = A.commentMenuTarget && A.commentMenuTarget(t);
+          if (menu) { noteCommentDelete({ menuId: menu.id || null }); return; }
+          if (A.commentConfirmTarget && A.commentConfirmTarget(t)) noteCommentDelete({ confirm: true });
+        } catch (err) { /* a detector must never break the page */ }
+      }, true);
+      // Signal two: a comment element left the DOM.
+      try {
+        const mo = new MutationObserver((records) => {
+          if (deleteReported || !state || state.commentS !== 'done') return;
+          for (const r of records) {
+            for (const n of r.removedNodes) {
+              if (!n || n.nodeType !== 1) continue;
+              let id = null;
+              try { id = A.commentIdFromNode ? A.commentIdFromNode(n) : null; } catch (e) { id = null; }
+              if (id !== null) { noteCommentDelete({ removedId: id }); return; }
+            }
+          }
+        });
+        mo.observe(document.documentElement, { childList: true, subtree: true });
+      } catch (err) { /* observers are optional, crediting is not */ }
     }
 
     function hookComment() {
@@ -1252,7 +1380,7 @@ self.EngageCore = (function () {
         targetReward: Number(target.reward) || 0,
         replaying: false, replayStarting: false, replayAllDone: replayMax > 0 && replayUsed >= replayMax,
         baseTarget: 0 };
-      lastHb = 0; hookComment(); hookLike(); hookIntent(); drawWidget();
+      lastHb = 0; hookComment(); hookCommentDelete(); hookLike(); hookIntent(); drawWidget();
       scheduleHealthSample(); // target is ACTIVE here; take the one health sample soon
       if (!state.watchDone) startWatch();
     }

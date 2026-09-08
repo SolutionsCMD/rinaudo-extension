@@ -177,3 +177,50 @@ test('a JSON body yields no keys at all', async () => {
   assert.equal(diag.meta.keys, '');
   assert.equal(JSON.stringify(sent).includes('my private caption'), false);
 });
+
+// --- YouTube comment actions (2026-09-08) ------------------------------------------
+// perform_comment_action is what YouTube fires when a member deletes their own comment.
+// It also fires for like, pin and report, which is exactly why engage-core treats it as
+// one of three required signals rather than a delete on its own. What matters here is
+// only that the endpoint is recognised and that its siblings under /comment/ are not.
+function loadYouTubeObserver() {
+  const sent = [];
+  const win = {
+    postMessage: (m) => sent.push(m),
+    fetch: async () => ({ ok: true }),
+    location: { origin: 'https://www.youtube.com', href: 'https://www.youtube.com/watch?v=abc' },
+    URLSearchParams, FormData,
+  };
+  win.XMLHttpRequest = function () {};
+  win.XMLHttpRequest.prototype = { open() {}, send() {}, addEventListener() {} };
+  const code = readFileSync('content/observe.js', 'utf8');
+  new Function('window', 'navigator', 'location', 'URLSearchParams', 'FormData', 'WeakMap', 'Object', code)(
+    win, { sendBeacon: () => true }, win.location, URLSearchParams, FormData, WeakMap, Object);
+  return { win, sent };
+}
+
+test('perform_comment_action is observed as a comment_action', async () => {
+  const { win, sent } = loadYouTubeObserver();
+  await win.fetch('https://www.youtube.com/youtubei/v1/comment/perform_comment_action?key=x',
+    { method: 'POST', body: JSON.stringify({ actions: ['opaque-token'] }) });
+  const hit = sent.find((m) => m.platform === 'youtube' && m.kind === 'comment_action');
+  assert.ok(hit, 'the comment action should be observed');
+  assert.equal(hit.ok, true);
+});
+
+test('creating a comment is not a comment_action, and vice versa', async () => {
+  const { win, sent } = loadYouTubeObserver();
+  await win.fetch('https://www.youtube.com/youtubei/v1/comment/create_comment',
+    { method: 'POST', body: JSON.stringify({ commentText: 'a real comment goes here now' }) });
+  assert.equal(sent.some((m) => m.kind === 'comment_action'), false,
+    'posting a comment must not read as a comment action');
+  assert.ok(sent.find((m) => m.platform === 'youtube' && m.kind === 'comment'),
+    'posting a comment is still a comment');
+});
+
+test('other /comment/ endpoints match nothing', async () => {
+  const { win, sent } = loadYouTubeObserver();
+  await win.fetch('https://www.youtube.com/youtubei/v1/comment/get_comments', { method: 'POST', body: '{}' });
+  assert.equal(sent.some((m) => m.platform === 'youtube' && (m.kind === 'comment' || m.kind === 'comment_action')), false,
+    'reading comments is not an action we credit or undo');
+});

@@ -279,12 +279,16 @@ function s2LogUi(e) {
 // leave the action idle and retryable. This used to answer { credited: false } for every
 // failure too (no token, network drop, 400, 409), which made an error indistinguishable
 // from an already-earned success and stuck failed actions "done" forever.
-async function s2Engagement(platform, action, ref) {
+async function s2Engagement(platform, action, ref, commentId) {
   const token = await getS2Token();
   if (!token) return { error: 'not_connected' };
+  const body = { platform, action, ref };
+  // Audit id for the comment just posted, when the page exposed one. Optional on both
+  // sides: an older server ignores it, and a newer one takes the credit without it.
+  if (typeof commentId === 'string' && commentId) body.commentId = commentId;
   const r = await fetch(S2.API + S2.ENGAGEMENT, {
     method: 'POST', headers: await s2Headers(token, true),
-    body: JSON.stringify({ platform, action, ref }),
+    body: JSON.stringify(body),
   }).catch(() => null);
   if (!r) return { error: 'network' };
   if (!r.ok) return { error: 'http_' + r.status };
@@ -293,6 +297,21 @@ async function s2Engagement(platform, action, ref) {
   // A 200 that does not answer the question is an error, not a silent "not credited".
   if (!('credited' in j)) return { error: 'bad_response' };
   return j;
+}
+
+// The member deleted a comment we had already credited. The server takes the ticket
+// back; there is nothing for the page to do with the answer, so failures are swallowed
+// (a missed report costs one ticket, a thrown error would break the content script).
+async function s2CommentDeleted(platform, ref, commentId) {
+  const token = await getS2Token();
+  if (!token) return { error: 'not_connected' };
+  const r = await fetch(S2.API + S2.ENGAGEMENT_DELETE, {
+    method: 'POST', headers: await s2Headers(token, true),
+    body: JSON.stringify({ platform, ref, commentId: commentId || null }),
+  }).catch(() => null);
+  if (!r) return { error: 'network' };
+  if (!r.ok) return { error: 'http_' + r.status };
+  return (await r.json().catch(() => null)) || { error: 'bad_json' };
 }
 
 // --- YouTube watch-to-earn (drives the existing s2 /api/watch/* flow) ---
@@ -423,7 +442,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     else if (msg.type === 's2ConnectDone') { await s2ConnectDone(_sender && _sender.tab && _sender.tab.id); reply({ ok: true }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
-    else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref)); }
+    else if (msg.type === 's2Engagement') { reply(await s2Engagement(msg.platform || 'x', msg.action, msg.ref, msg.commentId)); }
+    else if (msg.type === 's2CommentDeleted') { reply(await s2CommentDeleted(msg.platform || 'youtube', msg.ref, msg.commentId)); }
     else if (msg.type === 's2Debug') { s2Debug(msg.kind || 'x', msg.data); reply({ ok: true }); }
     else if (msg.type === 's2Discover') { reply(await s2Discover(msg.platform, msg.refs)); }
     else if (msg.type === 's2LogUi') { s2LogUi(msg.event || {}); reply({ ok: true }); }

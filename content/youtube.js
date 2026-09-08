@@ -59,12 +59,34 @@
     'ytm-comment-dialog-renderer textarea',
     'ytm-comment-dialog-renderer [contenteditable="true"]',
   ].join(', ');
+  // One rendered comment, across the watch page, Shorts panel and m.youtube.
+  const COMMENT_EL_SEL = [
+    'ytd-comment-view-model',
+    'ytd-comment-renderer',
+    'ytd-comment-thread-renderer',
+    'ytm-comment-renderer',
+  ].join(', ');
   const adapter = {
     platform: 'youtube',
     actions: { watch: true, like: true, comment: true },
     // YouTube's comment box inserts a newline on Enter; you must click "Comment" to post.
     // So don't trust Enter as a submit here — only the Comment-button click credits it.
     submitOnEnter: false,
+    // COMMENTS CREDIT ONLY ON YOUTUBE'S OWN create_comment REQUEST (observe.js), never
+    // from this page's DOM. The DOM paths engage-core would otherwise run paid for
+    // comments nobody posted (owner, 2026-09-08: "you might be crediting them before
+    // they comment"), and the audit that followed found more comment credits on a video
+    // than the video has comments at all:
+    //   · watchForPostedComment credits when the composer reads EMPTY within 4s of any
+    //     click while gate-passing text sits in any contenteditable. Clicking CANCEL
+    //     empties the composer, so Cancel was a credit.
+    //   · commentSubmitTarget matches #submit-button anywhere on the page and
+    //     commentText() reads any contenteditable, so an unrelated submit with a stale
+    //     reply box open credited too.
+    // TikTok had the identical bug and was fixed the identical way in 1.161 (2,148
+    // tickets in two days). The network signature is also language-proof, which the
+    // composer selectors never were — they kept missing on localized layouts.
+    commentConfirmNetwork: true,
     refFromUrl(href) {
       try {
         const u = new URL(href);
@@ -94,6 +116,76 @@
       return null;
     },
     commentInputTarget(t) { return t && t.closest ? t.closest('#contenteditable-root, [contenteditable="true"]') : null; },
+
+    // --- Comment identity and deletion ------------------------------------------------
+    // Everything here is read STRUCTURALLY: element names, ids and hrefs, never button
+    // text. Labels are localized, and the composer selectors already proved what trusting
+    // wording costs (Serbian members, 2026-08-09: selector_health flooded with misses).
+    commentDeleteHooks: true,
+
+    /** A comment's own id, from the permalink YouTube hangs off every comment (?lc=<id>). */
+    commentIdFromNode(node) {
+      try {
+        if (!node || !node.matches) return null;
+        const el = node.matches(COMMENT_EL_SEL) ? node
+          : (node.querySelector ? node.querySelector(COMMENT_EL_SEL) : null);
+        if (!el) return null;
+        const a = el.querySelector('a[href*="lc="]');
+        if (a) {
+          const m = /[?&]lc=([\w.-]+)/.exec(a.getAttribute('href') || '');
+          if (m) return m[1];
+        }
+        // Present but unreadable id still counts as "a comment left the page", which is
+        // the signal the delete detector actually needs. Empty string, not null: null
+        // means "this was not a comment at all".
+        return '';
+      } catch (e) { return null; }
+    },
+
+    /** The id of the comment whose text matches what was just posted. Best effort. */
+    commentIdFromDom(text) {
+      try {
+        const want = String(text || '').trim().slice(0, 80);
+        if (!want) return null;
+        for (const el of document.querySelectorAll(COMMENT_EL_SEL)) {
+          const body = el.querySelector('#content-text, .comment-text, yt-attributed-string');
+          const got = ((body && (body.textContent || body.innerText)) || '').trim();
+          if (!got || got.slice(0, 80) !== want) continue;
+          const a = el.querySelector('a[href*="lc="]');
+          const m = a ? /[?&]lc=([\w.-]+)/.exec(a.getAttribute('href') || '') : null;
+          if (m) return m[1];
+        }
+        return null;
+      } catch (e) { return null; }
+    },
+
+    /** The three-dot menu on a comment. Gives us which comment is being acted on. */
+    commentMenuTarget(t) {
+      try {
+        if (!t || !t.closest) return null;
+        const btn = t.closest('#action-menu button, ytd-menu-renderer button, ytm-menu button');
+        if (!btn) return null;
+        const el = btn.closest(COMMENT_EL_SEL);
+        if (!el) return null;
+        const a = el.querySelector('a[href*="lc="]');
+        const m = a ? /[?&]lc=([\w.-]+)/.exec(a.getAttribute('href') || '') : null;
+        return { id: m ? m[1] : null };
+      } catch (e) { return null; }
+    },
+
+    /** Confirming YouTube's "delete this comment?" dialog. Structure, not wording. */
+    commentConfirmTarget(t) {
+      try {
+        if (!t || !t.closest) return null;
+        return t.closest(
+          'yt-confirm-dialog-renderer #confirm-button,'
+          + 'ytd-confirm-dialog-renderer #confirm-button,'
+          + 'tp-yt-paper-dialog #confirm-button,'
+          + 'ytm-confirm-dialog-renderer .confirm-button,'
+          + 'yt-confirm-dialog-renderer button[aria-label], ytm-confirm-dialog-renderer button'
+        );
+      } catch (e) { return null; }
+    },
     composerSel: '#contenteditable-root, [contenteditable="true"]',
     commentText() {
       // Scan every candidate composer and return the first with text (instagram.js
