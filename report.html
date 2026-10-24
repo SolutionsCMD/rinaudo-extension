@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Report a problem · Mizkif Global</title>
+  <style>
+    @font-face { font-family: "Playfair Display"; src: url("fonts/playfair-display-latin.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }
+    @font-face { font-family: "DM Sans"; src: url("fonts/dm-sans-latin.woff2") format("woff2"); font-weight: 100 1000; font-style: normal; font-display: swap; }
+    :root {
+      --navy: #060b15; --card: rgba(255,255,255,.045); --line: rgba(255,255,255,.12); --ink: #f2f5f8;
+      --mute: rgba(255,255,255,.66); --dim: rgba(255,255,255,.45); --jade: #48d89f; --gold: #f3cc5c; --red: #ff6b81;
+      --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+      --sans: "DM Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body { margin: 0; min-height: 100vh; color: var(--ink); font: 16px/1.55 var(--sans); background:
+      radial-gradient(900px 480px at 85% -10%, rgba(72,216,159,.14), transparent 60%),
+      radial-gradient(700px 520px at 0% 110%, rgba(34,224,255,.07), transparent 60%), var(--navy); }
+    a { color: var(--jade); }
+    :focus-visible { outline: 3px solid var(--jade); outline-offset: 3px; border-radius: 6px; }
+    .wrap { width: min(680px, 100% - 32px); margin: 0 auto; padding-bottom: 64px; }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--ink); text-decoration: none; }
+    .brand img { width: 30px; height: 30px; }
+    .ver { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--mute); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
+    .eyebrow { margin: 0 0 12px; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--jade); }
+    h1 { margin: 0 0 12px; font-family: var(--serif); font-weight: 500; letter-spacing: -.03em; font-size: clamp(34px, 6vw, 48px); line-height: 1.05; }
+    .lede { margin: 0 0 28px; color: var(--mute); font-size: 17px; }
+    .card { padding: 20px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); margin-bottom: 18px; }
+    .first h2 { margin: 0 0 12px; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); font-family: var(--sans); }
+    .first ol { margin: 0; padding: 0; list-style: none; counter-reset: t; display: grid; gap: 12px; }
+    .first li { counter-increment: t; display: grid; grid-template-columns: 28px 1fr; gap: 10px; color: var(--mute); font-size: 15px; }
+    .first li::before { content: counter(t); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #1b1a17; background: var(--gold); }
+    .first li b { color: var(--ink); }
+    .first li:first-child::before { background: var(--jade); }
+    .first .refresh { margin-top: 2px; }
+    label.f { display: block; font-weight: 700; margin: 0 0 8px; }
+    label.f small { display: block; font-weight: 400; color: var(--dim); font-size: 13px; }
+    textarea, input[type=text] { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.25); color: var(--ink); font: 16px/1.5 var(--sans); padding: 12px 14px; }
+    textarea { min-height: 140px; resize: vertical; }
+    textarea::placeholder, input::placeholder { color: var(--dim); }
+    .field { margin-bottom: 20px; }
+    .shot { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; padding: 12px; border-radius: 12px; border: 1px solid var(--line); cursor: pointer; }
+    .shot input { width: 20px; height: 20px; accent-color: var(--jade); }
+    .shot .t b { display: block; }
+    .shot .t small { color: var(--dim); font-size: 13px; }
+    .shot img { grid-column: 1 / -1; width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: #000; opacity: .45; transition: opacity .15s; }
+    .shot.on img { opacity: 1; }
+    .send { margin-top: 6px; }
+    .sum { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; color: var(--mute); }
+    .sum b { color: var(--ink); font-weight: 600; }
+    details.all { margin-top: 12px; font-size: 13px; color: var(--dim); }
+    details.all summary { cursor: pointer; color: var(--mute); }
+    details.all pre { margin: 10px 0 0; max-height: 320px; overflow: auto; padding: 12px; border-radius: 10px; background: rgba(0,0,0,.35); color: var(--mute); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+    .note { margin: 10px 0 0; font-size: 13px; color: var(--dim); }
+    .cta { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; width: 100%; padding: 0 24px; border: 0; border-radius: 12px; font: 800 16px var(--sans); color: #08101E; cursor: pointer;
+      background: linear-gradient(135deg,#00F5A0,#22E0FF); box-shadow: 0 4px 18px -6px rgba(0,245,160,.5); touch-action: manipulation; }
+    .cta:disabled { opacity: .55; cursor: default; }
+    .err { min-height: 22px; margin: 10px 0 0; color: var(--red); font-weight: 700; font-size: 14px; }
+    .done { text-align: center; padding: 40px 20px; }
+    .done h2 { margin: 0 0 8px; font-family: var(--serif); font-weight: 500; font-size: 36px; }
+    .done p { margin: 0 0 22px; color: var(--mute); }
+    .done .cta { width: auto; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="bar">
+      <span class="brand"><img src="icons/brand-m.png" alt=""> Mizkif Global</span>
+      <span class="ver" id="ver">Extension</span>
+    </header>
+
+    <main id="form">
+      <p class="eyebrow">Report a problem</p>
+      <h1>Something not working?</h1>
+      <p class="lede">Tell us what happened and we'll look into it. The extension adds the details we need to track it down.</p>
+
+      <section class="card first">
+        <h2>Try this first</h2>
+        <ol>
+          <li><span><b>Refresh the page.</b> This fixes most stuck steps, like a repost or comment that didn't count or an arrow that stays on a button you already pressed.<span id="refreshNote" class="note refresh" hidden></span></span></li>
+          <li><span><b>Each step pays once per post.</b> A second comment or repost on the same post won't earn again.</span></li>
+          <li><span><b>Comments have to be real.</b> Very short ones, or ones about tickets, don't count.</span></li>
+          <li id="updTip" hidden><span><b>Update the extension.</b> <span id="updText"></span></span></li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <div class="field">
+          <label class="f" for="msg">What went wrong?</label>
+          <textarea id="msg" maxlength="2000" placeholder="Example: I reposted the TikTok and it didn't count. The arrow stayed on Share."></textarea>
+        </div>
+        <div class="field">
+          <label class="f" for="kick">Your Kick name <small id="kickHint">So we can look you up.</small></label>
+          <input id="kick" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="yourname">
+        </div>
+        <div class="field" id="shotField" hidden>
+          <label class="shot" id="shotBox">
+            <input type="checkbox" id="shotOn">
+            <span class="t"><b>Include a screenshot</b><small>Of the page you were on, shown below. Only sent if you tick this.</small></span>
+            <img id="shotImg" alt="Screenshot of the page you were on">
+          </label>
+        </div>
+        <button id="send" class="cta send" type="button">Send report</button>
+        <p class="err" id="err" role="alert"></p>
+      </section>
+
+      <section class="card">
+        <label class="f">What we'll send with it</label>
+        <ul class="sum" id="sum"></ul>
+        <details class="all">
+          <summary>See everything</summary>
+          <pre id="all"></pre>
+        </details>
+        <p class="note">Only ids and settings. Never what you typed on the page, your passwords, or your other tabs.</p>
+      </section>
+    </main>
+
+    <main id="done" class="card done" hidden>
+      <h2>Thanks, it's sent.</h2>
+      <p id="doneText">We'll look into it.</p>
+      <button id="closeBtn" class="cta" type="button">Close this tab</button>
+    </main>
+  </div>
+  <script src="report.js"></script>
+</body>
+</html>

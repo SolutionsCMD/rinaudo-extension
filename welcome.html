@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Welcome to Mizkif Global</title>
+  <style>
+    @font-face { font-family: "Playfair Display"; src: url("fonts/playfair-display-latin.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }
+    @font-face { font-family: "DM Sans"; src: url("fonts/dm-sans-latin.woff2") format("woff2"); font-weight: 100 1000; font-style: normal; font-display: swap; }
+    :root {
+      --ink: #08110f; --ink-soft: #26332f; --paper: #f4f2ec; --paper-warm: #ebe6db; --white: #fffdf8;
+      --jade: #48d89f; --jade-dark: #0b7f5b; --jade-pale: #dff8ed; --line: rgba(8,17,15,.14);
+      --muted: #68736f; --navy: #060b15; --navy-2: #0b1322; --navy-line: rgba(255,255,255,.12);
+      --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+      --sans: "DM Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.55 var(--sans); }
+    a { color: inherit; }
+    .wrap { width: min(1180px, 100% - 32px); margin: 0 auto; }
+    .eyebrow { margin: 0 0 14px; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--jade-dark); }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: -.03em; }
+    :focus-visible { outline: 3px solid var(--jade); outline-offset: 3px; border-radius: 6px; }
+
+    .hero { position: relative; overflow: hidden; color: #fff; background:
+      radial-gradient(900px 480px at 78% 30%, rgba(72,216,159,.16), transparent 60%),
+      radial-gradient(700px 520px at 5% 110%, rgba(34,224,255,.09), transparent 60%), var(--navy); }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; border-bottom: 1px solid var(--navy-line); }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; text-decoration: none; }
+    .brand img { width: 30px; height: 30px; }
+    .ver { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: rgba(255,255,255,.62); border: 1px solid var(--navy-line); border-radius: 999px; padding: 5px 12px; }
+    .hero-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; padding: 64px 0 76px; }
+    .hero .eyebrow { color: var(--jade); }
+    h1 { margin: 0 0 20px; font-size: clamp(38px, 4.3vw, 60px); line-height: 1.04; }
+    h1 em { display: block; font-style: normal; color: var(--jade); }
+    .lede { margin: 0 0 30px; max-width: 520px; font-size: 18px; color: rgba(255,255,255,.74); }
+
+    .connect { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; max-width: 540px; padding: 18px; border: 1px solid var(--navy-line); border-radius: 18px; background: rgba(255,255,255,.04); }
+    .cta { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 24px; border: 0; border-radius: 12px; font: 800 16px var(--sans); color: #08101E; cursor: pointer;
+      background: linear-gradient(135deg,#00F5A0,#22E0FF); box-shadow: 0 4px 18px -6px rgba(0,245,160,.5); transition: transform .2s ease, box-shadow .2s ease; touch-action: manipulation; }
+    .cta svg { width: 18px; height: 18px; }
+    .cta { position: relative; isolation: isolate; }
+    .cta::before { content: ""; position: absolute; inset: -6px; z-index: -1; border-radius: 16px; background: linear-gradient(135deg,#00F5A0,#22E0FF); filter: blur(14px); opacity: 0; pointer-events: none; }
+    .cta.pulse { animation: ctaBeat 1.8s ease-in-out infinite; }
+    .cta.pulse::before { animation: ctaGlow 1.8s ease-in-out infinite; }
+    @keyframes ctaBeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+    @keyframes ctaGlow { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
+    .connect { position: relative; }
+    .hand { position: absolute; right: 6px; bottom: -30px; width: 40px; height: 40px; display: none; pointer-events: none; animation: handBob 1.1s ease-in-out infinite; }
+    .hand img { width: 100%; height: 100%; object-fit: contain; object-position: 0 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+    .connect.needs .hand { display: block; }
+    @keyframes handBob { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-5px, -6px); } }
+    @media (prefers-reduced-motion: reduce) { .cta.pulse, .cta.pulse::before, .hand { animation: none; } .cta.pulse::before { opacity: .6; } }
+    .cta:disabled { cursor: default; background: rgba(72,216,159,.16); color: var(--jade); box-shadow: none; }
+    .conn-state { flex: 1 1 180px; min-width: 0; }
+    .conn-state strong { display: block; font-size: 15px; }
+    #status { font-size: 14px; color: rgba(255,255,255,.62); }
+    .dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #f3cc5c; vertical-align: 1px; }
+    .connect.on .dot { background: var(--jade); }
+
+    .mock { position: relative; justify-self: end; width: min(520px, 100%); }
+    .mock-player { position: relative; aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; border: 1px solid var(--navy-line);
+      background: radial-gradient(420px 260px at 70% 40%, rgba(255,49,87,.22), transparent 70%), linear-gradient(135deg,#1b2436,#0a0f1a); box-shadow: 0 30px 80px -30px rgba(0,0,0,.8); }
+    .mock-play { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: rgba(255,255,255,.12); }
+    .mock-play::after { content: ""; position: absolute; left: 26px; top: 20px; border-left: 18px solid rgba(255,255,255,.8); border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+    .pill { position: absolute; top: 14px; display: flex; align-items: center; gap: 8px; height: 38px; padding: 5px 12px 5px 6px; border-radius: 999px; background: rgba(255,255,255,.96); color: #14171c; font: 800 14px var(--sans); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+    .pill img { width: 34px; height: 28px; object-fit: contain; }
+    .pill.total { left: 14px; }
+    .pill.eyes { right: 14px; }
+    .chip { background: #eef0f3; border-radius: 999px; padding: 0 7px; font: 800 11px/18px var(--sans); color: #5d6570; }
+    .mock-meta { margin-top: 14px; }
+    .mock-title { font-weight: 700; font-size: 15px; margin: 0 0 10px; color: #fff; }
+    .mock-bar { display: flex; gap: 8px; }
+    .mock-bar span { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: 999px; background: rgba(255,255,255,.09); font-size: 14px; font-weight: 600; color: rgba(255,255,255,.9); }
+    .mock-bar .liked { background: #3ea6ff; color: #fff; }
+    .mock-ptr { position: absolute; left: 40px; bottom: -14px; width: 40px; height: 40px; }
+    .mock-ptr img.arrow { position: relative; width: 100%; height: 100%; object-fit: contain; object-position: 0 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+    .mock-ptr img.ring { position: absolute; left: -13px; top: -13px; width: 28px; height: 28px; opacity: .85; }
+    .mock-tix { position: absolute; left: 66px; bottom: 104px; width: 96px; animation: float 3.2s ease-in-out infinite; }
+    .mock-tix img { width: 100%; display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+    .mock-tix b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 22px var(--sans); text-shadow: 0 2px 4px rgba(0,0,0,.7), 0 0 2px #000; }
+    @keyframes float { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
+    @media (prefers-reduced-motion: reduce) { .mock-tix { animation: none; } }
+
+    section { padding: 88px 0; }
+    .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 36px; }
+    h2 { margin: 0; font-size: clamp(34px, 4.2vw, 54px); line-height: 1; }
+    .head p { margin: 0; max-width: 420px; color: var(--muted); }
+
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; padding: 1px; background: var(--line); border-radius: 18px; overflow: hidden; }
+    .step { background: var(--white); padding: 28px 26px 30px; display: flex; flex-direction: column; }
+    .step .num { font-family: var(--serif); font-size: 48px; line-height: 1; letter-spacing: -.03em; color: var(--jade-dark); }
+    .step .art { height: 84px; display: flex; align-items: center; margin: 26px 0 22px; }
+    .step .art img { max-height: 76px; max-width: 110px; }
+    .step h3 { margin: 0 0 10px; font-size: 25px; line-height: 1.08; }
+    .step p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .settings { background: var(--paper-warm); }
+    .cards { display: grid; grid-template-columns: 1fr 1.25fr; gap: 20px; align-items: start; }
+    .card { background: var(--white); border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 12px; }
+    .card h3 { margin: 0 0 4px; font-size: 26px; }
+    .card .sub { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+    .row { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+    .row .ic { flex: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--paper); color: var(--ink); }
+    .row .ic svg { width: 18px; height: 18px; }
+    .row .ic img { width: 26px; height: 26px; object-fit: contain; }
+    .row .txt { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; }
+    .row .txt small { display: block; font-weight: 400; font-size: 13px; color: var(--muted); }
+    .sw { position: relative; flex: none; width: 46px; height: 28px; }
+    .sw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .sw span { position: absolute; inset: 0; border-radius: 999px; background: #cfd4d1; transition: background .2s ease; pointer-events: none; }
+    .sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s ease; }
+    .sw input:checked + span { background: var(--jade-dark); }
+    .sw input:checked + span::after { transform: translateX(18px); }
+    .sw input:focus-visible + span { outline: 3px solid var(--jade); outline-offset: 2px; }
+
+    .follow { background: var(--navy); color: #fff; }
+    .follow .eyebrow { color: var(--jade); }
+    .follow .head p { color: rgba(255,255,255,.62); }
+    .links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .links a { position: relative; display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 14px 18px 14px 20px; border-radius: 14px; text-decoration: none;
+      background: rgba(255,255,255,.04); border: 1px solid var(--navy-line); border-left: 3px solid var(--platform, var(--jade)); transition: background .2s ease, transform .2s ease; }
+    .links .lic { flex: none; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--platform, var(--jade)) 18%, transparent); color: var(--platform, var(--jade)); }
+    .links .lic svg { width: 20px; height: 20px; }
+    .links .lic img { width: 24px; height: 24px; }
+    .links .lt { flex: 1; min-width: 0; }
+    .links .lt strong { display: block; font-size: 16px; }
+    .links .lt small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.55); }
+    .links .go { flex: none; opacity: .55; font-size: 18px; }
+
+    details.rates { background: var(--white); border: 1px solid var(--line); border-radius: 18px; }
+    details.rates summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 26px; font-family: var(--serif); font-size: 26px; letter-spacing: -.02em; }
+    details.rates summary::-webkit-details-marker { display: none; }
+    details.rates summary::after { content: "+"; font-family: var(--sans); font-size: 26px; color: var(--jade-dark); transition: transform .2s ease; }
+    details.rates[open] summary::after { transform: rotate(45deg); }
+    #rates { padding: 0 26px 22px; }
+    .rates-h { display: none; }
+    .rates-intro { font-size: 14px; color: var(--muted); line-height: 1.55; margin-bottom: 12px; }
+    .rates-item { padding: 12px 0; border-top: 1px solid var(--line); }
+    .rates-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .rates-l { font-size: 15px; font-weight: 700; }
+    .rates-amt { flex: none; font-size: 14px; font-weight: 800; color: var(--jade-dark); font-variant-numeric: tabular-nums; }
+    .rates-desc { font-size: 14px; color: var(--muted); line-height: 1.5; margin-top: 3px; }
+    .rates-sub { font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 4px; padding-left: 12px; border-left: 2px solid var(--jade-pale); }
+    .rates-note { font-size: 13px; color: var(--muted); line-height: 1.55; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+    footer { background: var(--navy); color: rgba(255,255,255,.55); font-size: 13px; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 16px; padding: 26px 0; border-top: 1px solid var(--navy-line); }
+    footer a { color: rgba(255,255,255,.75); }
+
+    @media (hover: hover) and (pointer: fine) {
+      .cta:not(:disabled):hover { transform: translateY(-2px); background: linear-gradient(135deg,#5BFFC4,#7FE9FF); box-shadow: 0 6px 24px -6px rgba(0,245,160,.7); }
+      .links a:hover { background: rgba(255,255,255,.08); transform: translateY(-2px); }
+    }
+    @media (max-width: 980px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 44px; padding: 48px 0 60px; }
+      .mock { justify-self: start; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .cards { grid-template-columns: 1fr; }
+      .links { grid-template-columns: 1fr 1fr; }
+      .head { flex-direction: column; align-items: flex-start; }
+    }
+    @media (max-width: 560px) {
+      section { padding: 60px 0; }
+      .lede { font-size: 16px; }
+      .connect { padding: 14px; }
+      .cta { width: 100%; }
+      .steps { grid-template-columns: 1fr; }
+      .step .art { margin: 16px 0 14px; height: 70px; }
+      .links { grid-template-columns: 1fr; }
+      .card { padding: 22px 18px 8px; }
+      footer .wrap { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap bar">
+      <a class="brand" href="https://mizkif.com" target="_blank" rel="noopener"><img src="icons/brand-m.png" alt="" width="30" height="30">Mizkif Global</a>
+      <span class="ver" id="ver">Extension</span>
+    </div>
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow" id="eyebrow">Welcome to the extension</p>
+        <h1 id="title">Earn tickets on his posts.<em>We'll show you where.</em></h1>
+        <p class="lede" id="lede">Open any of Mizkif's posts and an arrow points at what pays. Do it, and the tickets land in your total.</p>
+        <div class="connect" id="connectCard">
+          <div class="conn-state"><strong><span class="dot" aria-hidden="true"></span><span id="connTitle">Connect with Kick first</span></strong><div id="status">Not connected yet.</div></div>
+          <button class="cta" id="connect" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z"/></svg>
+            <span id="connectLabel">Connect with Kick</span>
+          </button>
+          <span class="hand" aria-hidden="true"><img data-asset="pointer" alt=""></span>
+        </div>
+      </div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-player">
+          <div class="mock-play"></div>
+          <div class="pill total"><img data-asset="total" alt=""><span>1,240</span><span class="chip">1/4</span></div>
+          <div class="pill eyes"><img data-asset="eyeOpen" alt=""><span>0:42 left</span></div>
+        </div>
+        <div class="mock-meta">
+          <p class="mock-title">She Has 24 Hours With $1,000,000</p>
+          <div class="mock-bar"><span>👍 Like</span><span>👎</span><span>Share</span></div>
+        </div>
+        <div class="mock-ptr"><img class="ring" data-asset="ripple" alt=""><img class="arrow" data-asset="pointer" alt=""></div>
+        <div class="mock-tix"><img data-asset="ticket" alt=""><b>+5</b></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <div><p class="eyebrow">How it works</p><h2>Four steps, then it runs itself.</h2></div>
+          <p>Everything happens on his real posts. The extension just shows you what pays and counts it for you.</p>
+        </div>
+        <div class="steps">
+          <article class="step"><span class="num">01</span><div class="art"><img src="icons/guide-link.webp" alt="" width="62" height="64"></div><h3>Connect with Kick</h3><p>Nothing earns until your Kick account is linked. It takes one tap.</p></article>
+          <article class="step"><span class="num">02</span><div class="art"><img src="icons/guide-pointer.webp" alt="" width="50" height="64"></div><h3>Follow the arrow</h3><p>On his posts, an arrow points at what pays: like, comment, share. Do it and it moves on to the next one.</p></article>
+          <article class="step"><span class="num">03</span><div class="art"><img src="icons/guide-eyes.webp" alt="" width="76" height="40"></div><h3>Watch with sound on</h3><p>The eyes on the video count down while it plays. They close if it's paused, muted, or in a background tab.</p></article>
+          <article class="step"><span class="num">04</span><div class="art"><img src="icons/guide-total.webp" alt="" width="74" height="64"></div><h3>Collect your tickets</h3><p>Tickets fly into your total in the corner. Tap it to see what's left on that post.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings">
+      <div class="wrap">
+        <div class="head">
+          <div><p class="eyebrow">Your settings</p><h2>Set it up your way.</h2></div>
+          <p>You can change these any time from the extension menu.</p>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <h3>On his posts</h3>
+            <p class="sub">What you see while you browse.</p>
+            <label class="row"><span class="ic"><img data-asset="pointer" alt=""></span><span class="txt">Guide arrow<small>Points at what pays on his posts.</small></span><span class="sw"><input type="checkbox" data-pref="guideOn"><span></span></span></label>
+            <label class="row"><span class="ic"><img data-asset="ticket" alt=""></span><span class="txt">Coin sound<small>Plays when tickets land.</small></span><span class="sw"><input type="checkbox" data-pref="guideSound"><span></span></span></label>
+          </div>
+          <div class="card">
+            <h3>Notifications</h3>
+            <p class="sub">Pick which alerts pop up on your desktop.</p>
+            <div id="notifs">
+              <label class="row"><span class="ic" data-icon="kick"></span><span class="txt">Kick<small>When he goes live</small></span><span class="sw"><input type="checkbox" data-p="kick"><span></span></span></label>
+              <label class="row"><span class="ic" data-icon="youtube"></span><span class="txt">YouTube<small>New videos</small></span><span class="sw"><input type="checkbox" data-p="youtube"><span></span></span></label>
+              <label class="row"><span class="ic" data-icon="tiktok"></span><span class="txt">TikTok<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="tiktok"><span></span></span></label>
+              <label class="row"><span class="ic" data-icon="x"></span><span class="txt">X<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="x"><span></span></span></label>
+              <label class="row"><span class="ic" data-icon="instagram"></span><span class="txt">Instagram<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="instagram"><span></span></span></label>
+              <label class="row"><span class="ic" data-icon="facebook"></span><span class="txt">Facebook<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="facebook"><span></span></span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="follow">
+      <div class="wrap">
+        <div class="head">
+          <div><p class="eyebrow">Follow Mizkif</p><h2>Everywhere he posts.</h2></div>
+          <p>Every new post is a chance to earn. Follow him on each platform so you catch them early.</p>
+        </div>
+        <div class="links" id="links"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <details class="rates">
+          <summary>Full ticket rates</summary>
+          <div id="rates"></div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap"><span>Mizkif Global</span><span><a href="https://mizkif.com/tickets" target="_blank" rel="noopener">How tickets work</a> · <a href="privacy.html">Privacy</a></span></div>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="popup/brand.js"></script>
+  <script src="content/guide-assets.js"></script>
+  <script src="rates-list.js"></script>
+  <script src="welcome.js"></script>
+</body>
+</html>

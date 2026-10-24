@@ -1,0 +1,74 @@
+{
+  "ticket-youtube.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#ffffff",
+    "stroke": null
+  },
+  "ticket-tiktok.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#ffffff",
+    "stroke": null
+  },
+  "ticket-instagram.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#ffffff",
+    "stroke": "#60213e"
+  },
+  "ticket-x.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#ffffff",
+    "stroke": null
+  },
+  "ticket-facebook.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#ffffff",
+    "stroke": null
+  },
+  "ticket-kick.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#53fc18",
+    "stroke": null
+  },
+  "ticket-reddit.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#ffffff",
+    "stroke": null
+  },
+  "ticket-multi.png": {
+    "cx": 160,
+    "cy": 181,
+    "maxWidth": 226,
+    "fontPx": 182,
+    "rotateDeg": -8,
+    "color": "#10151e",
+    "stroke": null
+  }
+}

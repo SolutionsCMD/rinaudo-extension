@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    @font-face { font-family: "Playfair Display"; src: url("../fonts/playfair-display-latin.woff2") format("woff2"); font-weight: 400 900; font-display: swap; }
+    @font-face { font-family: "DM Sans"; src: url("../fonts/dm-sans-latin.woff2") format("woff2"); font-weight: 100 1000; font-display: swap; }
+    :root {
+      --navy: #060b15; --card: rgba(255,255,255,.045); --line: rgba(255,255,255,.1); --ink: #f2f5f8; --mute: rgba(255,255,255,.6);
+      --dim: rgba(255,255,255,.42); --jade: #48d89f; --jade-dark: #0b7f5b; --red: #d6002f; --gold: #f3cc5c;
+      --serif: "Playfair Display", Georgia, serif; --sans: "DM Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body { width: 348px; margin: 0; background: radial-gradient(420px 260px at 90% -10%, rgba(72,216,159,.14), transparent 60%), var(--navy); color: var(--ink); font: 14px/1.45 var(--sans); }
+    @media (max-width: 500px) { body { width: auto; } }
+    button { font: inherit; }
+    :focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 8px; }
+    .wrap { padding: 14px 16px 18px; }
+
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+    .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; font-size: 15px; }
+    .brand img { width: 26px; height: 26px; }
+    #ver { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; }
+    #ver:empty { display: none; }
+
+    .eyebrow { margin: 18px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--jade); }
+    .sub { margin: -4px 0 8px; font-size: 12.5px; color: var(--dim); }
+
+    #update, #hostgrant, #gate { margin: 0 0 12px; padding: 11px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; }
+    #update { display: none; background: rgba(243,204,92,.1); border: 1px solid rgba(243,204,92,.4); color: var(--gold); }
+    #hostgrant { background: rgba(243,204,92,.1); border: 1px solid rgba(243,204,92,.4); color: var(--gold); }
+    #hostgrant[hidden], #gate[hidden] { display: none; }
+    #gate { background: rgba(214,0,47,.12); border: 1px solid rgba(214,0,47,.45); color: #ffb3c2; }
+    .updRow { display: flex; gap: 10px; align-items: center; margin-top: 9px; }
+    .small-btn { min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px; font-weight: 800; font-size: 13px; cursor: pointer; }
+    #updateBtn, #hostgrantBtn { background: var(--gold); color: #1b1a17; }
+    #hostgrantBtn { margin-top: 9px; }
+    #gateBtn { margin-top: 9px; background: var(--red); color: #fff; }
+    .small-btn:disabled { opacity: .55; cursor: default; }
+    .report { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 16px 0 4px; padding: 11px 12px; border-radius: 12px;
+      border: 1px dashed var(--line); background: none; color: var(--mute); font: 13px var(--sans); cursor: pointer; }
+    .report svg { width: 16px; height: 16px; flex: none; color: var(--gold); }
+    .report b { color: var(--ink); font-weight: 700; }
+    .report:hover { border-color: rgba(255,255,255,.25); color: var(--ink); }
+    #updateLink { display: none; font-size: 12px; color: var(--gold); }
+    #updateMsg { font-size: 12px; margin-top: 6px; opacity: .85; }
+    #updateMsg:empty { display: none; }
+
+    #total { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: linear-gradient(135deg, rgba(72,216,159,.14), rgba(34,224,255,.06)); border: 1px solid rgba(72,216,159,.28); }
+    #total[hidden] { display: none; }
+    #total img { width: 52px; height: 44px; object-fit: contain; flex: none; }
+    #totalN { font-family: var(--serif); font-size: 34px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    #totalL { margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+
+    #connectCard { padding: 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+    body.connected #connectCard { display: none; }
+    #connectCard h1 { margin: 0 0 6px; font-family: var(--serif); font-weight: 500; font-size: 24px; line-height: 1.1; letter-spacing: -.02em; }
+    #intro { margin: 0 0 14px; font-size: 13px; color: var(--mute); }
+    .cta { position: relative; isolation: isolate; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 50px; border: 0; border-radius: 12px; cursor: pointer;
+      font: 800 15px var(--sans); color: #08101E; background: linear-gradient(135deg,#00F5A0,#22E0FF); box-shadow: 0 4px 18px -6px rgba(0,245,160,.5); touch-action: manipulation; }
+    .cta svg { width: 17px; height: 17px; }
+    .cta:disabled { opacity: .6; cursor: default; }
+    .cta::before { content: ""; position: absolute; inset: -5px; z-index: -1; border-radius: 15px; background: linear-gradient(135deg,#00F5A0,#22E0FF); filter: blur(12px); opacity: 0; pointer-events: none; }
+    .cta.pulse { animation: ctaBeat 1.8s ease-in-out infinite; }
+    .cta.pulse::before { animation: ctaGlow 1.8s ease-in-out infinite; }
+    @keyframes ctaBeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+    @keyframes ctaGlow { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
+    #s2status { margin: 10px 0 0; font-size: 12.5px; color: var(--mute); }
+    #s2status .ok { color: var(--jade); font-weight: 700; }
+    body.connected #s2status { margin: 8px 2px 0; }
+
+    #earnnow[hidden] { display: none; }
+    #earnlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .earn-item { display: flex; align-items: flex-start; gap: 11px; padding: 11px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--platform, var(--jade)); }
+    .earn-ic { flex: none; width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--platform, var(--jade)) 18%, transparent); color: var(--platform, var(--jade)); }
+    .earn-ic svg { width: 16px; height: 16px; }
+    .earn-body { flex: 1; min-width: 0; }
+    .earn-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .earn-plat { font-weight: 800; font-size: 13.5px; }
+    .earn-open { flex: none; min-height: 30px; padding: 0 12px; border-radius: 8px; border: 0; background: linear-gradient(135deg,#00F5A0,#22E0FF); color: #08101E; font-weight: 800; font-size: 12px; cursor: pointer; }
+    .earn-label { margin-top: 2px; font-size: 12.5px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .earn-ticks { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .earn-tick { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.07); color: var(--mute); }
+    .earn-tick.done { background: rgba(72,216,159,.16); color: var(--jade); }
+    .earn-more { font-size: 12px; color: var(--dim); margin: 8px 0 0; }
+
+    .card { padding: 2px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+    .row { display: flex; align-items: center; gap: 11px; min-height: 48px; padding: 6px 0; cursor: pointer; }
+    .row + .row { border-top: 1px solid var(--line); }
+    .row .ic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.07); color: var(--ink); }
+    .row .ic svg { width: 15px; height: 15px; }
+    .row .ic img { width: 22px; height: 22px; object-fit: contain; }
+    .row .txt { flex: 1; min-width: 0; font-weight: 700; font-size: 13.5px; }
+    .row .txt small { display: block; font-weight: 400; font-size: 12px; color: var(--dim); }
+    .dashbtn { flex: none; background: #1E2B44; color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; font: 700 12px/1 inherit; cursor: pointer; }
+    .dashbtn.on { background: transparent; border: 1px solid #1E2B44; }
+    .sw { position: relative; flex: none; width: 40px; height: 24px; }
+    .sw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .sw span { position: absolute; inset: 0; border-radius: 999px; background: rgba(255,255,255,.18); transition: background .2s ease; pointer-events: none; }
+    .sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s ease; }
+    .sw input:checked + span { background: var(--jade-dark); }
+    .sw input:checked + span::after { transform: translateX(16px); }
+    .sw input:focus-visible + span { outline: 2px solid var(--jade); outline-offset: 2px; }
+
+    #hislinks[hidden] { display: none; }
+    .links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .links a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 64px; padding: 8px 4px; border-radius: 11px; text-decoration: none; color: var(--ink);
+      background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--platform, var(--jade)); font-size: 11.5px; font-weight: 700; text-align: center; }
+    .links .lic { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--platform, var(--jade)) 18%, transparent); color: var(--platform, var(--jade)); }
+    .links .lic svg { width: 15px; height: 15px; }
+    .links .lic img { width: 18px; height: 18px; }
+
+    details.rates { margin-top: 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+    details.rates summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; font-family: var(--serif); font-size: 18px; }
+    details.rates summary::-webkit-details-marker { display: none; }
+    details.rates summary::after { content: "+"; font-family: var(--sans); font-size: 20px; color: var(--jade); transition: transform .2s ease; }
+    details.rates[open] summary::after { transform: rotate(45deg); }
+    #rates { padding: 0 14px 12px; }
+    .rates-h { display: none; }
+    .rates-intro { font-size: 12.5px; color: var(--mute); line-height: 1.5; margin-bottom: 10px; }
+    .rates-item { padding: 9px 0; border-top: 1px solid var(--line); }
+    .rates-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .rates-l { font-size: 13px; font-weight: 700; }
+    .rates-amt { flex: none; font-size: 12.5px; font-weight: 800; color: var(--jade); font-variant-numeric: tabular-nums; }
+    .rates-desc { font-size: 12px; color: var(--mute); line-height: 1.45; margin-top: 3px; }
+    .rates-sub { font-size: 11.5px; color: var(--dim); line-height: 1.45; margin-top: 3px; padding-left: 10px; border-left: 2px solid rgba(72,216,159,.3); }
+    .rates-note { font-size: 11.5px; color: var(--dim); line-height: 1.5; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+    @media (hover: hover) and (pointer: fine) {
+      .cta:not(:disabled):hover, .earn-open:hover { background: linear-gradient(135deg,#5BFFC4,#7FE9FF); }
+      .links a:hover { background: rgba(255,255,255,.08); }
+    }
+    @media (prefers-reduced-motion: reduce) { .cta.pulse, .cta.pulse::before { animation: none; } .cta.pulse::before { opacity: .6; } }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <span class="brand"><img src="../icons/brand-m.png" alt="" width="26" height="26">Mizkif Global</span>
+    <p id="ver"></p>
+  </div>
+  <div class="wrap">
+    <div id="update">
+      <div id="updateText"></div>
+      <div class="updRow">
+        <button id="updateBtn" class="small-btn" type="button">Update now</button>
+        <a id="updateLink" href="#" target="_blank" rel="noopener">Open store page</a>
+      </div>
+      <div id="updateMsg"></div>
+    </div>
+    <div id="hostgrant" hidden>
+      <div id="hostgrantText"></div>
+      <button id="hostgrantBtn" class="small-btn" type="button">Enable earning on those sites</button>
+    </div>
+    <div id="gate" hidden>
+      <div>Your account has no Kick link yet, so nothing earns. Link Kick on mizkif.com to start.</div>
+      <button id="gateBtn" class="small-btn" type="button">Link Kick</button>
+    </div>
+
+    <div id="total" hidden>
+      <img src="../icons/guide-total.webp" alt="">
+      <div><div id="totalN">0</div><div id="totalL">Your tickets</div></div>
+    </div>
+
+    <div id="connectCard">
+      <h1>Start earning tickets</h1>
+      <p id="intro">Connect with Kick to earn tickets for watching and liking his posts. You'll also get pinged when Mizkif goes live or posts.</p>
+      <button id="s2connect" class="cta pulse" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z"/></svg>
+        Connect with Kick
+      </button>
+    </div>
+    <p id="s2status">…</p>
+
+    <div id="earnnow" hidden>
+      <p class="eyebrow">Earn now</p>
+      <p class="sub">Open a post to earn tickets on it.</p>
+      <ul id="earnlist"></ul>
+      <p id="earnmore" class="earn-more" hidden></p>
+    </div>
+
+    <p class="eyebrow">Notifications</p>
+    <p class="sub">Which alerts pop up on your desktop.</p>
+    <div id="notifs" class="card">
+      <label class="row"><span class="ic" data-icon="kick"></span><span class="txt">Kick<small>When he goes live</small></span><span class="sw"><input type="checkbox" data-p="kick"><span></span></span></label>
+      <label class="row"><span class="ic" data-icon="youtube"></span><span class="txt">YouTube<small>New videos</small></span><span class="sw"><input type="checkbox" data-p="youtube"><span></span></span></label>
+      <label class="row"><span class="ic" data-icon="tiktok"></span><span class="txt">TikTok<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="tiktok"><span></span></span></label>
+      <label class="row"><span class="ic" data-icon="x"></span><span class="txt">X<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="x"><span></span></span></label>
+      <label class="row"><span class="ic" data-icon="instagram"></span><span class="txt">Instagram<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="instagram"><span></span></span></label>
+      <label class="row"><span class="ic" data-icon="facebook"></span><span class="txt">Facebook<small>New posts</small></span><span class="sw"><input type="checkbox" data-p="facebook"><span></span></span></label>
+    </div>
+
+    <p class="eyebrow">On the page</p>
+    <p class="sub">What shows on his posts and on Kick.</p>
+    <div id="widgets" class="card">
+      <label class="row"><span class="ic"><img src="../icons/guide-pointer.webp" alt=""></span><span class="txt">Guide arrow<small>Points at what pays on his posts.</small></span><span class="sw"><input type="checkbox" data-pref="guideOn"><span></span></span></label>
+      <label class="row"><span class="ic"><img data-asset="ticket" alt=""></span><span class="txt">Coin sound<small>Plays when tickets land.</small></span><span class="sw"><input type="checkbox" data-pref="guideSound"><span></span></span></label>
+      <label class="row"><span class="ic" data-icon="kick"></span><span class="txt">Live vote card<small>The vote card on his Kick stream.</small></span><span class="sw"><input type="checkbox" id="toggleVote"><span></span></span></label>
+      <label class="row"><span class="ic"><img src="../icons/rank-top10.webp" alt=""></span><span class="txt">Rank badges in Kick chat<small>Everyone's place on the board, next to their name.</small></span><span class="sw"><input type="checkbox" data-pref="kickBadges"><span></span></span></label>
+      <div class="row" id="dashRow"><span class="ic" data-icon="kick"></span><span class="txt">Badges in the mod dashboard<small id="dashState">For mods. Asks for access to dashboard.kick.com only.</small></span><button type="button" id="dashBtn" class="dashbtn">Turn On</button></div>
+    </div>
+
+    <div id="hislinks">
+      <p class="eyebrow">Follow Mizkif</p>
+      <div class="links" id="links"></div>
+    </div>
+
+    <details class="rates">
+      <summary>Full ticket rates</summary>
+      <div id="rates"></div>
+    </details>
+
+    <button id="reportBtn" class="report" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      <span>Something not working? <b>Report a problem</b></span>
+    </button>
+  </div>
+  <script src="../config.js"></script>
+  <script src="brand.js"></script>
+  <script src="../content/guide-assets.js"></script>
+  <script src="../rates-list.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
