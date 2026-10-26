@@ -48,7 +48,6 @@ function homepageFor(url) {
 
 
 const prefOn = (prefs, p) => !prefs || prefs[p] !== false;
-const SOCIAL_PLATFORM_KEY = { tiktok: 'tiktok', instagram: 'instagram', twitter: 'x' };
 
 async function updateBadge() {
   const token = await getS2Token();
@@ -898,15 +897,8 @@ async function checkSignals() {
       if (!v.videoId || vidSeen.has(v.videoId)) continue;
       vidSeen.add(v.videoId);
     }
-    const SOCIAL_TITLES = { tiktok: 'New TikTok: Mizkif', instagram: 'New Instagram: Mizkif', twitter: 'New X post: Mizkif' };
-    const SOCIAL_ICONS = { tiktok: 'icons/tiktok.png', instagram: 'icons/instagram.png', twitter: 'icons/x.png' };
     for (const s of (r.latestSocial || [])) {
-      if (!s.url || socSeen.has(s.url)) continue;
-      socSeen.add(s.url);
-      if (seeding || !prefOn(prefs, SOCIAL_PLATFORM_KEY[s.platform] || s.platform)) continue;
-      const id = `soc-${s.platform}-${Date.now()}`;
-      notifUrls[id] = postLink(s.url, s.platform);
-      fire.push({ id, kind: 'social', data: { platform: s.platform, url: s.url, title: s.title }, fallback: { type: 'basic', iconUrl: SOCIAL_ICONS[s.platform] || 'icons/icon128.png', title: SOCIAL_TITLES[s.platform] || 'New post', message: 'New post. Click to open it.', priority: 2 } });
+      if (s.url) socSeen.add(s.url);
     }
   } else {
     (r.latestVideos || []).forEach((v) => { if (v.videoId) vidSeen.add(v.videoId); });

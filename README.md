@@ -7,4 +7,4 @@ This repository holds the code exactly as it ships in each release.
 
 - **Install:** [mizkif.com/downloads](https://mizkif.com/downloads) (Chrome, Edge, Firefox, Safari on iPhone)
 - **Privacy:** what the extension reads and sends is listed in [privacy.html](privacy.html)
-- **Current version:** 1.207
+- **Current version:** 1.208
