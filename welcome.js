@@ -28,7 +28,7 @@ try {
     const em = document.createElement('em');
     em.textContent = 'Just follow the arrow.';
     title.replaceChildren('The extension now shows you what pays.', em);
-    document.getElementById('lede').textContent = 'An arrow points at each thing that earns tickets on his posts, the eyes count your watch time, and your total sits in the corner.';
+    document.getElementById('lede').textContent = 'An arrow points at each thing that earns shares on his posts, the eyes count your watch time, and your total sits in the corner.';
   }
 } catch {   }
 
@@ -44,16 +44,16 @@ async function refresh() {
     btnLabel.textContent = 'Connected';
     btn.disabled = true;
   } else {
-    connTitle.textContent = 'Connect with Kick first';
+    connTitle.textContent = 'Connect with Discord first';
     status.textContent = 'Not connected yet.';
-    btnLabel.textContent = 'Connect with Kick';
+    btnLabel.textContent = 'Connect with Discord';
     btn.disabled = false;
   }
 }
 
 btn.addEventListener('click', async () => {
   btn.disabled = true;
-  await chrome.runtime.sendMessage({ type: 's2Connect' }).catch(() => null);
+  await chrome.runtime.sendMessage({ type: 's2Connect', via: 'discord' }).catch(() => null);
   refresh();
 });
 

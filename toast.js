@@ -140,31 +140,35 @@
     x.fillText(p.letter || 'M', px + s / 2, py + s / 2 + 1);
   }
   const TICKET_FILE = { youtube: 'youtube', tiktok: 'tiktok', instagram: 'instagram', x: 'x', twitter: 'x', facebook: 'facebook', reddit: 'reddit', kick: 'kick', multi: 'multi' };
-  let specsCache;
-  function ticketSpecs() {
-    if (!specsCache) specsCache = (async () => {
-      try { const j = await fetchBlob(chrome.runtime.getURL('icons/tickets/tickets.json'), NET_MS); return j ? JSON.parse(await j.text()) : {}; } catch { return {}; }
-    })();
-    return specsCache;
-  }
+  const SEAL = { kick: '#53fc18', youtube: '#ff0033', x: '#ffffff', twitter: '#ffffff', tiktok: '#25f4ee', instagram: '#ff2d80', facebook: '#1877f2', reddit: '#ff4500' };
   const validSpec = (s) => !!s && Number.isFinite(Number(s.cx)) && Number.isFinite(Number(s.cy));
   const artCache = new Map();
-  function questArt(kind) {
-    const file = TICKET_FILE[kind];
-    const key = file || 'gold';
+  function questArt() {
+    const key = 'cert';
     if (!artCache.has(key)) artCache.set(key, (async () => {
       try {
-        if (file) {
-          const [bmp, specs] = await Promise.all([local(`icons/tickets/ticket-${file}.png`), ticketSpecs()]);
-          const spec = specs[`ticket-${file}.png`];
-          if (bmp && validSpec(spec)) return { bmp, spec };
-        }
-        const [bmp, j] = await Promise.all([local('icons/quest-ticket.png'), fetchBlob(chrome.runtime.getURL('icons/quest-ticket.json'), NET_MS)]);
+        const [bmp, j] = await Promise.all([local('icons/shares/toast-card.png'), fetchBlob(chrome.runtime.getURL('icons/shares/toast-card.json'), NET_MS)]);
         const spec = j ? JSON.parse(await j.text()) : null;
         return bmp && validSpec(spec) ? { bmp, spec } : null;
       } catch { return null; }
     })());
     return artCache.get(key);
+  }
+  function sealDot(x, spec, platform, k) {
+    const s = spec && spec.seal;
+    if (!s || !Number.isFinite(Number(s.cx)) || !Number.isFinite(Number(s.cy))) return;
+    const cx = Number(s.cx) * k, cy = Number(s.cy) * k, r = Math.max(3, (Number(s.r) || 10) * k);
+    let fill = null;
+    if (!platform) {
+      const g = x.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      g.addColorStop(0, '#ff2d80'); g.addColorStop(.35, '#ffd400'); g.addColorStop(.7, '#53fc18'); g.addColorStop(1, '#25f4ee');
+      fill = g;
+    } else if (SEAL[platform]) fill = SEAL[platform];
+    if (!fill) return;
+    x.save();
+    x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 4 * k; x.shadowOffsetY = 1 * k;
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fillStyle = fill; x.fill();
+    x.restore();
   }
   const iconCache = new Map();
   function ticketIcon(n, platform) {
@@ -175,7 +179,7 @@
           await loadFont();
           const c = new OffscreenCanvas(ICON, ICON), x = c.getContext('2d');
           const label = n > 0 ? `+${n}` : '+';
-          const art = await questArt(platform || 'multi');
+          const art = await questArt();
           if (art) {
             const k = ICON / art.bmp.width, a = art.spec;
             const hex = (v) => (/^#[0-9a-f]{3,8}$/i.test(v || '') ? v : null);
@@ -185,25 +189,32 @@
             let fs = (Number(a.fontPx) || 96) * k; x.font = `800 ${fs}px ${SANS}`;
             while (fs > 14 && x.measureText(label).width > (Number(a.maxWidth) || 160) * k) { fs -= 1; x.font = `800 ${fs}px ${SANS}`; }
             x.textAlign = 'center'; x.textBaseline = 'middle';
+            if (a.pill && typeof a.pill === 'object') {
+              const ph = (Number(a.pill.h) || 64) * k, pw = x.measureText(label).width + 2 * (Number(a.pill.padX) || 16) * k;
+              rr(x, -pw / 2, -ph / 2, pw, ph, ph / 2);
+              x.fillStyle = hex(a.pill.fill) || '#0a0a0a'; x.fill();
+              x.lineWidth = Math.max(1.5, 3 * k); x.strokeStyle = hex(a.pill.stroke) || '#ffffff'; x.stroke();
+            }
             if (hex(a.stroke)) { x.lineJoin = 'round'; x.lineWidth = Math.max(2, fs * 0.16); x.strokeStyle = a.stroke; x.strokeText(label, 0, 0); }
-            x.fillStyle = hex(a.color) || C.navy;
+            x.fillStyle = hex(a.color) || '#ffffff';
             x.fillText(label, 0, 0);
             x.restore();
+            sealDot(x, a, platform === 'twitter' ? 'x' : platform, k);
             return await toDataUrl(c);
           }
           x.save(); x.translate(76, 72); x.rotate(-0.17);
           const w = 140, h = 92;
           x.shadowColor = 'rgba(0,0,0,.30)'; x.shadowBlur = 10; x.shadowOffsetY = 4;
           ticketPath(x, w, h, 14, 16);
-          const g = x.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, '#ffe08a'); g.addColorStop(1, C.gold);
+          const g = x.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, '#2b2b2b'); g.addColorStop(1, '#0a0a0a');
           x.fillStyle = g; x.fill();
           x.shadowColor = 'transparent';
-          x.lineWidth = 3; x.strokeStyle = C.goldDeep; x.stroke();
-          x.setLineDash([6, 6]); x.lineWidth = 3; x.strokeStyle = 'rgba(6,11,21,.28)';
+          x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.7)'; x.stroke();
+          x.setLineDash([6, 6]); x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.28)';
           x.beginPath(); x.moveTo(-w / 2 + 34, -h / 2 + 10); x.lineTo(-w / 2 + 34, h / 2 - 10); x.stroke(); x.setLineDash([]);
           let fs = 58; x.font = `800 ${fs}px ${SANS}`;
           while (fs > 30 && x.measureText(label).width > 82) { fs -= 2; x.font = `800 ${fs}px ${SANS}`; }
-          x.fillStyle = C.navy; x.textAlign = 'center'; x.textBaseline = 'middle';
+          x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
           x.fillText(label, 16, 3);
           x.restore();
           await badge(x, platform);
@@ -255,7 +266,7 @@
     } catch {   }
     return out;
   }
-  const reward = (n) => (n > 0 ? `+${n} ticket${n === 1 ? '' : 's'}` : 'Earn tickets');
+  const reward = (n) => (n > 0 ? `+${n} share${n === 1 ? '' : 's'}` : 'Earn shares');
 
   const HINT_KEY = 'toastHintSeen';
   async function firstTime(key) {
@@ -276,7 +287,7 @@
     const hint = await firstTime(TICKET_FILE[t.platform] || 'other');
     const out = basic({
       title: `${reward(n)}: new ${thing}`,
-      message: hint ? `${todo(t)} to collect your tickets.` : '',
+      message: hint ? `${todo(t)} to collect your shares.` : '',
       contextMessage: ctx(left ? left.text : null),
     });
     return withIcon(out, () => ticketIcon(n, t.platform), t.platform);
@@ -304,7 +315,7 @@
 
   async function live() {
     const hint = await firstTime('kick');
-    const out = basic({ title: '🔴 Mizkif is live on Kick', message: hint ? 'Watch and vote to collect tickets.' : '', contextMessage: ctx('Kick'), priority: 2 });
+    const out = basic({ title: '🔴 Mizkif is live on Kick', message: hint ? 'Watch to collect shares.' : '', contextMessage: ctx('Kick'), priority: 2 });
     return withIcon(out, () => logoIcon('kick'), 'kick');
   }
 

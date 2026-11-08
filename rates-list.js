@@ -22,7 +22,7 @@
       },
       {
         t: 'Watch his videos', a: `${v.floor}+`,
-        d: `${v.floor} tickets for any video up to ${crossStr} minutes, then +${v.perMinute} for each extra minute, once per video.`,
+        d: `${v.floor} shares for any video up to ${crossStr} minutes, then +${v.perMinute} for each extra minute, once per video.`,
         subs: [
           'YouTube: any video or short from the last 24h, plus his latest is always eligible.',
           'TikTok: any post from the last 24h.',
@@ -38,8 +38,8 @@
       { t: 'Install bonus', a: `+${r.extensionInstall}`, d: 'One-time, for installing this extension.' },
     ];
     el.replaceChildren();
-    add(el, 'rates-h', 'How tickets work');
-    add(el, 'rates-intro', 'Connect with Kick first. Nothing credits until you do.');
+    add(el, 'rates-h', 'How shares work');
+    add(el, 'rates-intro', 'Connect first. Nothing credits until you do.');
     for (const it of items) {
       const item = add(el, 'rates-item');
       const row = add(item, 'rates-row');
@@ -50,8 +50,8 @@
       for (const s of (it.subs || [])) add(item, 'rates-sub', s);
     }
     add(el, 'rates-note', r.commentLike > 0 && r.commentLikeMax > 0
-      ? 'You earn on his recent posts only. Your ticket total shows in the corner of a post that counts. Each like, comment, and watch credits once per post. Comment likes credit up to the cap shown above.'
-      : 'You earn on his recent posts only. Your ticket total shows in the corner of a post that counts. Each like, comment, and watch credits once per post.');
+      ? 'You earn on his recent posts only. Your share total shows in the corner of a post that counts. Each like, comment, and watch credits once per post. Comment likes credit up to the cap shown above.'
+      : 'You earn on his recent posts only. Your share total shows in the corner of a post that counts. Each like, comment, and watch credits once per post.');
   }
 
   self.renderRates = renderRates;

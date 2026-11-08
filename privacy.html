@@ -33,24 +33,24 @@
 <body>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="meta">Mizkif Global (browser extension) · Last updated 31 August 2026</p>
+    <p class="meta">Mizkif Global (browser extension) · Last updated 8 November 2026</p>
 
     <p>
       This policy explains what the <strong>Mizkif Global</strong> browser extension ("the extension")
       does with your data. It applies only to the extension, not to the
-      <a href="https://rinaudoglobal.com">rinaudoglobal.com</a> website or any other service.
+      <a href="https://mizkif.com">mizkif.com</a> website or any other service.
     </p>
 
     <h2>What the extension does</h2>
     <p>
-      The extension lets you earn tickets in Mizkif's game by engaging with his content. It notices
+      The extension lets you earn shares in Mizkif Global by engaging with his content. It notices
       when you like, comment on, like a comment under, watch, repost, or send one of his promoted posts and videos on
       YouTube, TikTok, Instagram, and X (the site at x.com, which also answers to twitter.com), and
       it tells the game so the action can be credited. The game decides what each action is worth
       and those rates change from season to season: as of this update, comments earn nothing on any
       platform. The extension also shows the live poll from Mizkif's Kick stream so you can vote,
       checks in while that stream is playing so your watch time counts, and notifies you when he
-      goes live or posts. Tickets are credited to the account you link once with "Connect with
+      goes live or posts. Shares are credited to the account you link once with "Connect with
       Kick."
     </p>
 
@@ -65,7 +65,7 @@
       <li><code>facebook.com</code> (including <code>web.facebook.com</code> and <code>m.facebook.com</code>): the same, for his promoted reels.</li>
       <li><code>reddit.com</code> (and <code>old.reddit.com</code>): to spot your upvote or reply on one of his promoted posts, and, on his own profile page only, to notice the addresses of his newest posts so the game learns about them promptly. Which posts of his you happen to see elsewhere on Reddit is never read or sent.</li>
       <li><code>x.com</code> and <code>twitter.com</code>: to spot your like, reply, comment like, or repost on one of his promoted posts. The next section covers exactly how the repost check works.</li>
-      <li><code>s2.jsolutions.dev/extension/connect</code>: the single page where "Connect with Kick" finishes and hands the extension your account token.</li>
+      <li><code>s2.jsolutions.dev/extension/connect</code>: the single page where "Connect with Discord" (or Kick) finishes and hands the extension your account token.</li>
     </ul>
     <p>
       On every other site the extension is not loaded at all, so it cannot see the page.
@@ -73,7 +73,7 @@
 
     <h2>How the repost check works on X</h2>
     <p>
-      A repost earns tickets only when X itself confirms the repost happened. A button click on its
+      A repost earns shares only when X itself confirms the repost happened. A button click on its
       own is not proof, so on <code>x.com</code> and <code>twitter.com</code> the extension watches
       the requests the X page sends while you use it. Here is the whole of what that means:
     </p>
@@ -104,7 +104,7 @@
     <h2>What we store</h2>
     <ul>
       <li>
-        <strong>Your account token.</strong> When you choose "Connect with Kick," a single
+        <strong>Your account token.</strong> When you choose "Connect with Discord" (or Kick), a single
         authentication token is stored locally in your browser (<code>chrome.storage.local</code>). It is
         used only to authenticate your requests to <code>s2.jsolutions.dev</code>, never leaves your
         browser except in the <code>Authorization</code> header of calls to that server, and is deleted
@@ -114,7 +114,7 @@
         <strong>An anti-fraud device token.</strong> A random identifier the extension generates the
         first time it runs and stores locally (<code>chrome.storage.local</code>). It is <em>not</em>
         derived from your hardware and contains no personal information. It simply lets the game tell
-        one browser install apart from another so a single person can't farm tickets across many
+        one browser install apart from another so a single person can't farm shares across many
         accounts. You can reset it by clearing the extension's storage or reinstalling.
       </li>
       <li>
@@ -165,7 +165,7 @@
       When an engagement is credited, three things go out: <strong>which site and which post</strong>
       (its id, the same one you can read in the post's public web address), <strong>which action</strong>
       it was (like, comment, comment like, watch, repost, or send), and <strong>your account token</strong>, so the
-      tickets land on your account. While a video plays, the extension also sends periodic "still
+      shares land on your account. While a video plays, the extension also sends periodic "still
       watching" signals. Every one of these requests carries the anti-fraud device token, fingerprint,
       and coarse device traits described in the next section.
     </p>
@@ -180,7 +180,7 @@
 
     <h2>Preventing duplicate accounts and bots</h2>
     <p>
-      Because tickets have real value, we take basic steps to stop one person from farming them with
+      Because shares have real value, we take basic steps to stop one person from farming them with
       many fake accounts or bots. With each authenticated request to <code>s2.jsolutions.dev</code>, the
       extension includes the anti-fraud <strong>device token</strong>, <strong>device fingerprint</strong>,
       and the three coarse device traits described above. The server additionally records a
@@ -195,7 +195,7 @@
     <h2>What we do <em>not</em> do</h2>
     <ul>
       <li>No analytics or behavioral tracking of how you use the web. The only device and network signals
-        we collect are the anti-fraud identifiers described above, used solely to keep the ticket economy
+        we collect are the anti-fraud identifiers described above, used solely to keep the share pool
         fair.</li>
       <li>No advertising, and no selling or sharing of data with third parties.</li>
       <li>
@@ -213,8 +213,8 @@
     <ul>
       <li><code>storage</code>: to store your account token and local state.</li>
       <li><code>alarms</code>: a periodic timer to check for open polls and new content.</li>
-      <li><code>notifications</code>: desktop alerts when a poll opens, when Mizkif goes live or posts, when a new post can earn you tickets, and the occasional announcement from Mizkif. Each kind can be turned off in the popup.</li>
-      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code>: to talk to the game API and the public notifications feed, and to finish the "Connect with Kick" sign-in.</li>
+      <li><code>notifications</code>: desktop alerts when a poll opens, when Mizkif goes live or posts, when a new post can earn you shares, and the occasional announcement from Mizkif. Each kind can be turned off in the popup.</li>
+      <li><code>host access</code> to <code>s2.jsolutions.dev</code> and <code>rinaudoglobal.com</code>: to talk to the game API and the public notifications feed, and to finish the "Connect with Discord" (or Kick) sign-in.</li>
       <li><code>host access</code> to <code>kick.com</code>: to show the vote card on Mizkif's stream.</li>
       <li><code>host access</code> to <code>youtube.com</code>, <code>tiktok.com</code>, <code>instagram.com</code>, and <code>facebook.com</code>, including their mobile addresses: to detect your likes, comments, comment likes, shares, and watches on Mizkif's promoted posts, reels, and videos there, so the game can credit them.</li>
       <li><code>host access</code> to <code>reddit.com</code>: to detect your upvotes and replies on his promoted posts, and to notice his newest posts from his own profile page, so the game can credit and announce them.</li>
@@ -241,11 +241,11 @@
 
     <h2>Contact</h2>
     <p>
-      Questions about this policy? Email <a href="mailto:privacy@rinaudoglobal.com">privacy@rinaudoglobal.com</a>.
+      Questions about this policy? Email <a href="mailto:privacy@mizkif.com">privacy@mizkif.com</a>.
     </p>
 
     <footer>
-      © 2026 Rinaudo Global. This policy may be updated; material changes will be reflected by the
+      © 2026 Mizkif Global. This policy may be updated; material changes will be reflected by the
       "Last updated" date above.
     </footer>
   </div>

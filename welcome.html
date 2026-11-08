@@ -64,7 +64,7 @@
       background: radial-gradient(420px 260px at 70% 40%, rgba(255,49,87,.22), transparent 70%), linear-gradient(135deg,#1b2436,#0a0f1a); box-shadow: 0 30px 80px -30px rgba(0,0,0,.8); }
     .mock-play { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: rgba(255,255,255,.12); }
     .mock-play::after { content: ""; position: absolute; left: 26px; top: 20px; border-left: 18px solid rgba(255,255,255,.8); border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
-    .pill { position: absolute; top: 14px; display: flex; align-items: center; gap: 8px; height: 38px; padding: 5px 12px 5px 6px; border-radius: 999px; background: rgba(255,255,255,.96); color: #14171c; font: 800 14px var(--sans); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+    .pill { position: absolute; top: 14px; display: flex; align-items: center; gap: 8px; height: 38px; padding: 5px 12px 5px 6px; border-radius: 999px; background: rgba(10,10,10,.82); border: 1px solid rgba(255,255,255,.22); color: #fff; font: 800 14px var(--sans); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
     .pill img { width: 34px; height: 28px; object-fit: contain; }
     .pill.total { left: 14px; }
     .pill.eyes { right: 14px; }
@@ -77,9 +77,9 @@
     .mock-ptr { position: absolute; left: 40px; bottom: -14px; width: 40px; height: 40px; }
     .mock-ptr img.arrow { position: relative; width: 100%; height: 100%; object-fit: contain; object-position: 0 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
     .mock-ptr img.ring { position: absolute; left: -13px; top: -13px; width: 28px; height: 28px; opacity: .85; }
-    .mock-tix { position: absolute; left: 66px; bottom: 104px; width: 96px; animation: float 3.2s ease-in-out infinite; }
-    .mock-tix img { width: 100%; display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
-    .mock-tix b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 22px var(--sans); text-shadow: 0 2px 4px rgba(0,0,0,.7), 0 0 2px #000; }
+    .mock-tix { position: absolute; left: 30px; bottom: 90px; width: 170px; animation: float 3.2s ease-in-out infinite; }
+    .mock-tix img { width: 100%; height: auto; display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+    .mock-tix b { position: absolute; right: -6px; top: -4px; padding: 3px 10px; border-radius: 999px; background: #000; border: 1px solid rgba(255,255,255,.3); color: #fff; font: 800 15px var(--sans); text-shadow: 0 2px 4px rgba(0,0,0,.7), 0 0 2px #000; }
     @keyframes float { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
     @media (prefers-reduced-motion: reduce) { .mock-tix { animation: none; } }
 
@@ -183,13 +183,13 @@
     <div class="wrap hero-grid">
       <div>
         <p class="eyebrow" id="eyebrow">Welcome to the extension</p>
-        <h1 id="title">Earn tickets on his posts.<em>We'll show you where.</em></h1>
-        <p class="lede" id="lede">Open any of Mizkif's posts and an arrow points at what pays. Do it, and the tickets land in your total.</p>
+        <h1 id="title">Earn shares on his posts.<em>We'll show you where.</em></h1>
+        <p class="lede" id="lede">Open any of Mizkif's posts and an arrow points at what pays. Do it, and the shares land in your total.</p>
         <div class="connect" id="connectCard">
-          <div class="conn-state"><strong><span class="dot" aria-hidden="true"></span><span id="connTitle">Connect with Kick first</span></strong><div id="status">Not connected yet.</div></div>
+          <div class="conn-state"><strong><span class="dot" aria-hidden="true"></span><span id="connTitle">Connect with Discord first</span></strong><div id="status">Not connected yet.</div></div>
           <button class="cta" id="connect" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z"/></svg>
-            <span id="connectLabel">Connect with Kick</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+            <span id="connectLabel">Connect with Discord</span>
           </button>
           <span class="hand" aria-hidden="true"><img data-asset="pointer" alt=""></span>
         </div>
@@ -205,7 +205,7 @@
           <div class="mock-bar"><span>👍 Like</span><span>👎</span><span>Share</span></div>
         </div>
         <div class="mock-ptr"><img class="ring" data-asset="ripple" alt=""><img class="arrow" data-asset="pointer" alt=""></div>
-        <div class="mock-tix"><img data-asset="ticket" alt=""><b>+5</b></div>
+        <div class="mock-tix"><img src="icons/shares/card.webp" alt="" width="480" height="290"><b>+5</b></div>
       </div>
     </div>
   </header>
@@ -218,10 +218,10 @@
           <p>Everything happens on his real posts. The extension just shows you what pays and counts it for you.</p>
         </div>
         <div class="steps">
-          <article class="step"><span class="num">01</span><div class="art"><img src="icons/guide-link.webp" alt="" width="62" height="64"></div><h3>Connect with Kick</h3><p>Nothing earns until your Kick account is linked. It takes one tap.</p></article>
+          <article class="step"><span class="num">01</span><div class="art"><img src="icons/guide-link.webp" alt="" width="62" height="64"></div><h3>Connect with Discord</h3><p>Nothing earns until your Kick account is linked. It takes one tap.</p></article>
           <article class="step"><span class="num">02</span><div class="art"><img src="icons/guide-pointer.webp" alt="" width="50" height="64"></div><h3>Follow the arrow</h3><p>On his posts, an arrow points at what pays: like, comment, share. Do it and it moves on to the next one.</p></article>
           <article class="step"><span class="num">03</span><div class="art"><img src="icons/guide-eyes.webp" alt="" width="76" height="40"></div><h3>Watch with sound on</h3><p>The eyes on the video count down while it plays. They close if it's paused, muted, or in a background tab.</p></article>
-          <article class="step"><span class="num">04</span><div class="art"><img src="icons/guide-total.webp" alt="" width="74" height="64"></div><h3>Collect your tickets</h3><p>Tickets fly into your total in the corner. Tap it to see what's left on that post.</p></article>
+          <article class="step"><span class="num">04</span><div class="art"><img src="icons/shares/card.webp" alt="" width="110" height="66"></div><h3>Collect your shares</h3><p>Shares fly into your total in the corner. Tap it to see what's left on that post.</p></article>
         </div>
       </div>
     </section>
@@ -237,7 +237,7 @@
             <h3>On his posts</h3>
             <p class="sub">What you see while you browse.</p>
             <label class="row"><span class="ic"><img data-asset="pointer" alt=""></span><span class="txt">Guide arrow<small>Points at what pays on his posts.</small></span><span class="sw"><input type="checkbox" data-pref="guideOn"><span></span></span></label>
-            <label class="row"><span class="ic"><img data-asset="ticket" alt=""></span><span class="txt">Coin sound<small>Plays when tickets land.</small></span><span class="sw"><input type="checkbox" data-pref="guideSound"><span></span></span></label>
+            <label class="row"><span class="ic"><img src="icons/shares/sound.png" alt="" width="22" height="22"></span><span class="txt">Earn sound<small>Plays when shares land.</small></span><span class="sw"><input type="checkbox" data-pref="guideSound"><span></span></span></label>
           </div>
           <div class="card">
             <h3>Notifications</h3>
@@ -268,7 +268,7 @@
     <section>
       <div class="wrap">
         <details class="rates">
-          <summary>Full ticket rates</summary>
+          <summary>Full share rates</summary>
           <div id="rates"></div>
         </details>
       </div>
@@ -276,7 +276,7 @@
   </main>
 
   <footer>
-    <div class="wrap"><span>Mizkif Global</span><span><a href="https://mizkif.com/tickets" target="_blank" rel="noopener">How tickets work</a> · <a href="privacy.html">Privacy</a></span></div>
+    <div class="wrap"><span>Mizkif Global</span><span><a href="https://mizkif.com/faq" target="_blank" rel="noopener">How shares work</a> · <a href="privacy.html">Privacy</a></span></div>
   </footer>
 
   <script src="config.js"></script>

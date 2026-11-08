@@ -157,7 +157,7 @@ function drawWtWidget(status) {
     body.append(row);
     const sub = document.createElement('div'); sub.className = 'sub';
     sub.textContent = status === 'connect'
-      ? 'Open the extension popup and connect with Kick'
+      ? 'Open the extension popup and connect'
       : status === 'gate' ? 'Open the extension menu to link it.' : 'Required for watchtime';
     body.append(sub);
     wtFrame.setPill('🎟');
@@ -243,7 +243,7 @@ function battleStake(sideIdx, tickets) {
     .then((r) => {
       if (r && r.ok) { battleStatusMsg = ''; return; }
       const reason = r && r.reason;
-      battleStatusMsg = reason === 'insufficient' ? 'Not enough tickets for that'
+      battleStatusMsg = reason === 'insufficient' ? 'Not enough shares for that'
         : reason === 'closed' || reason === 'not_staking' ? 'Staking has closed'
         : reason === 'not_connected' ? 'Connect the extension (its icon) to stake'
         : 'That did not go through, try again';
@@ -293,7 +293,7 @@ function drawBattle(body, b, mine) {
   if (left !== 0) {
     const row = document.createElement('div'); row.className = 'brow';
     const input = document.createElement('input'); input.className = 'bin'; input.type = 'text';
-    input.placeholder = 'tickets, then pick a side';
+    input.placeholder = 'shares, then pick a side';
     input.value = battleDraft;
     input.addEventListener('input', () => {
       battleDraft = input.value.toLowerCase() === 'all' ? 'all' : input.value.replace(/[^0-9]/g, '');
@@ -314,10 +314,10 @@ function drawBattle(body, b, mine) {
   const line = document.createElement('div');
   if (mine) {
     line.className = 'bmine';
-    line.textContent = 'You staked ' + tix(mine.tickets) + ' on ' + b.sides[mine.sideIdx].label;
+    line.textContent = 'You staked ' + tix(mine.tickets) + (Number(mine.tickets) === 1 ? ' share' : ' shares') + ' on ' + b.sides[mine.sideIdx].label;
   } else {
     line.className = 'hint';
-    line.textContent = left === 0 ? 'Staking is closed' : 'Tickets are spent either way';
+    line.textContent = left === 0 ? 'Staking is closed' : 'Shares are spent either way';
   }
   body.append(line);
 }
@@ -411,7 +411,7 @@ function drawAmountVote(body, av, mineCents, connected) {
     line.className = 'hint';
     line.textContent = connected
       ? (open ? 'Tap an amount, or type one in chat' : 'Voting closed')
-      : 'Connect with Kick (extension popup) to vote';
+      : 'Connect the extension (popup) to vote';
   }
   body.append(line);
 }
@@ -433,7 +433,7 @@ function render(poll, tally, mine, connected, keep) {
     body.append(b);
   });
   const hint = document.createElement('div'); hint.className = 'hint';
-  hint.textContent = connected ? (mine != null ? 'Tap another to change your vote' : 'Tap to vote') : 'Connect with Kick (extension popup) to vote';
+  hint.textContent = connected ? (mine != null ? 'Tap another to change your vote' : 'Tap to vote') : 'Connect the extension (popup) to vote';
   body.append(hint);
   frame.setPill(mine != null ? 'Voted ✓' : 'Vote');
 }
@@ -804,7 +804,7 @@ const kickTotal = (function () {
       el: 'hud',
       text: key === 'connect'
         ? copy('connect', 'Connect the extension to start earning.')
-        : copy('link', 'Link your Kick account to earn tickets. Open the extension menu to link it.'),
+        : copy('link', 'Link your Kick account to earn shares. Open the extension menu to link it.'),
       icon: 'link',
     });
   }

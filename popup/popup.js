@@ -44,7 +44,7 @@ async function refreshBalance() {
     if (r.error === 'not_connected') { refreshS2(); return; }
     const st = $('s2status');
     st.replaceChildren();
-    st.textContent = 'Your connection expired. Connect with Kick again.';
+    st.textContent = 'Your connection expired. Connect again.';
     return;
   }
   if (r && !r.error && Number.isFinite(Number(r.tickets))) {
@@ -60,17 +60,43 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 $('gateBtn').addEventListener('click', () => { chrome.tabs.create({ url: LINK_KICK_URL }).catch(() => {}); });
 
-$('s2connect').addEventListener('click', async () => {
-  const btn = $('s2connect');
-  btn.disabled = true;
-  const r = await chrome.runtime.sendMessage({ type: 's2Connect' }).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
-  btn.disabled = false;
+function connectOrigins() {
+  try {
+    const m = chrome.runtime.getManifest();
+    return [...(m.host_permissions || []), ...(m.optional_host_permissions || [])]
+      .filter((o) => /^https:\/\/(s2\.jsolutions\.dev|mizkif\.com|www\.mizkif\.com|kick\.com|(www|m)\.youtube\.com|x\.com|twitter\.com|(www|m)\.tiktok\.com|(www\.)?instagram\.com|(www|web|m)\.facebook\.com)\/\*$/.test(o));
+  } catch { return []; }
+}
+async function ensureConnectHosts() {
+  try {
+    const origins = connectOrigins();
+    if (!origins.length || !chrome.permissions || !chrome.permissions.contains) return true;
+    const have = await chrome.permissions.contains({ origins }).catch(() => true);
+    if (have) return true;
+    return !!(await chrome.permissions.request({ origins }).catch(() => false));
+  } catch { return true; }
+}
+function showHostDenied() {
+  const box = $('hostdenied');
+  if (box) box.hidden = false;
+}
+
+async function startConnect(via) {
+  const btns = [$('s2connect'), $('s2connectKick')].filter(Boolean);
+  btns.forEach((b) => { b.disabled = true; });
+  const granted = await ensureConnectHosts();
+  if (!granted) { btns.forEach((b) => { b.disabled = false; }); showHostDenied(); return; }
+  const hd = $('hostdenied'); if (hd) hd.hidden = true;
+  const r = await chrome.runtime.sendMessage({ type: 's2Connect', via }).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+  btns.forEach((b) => { b.disabled = false; });
   if (r && !r.ok && r.error) {
     const s = $('s2status');
     if (s) { s.textContent = 'Connect failed: ' + r.error; s.style.color = '#C2452A'; }
   }
   refreshS2();
-});
+}
+$('s2connect').addEventListener('click', () => { startConnect('discord'); });
+$('s2connectKick').addEventListener('click', () => { startConnect('kick'); });
 
 async function refreshVersion() {
   let current = '';

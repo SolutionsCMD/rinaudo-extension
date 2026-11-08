@@ -41,7 +41,7 @@ function renderSummary() {
   }
   ul.append(li('Extension', [e.version, [b.name, b.ver].filter(Boolean).join(' '), e.os].filter(Boolean).join(', ')));
   const acct = [c.connected ? 'connected' : 'not connected'];
-  if (typeof c.tickets === 'number') acct.push(c.tickets.toLocaleString('en-US') + ' tickets');
+  if (typeof c.tickets === 'number') acct.push(c.tickets.toLocaleString('en-US') + ' shares');
   if (c.canEarn === false) acct.push('earning blocked (no Kick link)');
   ul.append(li('Account', acct.join(', ')));
   const n = Array.isArray(d.activity) ? d.activity.length : 0;

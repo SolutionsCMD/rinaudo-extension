@@ -28,10 +28,11 @@
     .eyebrow { margin: 18px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--jade); }
     .sub { margin: -4px 0 8px; font-size: 12.5px; color: var(--dim); }
 
-    #update, #hostgrant, #gate { margin: 0 0 12px; padding: 11px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; }
+    #update, #hostgrant, #hostdenied, #gate { margin: 0 0 12px; padding: 11px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; }
     #update { display: none; background: rgba(243,204,92,.1); border: 1px solid rgba(243,204,92,.4); color: var(--gold); }
     #hostgrant { background: rgba(243,204,92,.1); border: 1px solid rgba(243,204,92,.4); color: var(--gold); }
-    #hostgrant[hidden], #gate[hidden] { display: none; }
+    #hostgrant[hidden], #hostdenied[hidden], #gate[hidden] { display: none; }
+    #hostdenied { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.22); color: #fff; }
     #gate { background: rgba(214,0,47,.12); border: 1px solid rgba(214,0,47,.45); color: #ffb3c2; }
     .updRow { display: flex; gap: 10px; align-items: center; margin-top: 9px; }
     .small-btn { min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px; font-weight: 800; font-size: 13px; cursor: pointer; }
@@ -48,9 +49,9 @@
     #updateMsg { font-size: 12px; margin-top: 6px; opacity: .85; }
     #updateMsg:empty { display: none; }
 
-    #total { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: linear-gradient(135deg, rgba(72,216,159,.14), rgba(34,224,255,.06)); border: 1px solid rgba(72,216,159,.28); }
+    #total { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.2); }
     #total[hidden] { display: none; }
-    #total img { width: 52px; height: 44px; object-fit: contain; flex: none; }
+    #total img { width: 64px; height: 39px; object-fit: contain; flex: none; filter: drop-shadow(0 3px 6px rgba(0,0,0,.5)); }
     #totalN { font-family: var(--serif); font-size: 34px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
     #totalL { margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
 
@@ -61,6 +62,11 @@
     .cta { position: relative; isolation: isolate; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 50px; border: 0; border-radius: 12px; cursor: pointer;
       font: 800 15px var(--sans); color: #08101E; background: linear-gradient(135deg,#00F5A0,#22E0FF); box-shadow: 0 4px 18px -6px rgba(0,245,160,.5); touch-action: manipulation; }
     .cta svg { width: 17px; height: 17px; }
+    .cta.discord { color: #fff; background: #5865F2; box-shadow: 0 4px 18px -6px rgba(88,101,242,.65); }
+    .cta.discord svg { width: 20px; height: 20px; }
+    .cta.discord::before { background: #5865F2; }
+    .alt { display: block; margin: 10px auto 0; min-height: 32px; padding: 4px 12px; border: 0; background: none; color: var(--mute); font: 600 12.5px var(--sans); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; touch-action: manipulation; }
+    .alt:disabled { opacity: .6; cursor: default; }
     .cta:disabled { opacity: .6; cursor: default; }
     .cta::before { content: ""; position: absolute; inset: -5px; z-index: -1; border-radius: 15px; background: linear-gradient(135deg,#00F5A0,#22E0FF); filter: blur(12px); opacity: 0; pointer-events: none; }
     .cta.pulse { animation: ctaBeat 1.8s ease-in-out infinite; }
@@ -130,6 +136,8 @@
 
     @media (hover: hover) and (pointer: fine) {
       .cta:not(:disabled):hover, .earn-open:hover { background: linear-gradient(135deg,#5BFFC4,#7FE9FF); }
+      .cta.discord:not(:disabled):hover { background: #4752C4; }
+      .alt:not(:disabled):hover { color: var(--ink); }
       .links a:hover { background: rgba(255,255,255,.08); }
     }
     @media (prefers-reduced-motion: reduce) { .cta.pulse, .cta.pulse::before { animation: none; } .cta.pulse::before { opacity: .6; } }
@@ -154,28 +162,30 @@
       <button id="hostgrantBtn" class="small-btn" type="button">Enable earning on those sites</button>
     </div>
     <div id="gate" hidden>
-      <div>Your account has no Kick link yet, so nothing earns. Link Kick on mizkif.com to start.</div>
-      <button id="gateBtn" class="small-btn" type="button">Link Kick</button>
+      <div>Your account can't earn yet. Join the Mizkif Discord with this account, or link Kick on mizkif.com.</div>
+      <button id="gateBtn" class="small-btn" type="button">Fix on mizkif.com</button>
     </div>
 
     <div id="total" hidden>
-      <img src="../icons/guide-total.webp" alt="">
-      <div><div id="totalN">0</div><div id="totalL">Your tickets</div></div>
+      <img src="../icons/shares/card.webp" alt="" width="64" height="39">
+      <div><div id="totalN">0</div><div id="totalL">Your shares</div></div>
     </div>
 
+    <div id="hostdenied" hidden>Turn on site access for the extension in about:addons, Permissions, then tap Connect again.</div>
     <div id="connectCard">
-      <h1>Start earning tickets</h1>
-      <p id="intro">Connect with Kick to earn tickets for watching and liking his posts. You'll also get pinged when Mizkif goes live or posts.</p>
-      <button id="s2connect" class="cta pulse" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z"/></svg>
-        Connect with Kick
+      <h1>Start earning shares</h1>
+      <p id="intro">Connect with Discord to earn shares for watching and liking his posts. You'll also get pinged when Mizkif goes live or posts.</p>
+      <button id="s2connect" class="cta discord pulse" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+        Connect with Discord
       </button>
+      <button id="s2connectKick" class="alt" type="button">Use Kick instead</button>
     </div>
     <p id="s2status">…</p>
 
     <div id="earnnow" hidden>
       <p class="eyebrow">Earn now</p>
-      <p class="sub">Open a post to earn tickets on it.</p>
+      <p class="sub">Open a post to earn shares on it.</p>
       <ul id="earnlist"></ul>
       <p id="earnmore" class="earn-more" hidden></p>
     </div>
@@ -195,7 +205,7 @@
     <p class="sub">What shows on his posts and on Kick.</p>
     <div id="widgets" class="card">
       <label class="row"><span class="ic"><img src="../icons/guide-pointer.webp" alt=""></span><span class="txt">Guide arrow<small>Points at what pays on his posts.</small></span><span class="sw"><input type="checkbox" data-pref="guideOn"><span></span></span></label>
-      <label class="row"><span class="ic"><img data-asset="ticket" alt=""></span><span class="txt">Coin sound<small>Plays when tickets land.</small></span><span class="sw"><input type="checkbox" data-pref="guideSound"><span></span></span></label>
+      <label class="row"><span class="ic"><img src="../icons/shares/sound.png" alt="" width="22" height="22"></span><span class="txt">Earn sound<small>Plays when shares land.</small></span><span class="sw"><input type="checkbox" data-pref="guideSound"><span></span></span></label>
       <label class="row"><span class="ic" data-icon="kick"></span><span class="txt">Live vote card<small>The vote card on his Kick stream.</small></span><span class="sw"><input type="checkbox" id="toggleVote"><span></span></span></label>
       <label class="row"><span class="ic"><img src="../icons/rank-top10.webp" alt=""></span><span class="txt">Rank badges in Kick chat<small>Everyone's place on the board, next to their name.</small></span><span class="sw"><input type="checkbox" data-pref="kickBadges"><span></span></span></label>
       <div class="row" id="dashRow"><span class="ic" data-icon="kick"></span><span class="txt">Badges in the mod dashboard<small id="dashState">For mods. Asks for access to dashboard.kick.com only.</small></span><button type="button" id="dashBtn" class="dashbtn">Turn On</button></div>
@@ -207,7 +217,7 @@
     </div>
 
     <details class="rates">
-      <summary>Full ticket rates</summary>
+      <summary>Full share rates</summary>
       <div id="rates"></div>
     </details>
 

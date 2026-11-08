@@ -673,5 +673,28 @@
         } catch (e) {   }
       }
     }
+    try {
+      if (String(location.hostname || '') === 'm.youtube.com') {
+        var YT_CID_RE = /^[\w.-]{1,120}$/;
+        var stampYtm = function () {
+          try {
+            var rows = document.getElementsByTagName('ytm-comment-renderer');
+            for (var i = 0; i < rows.length; i++) {
+              var r = rows[i], d = r.data;
+              if (!d || typeof d !== 'object') continue;
+              var cid = typeof d.commentId === 'string' ? d.commentId : '';
+              if (cid && YT_CID_RE.test(cid) && r.getAttribute('data-rgc-cid') !== cid) r.setAttribute('data-rgc-cid', cid);
+              var liked = (d.voteStatus === 'LIKE' || d.isLiked === true) ? '1' : '0';
+              if (r.getAttribute('data-rgc-liked') !== liked) r.setAttribute('data-rgc-liked', liked);
+            }
+          } catch (e2) {   }
+        };
+        var ytmTimer = setInterval(stampYtm, 1500);
+        try { if (ytmTimer && typeof ytmTimer.unref === 'function') ytmTimer.unref(); } catch (e4) {   }
+        window.addEventListener('message', function (e) {
+          try { if (e.source === window && e.data && e.data.rgcObsAsk === 1 && e.data.kind === 'ytmids') stampYtm(); } catch (e3) {   }
+        });
+      }
+    } catch (e) {   }
   } catch (e) {   }
 })();

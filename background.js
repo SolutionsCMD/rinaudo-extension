@@ -144,8 +144,12 @@ function sharedRead(ttlMs, now) {
   };
 }
 
-async function s2Connect() {
-  await chrome.tabs.create({ url: S2.CONNECT_PAGE });
+function connectUrl(via) {
+  const v = via === 'discord' || via === 'kick' ? via : '';
+  return S2.CONNECT_PAGE + (v ? (S2.CONNECT_PAGE.includes('?') ? '&' : '?') + 'via=' + v : '');
+}
+async function s2Connect(via) {
+  await chrome.tabs.create({ url: connectUrl(via) });
 }
 
 async function s2ConnectDone(tabId) {
@@ -611,6 +615,7 @@ async function bugSubmit(msg) {
   return { ok: true, id: j && j.id };
 }
 
+
 async function s2Poll() {
   const token = await getS2Token();
   const headers = token
@@ -819,7 +824,7 @@ function kickRanksRefresh() {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
-    if (msg.type === 's2Connect') { const e = await s2Connect().then(() => null).catch((x) => x); if (e) console.error('[rgc] s2Connect failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
+    if (msg.type === 's2Connect') { const e = await s2Connect(msg.via).then(() => null).catch((x) => x); if (e) console.error('[rgc] s2Connect failed:', e); reply({ ok: !e, error: e ? (e.message || String(e)) : null }); }
     else if (msg.type === 's2ConnectDone') { await s2ConnectDone(_sender && _sender.tab && _sender.tab.id); reply({ ok: true }); }
     else if (msg.type === 's2AuthState') { reply({ connected: !!(await getS2Token()) }); }
     else if (msg.type === 's2Targets') { reply(await s2Targets()); }
@@ -999,8 +1004,8 @@ async function checkNewTargets() {
   notify(toast.id, await toastOptions(toast.kind, toast.data, {
     type: 'basic',
     iconUrl: TARGET_ICONS[fire[0].t.platform] || 'icons/icon128.png',
-    title: n > 0 ? `New Mizkif post: ${n} ticket${n === 1 ? '' : 's'}` : 'New Mizkif post',
-    message: 'Open it to earn tickets.',
+    title: n > 0 ? `New Mizkif post: ${n} share${n === 1 ? '' : 's'}` : 'New Mizkif post',
+    message: 'Open it to earn shares.',
     priority: 2,
   }));
 }

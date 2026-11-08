@@ -216,7 +216,7 @@
     platform: 'facebook',
     earnBlocked() {
       return loginState() === 'out'
-        ? 'Sign in to Facebook to collect tickets. Nothing here will pay while you are signed out.'
+        ? 'Sign in to Facebook to collect shares. Nothing here will pay while you are signed out.'
         : null;
     },
     loginState,

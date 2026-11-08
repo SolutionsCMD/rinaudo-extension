@@ -208,12 +208,13 @@
     };
   }
 
-  const TICKET_AR = 111 / 200;
+  const BADGE_AR = 0.36;
   const GRID_INSET = 8;
   function badgeSize(rect, card, done) {
     const base = card ? Math.min(Number(rect && rect.width) || 0, 250) : (Number(rect && rect.width) || 0);
-    const w = Math.round(done ? Math.max(22, Math.min(64, base * 0.16)) : Math.max(44, Math.min(140, base * 0.28)));
-    return { w, h: done ? w : Math.round(w * TICKET_AR), font: Math.max(11, Math.round(w * 0.26)) };
+    const w = Math.round(done ? Math.max(22, Math.min(64, base * 0.16)) : Math.max(56, Math.min(170, base * 0.34)));
+    const h = done ? w : Math.round(w * BADGE_AR);
+    return { w, h, font: Math.max(11, Math.round(done ? w * 0.26 : h * 0.48)) };
   }
   function badgePos(rect, card, w, h, vw, vh) {
     const x0 = card ? rect.right - w - 10 : rect.right - w - GRID_INSET;
@@ -291,8 +292,11 @@
     '.b span{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;',
     'justify-content:center;font-weight:900;line-height:1;color:#fff;white-space:nowrap;letter-spacing:-.5px;',
     'text-shadow:0 2px 4px rgba(0,0,0,.7),0 0 2px #000;pointer-events:none}',
-    '.b.plain .in{border-radius:6px;background:#d6002f;border:1.5px solid #fff}',
-    '.b.plain.ok .in{background:#1a7f37}',
+    '.b.tk img{left:auto;right:0;width:auto;height:100%;aspect-ratio:1230/743}',
+    '.b.tk span{left:auto;top:0;right:calc(59.6% + 4px);bottom:0;width:auto;height:100%;transform:none;padding:0 9px;',
+    'border-radius:999px;background:#000;border:1px solid rgba(255,255,255,.28);text-shadow:none;letter-spacing:0;font-weight:800}',
+    '.b.plain .in{border-radius:6px;background:#0a0a0a;border:1.5px solid rgba(255,255,255,.6)}',
+    '.b.plain.ok .in{background:#fff;color:#0a0a0a}',
     '.b.plain span{font-size:12px;font-weight:800;text-shadow:none}',
     '.tip{position:absolute;left:0;top:0;width:' + TIP_W + 'px;padding:14px 16px 34px;box-sizing:border-box;',
     'color:#14171c;font-size:13px;line-height:19px;font-weight:600;text-align:left;pointer-events:none;',
@@ -629,7 +633,7 @@
     const de = document.documentElement || {};
     const vw = window.innerWidth || de.clientWidth || 0;
     const vh = window.innerHeight || de.clientHeight || 0;
-    const tSrc = asset('ticket'), cSrc = asset('check');
+    const tSrc = asset('gridBadge') || asset('ticket'), cSrc = asset('check');
     const specs = [];
     const seen = new Set();
     let anchors = [];
@@ -676,7 +680,7 @@
         badges.set(s.ref, b);
       }
       if (b.txt !== s.txt) { b.span.textContent = s.txt; b.txt = s.txt; }
-      const cls = 'b' + (b.plain ? ' plain' : '') + (s.done ? ' ok' : '') + (s.card ? '' : ' i');
+      const cls = 'b' + (b.plain ? ' plain' : '') + (s.done ? ' ok' : (b.plain ? '' : ' tk')) + (s.card ? '' : ' i');
       if (b.cls !== cls) { b.el.className = cls; b.cls = cls; }
       const sz = s.w + 'x' + s.h + 'x' + s.font;
       if (b.sz !== sz) {

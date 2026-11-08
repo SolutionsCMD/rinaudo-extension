@@ -100,7 +100,7 @@ self.RGCStake = (function () {
     const input = document.createElement('input');
     input.type = 'text';
     input.inputMode = 'numeric';
-    input.setAttribute('aria-label', 'tickets');
+    input.setAttribute('aria-label', 'shares');
     const hint = el('div', 'stkCapHint');
 
     minus.type = 'button'; plus.type = 'button';
@@ -113,7 +113,7 @@ self.RGCStake = (function () {
       const overCap = capAt != null && capAt >= 2 && capAt < safeMax && v > capAt;
       hint.textContent = overCap
         ? `past the cap, the extra ~${v - capAt} would come back as a refund`
-        : (v >= safeMax ? `that is all ${safeMax.toLocaleString()} of your tickets` : ' ');
+        : (v >= safeMax ? `that is all ${safeMax.toLocaleString()} of your shares` : ' ');
       renderPile(pile, v);
     };
     const setV = (n, force) => {
@@ -236,7 +236,7 @@ self.RGCStake = (function () {
       const tally = round.tally || [];
       const total = tally.reduce((a, x) => a + x.amount, 0);
       const mine = me && me.stake;
-      host.append(el('div', 'stkQ', 'Stake tickets on a ticker'));
+      host.append(el('div', 'stkQ', 'Stake shares on a ticker'));
       const meta = el('div', 'stkMeta');
       meta.append(document.createTextNode(`${total.toLocaleString()} staked`));
       if (me) {
@@ -275,7 +275,7 @@ self.RGCStake = (function () {
       host.append(big);
       if (mine) host.append(potLine(mine.amount));
       if (mine) host.append(el('div', 'stkNote', `On ${mine.ticker} · staking again moves it`));
-      else if (me && maxT < 1) host.append(el('div', 'stkNote', 'You have no tickets to stake'));
+      else if (me && maxT < 1) host.append(el('div', 'stkNote', 'You have no shares to stake'));
       host.append(el('div', 'stkHint', 'Most-staked ticker becomes the desk’s pick'));
       return true;
     }
@@ -290,16 +290,16 @@ self.RGCStake = (function () {
       meta.append(img, document.createTextNode(`${committed.toLocaleString()} committed`));
       if (me) meta.append(el('b', '', ` · ${me.tickets.toLocaleString()} held`));
       host.append(meta, el('div', 'stkRule'));
-      host.append(el('div', 'stkQ', 'Step 2: How many tickets to add?'));
+      host.append(el('div', 'stkQ', 'Step 2: How many shares to add?'));
 
       const tickets = me ? me.tickets : 0;
       if (connected && me && tickets < 1) {
-        host.append(el('div', 'stkNote', 'You have no tickets left to add.'));
+        host.append(el('div', 'stkNote', 'You have no shares left to add.'));
       } else {
         const capAt = Math.floor(Math.max(0, committed - myCommitted) / 19);
         let amount = seedAmount(round, Math.min(25, Math.max(1, tickets)), Math.max(1, tickets));
         const big = el('button', 'stkBig');
-        const paintBig = () => { big.textContent = `Join with ${Math.min(amount, Math.max(1, tickets))} 🎟`; };
+        const paintBig = () => { big.textContent = `Join with ${Math.min(amount, Math.max(1, tickets))} shares`; };
         const sl = amountInput({
           max: Math.max(1, tickets), value: amount, capAt,
           disabled: !connected || !me,
@@ -317,7 +317,7 @@ self.RGCStake = (function () {
         host.append(big);
       }
       if (me && myCommitted > 0) host.append(potLine(myCommitted));
-      host.append(el('div', 'stkHint', 'Final window · profit splits by ticket share when the desk sells'));
+      host.append(el('div', 'stkHint', 'Final window · profit splits by share count when the desk sells'));
       return true;
     }
 

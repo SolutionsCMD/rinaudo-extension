@@ -106,7 +106,52 @@
   const COMMENT_ID_RE = /^[\w.-]{1,120}$/;
   function commentLikeControl(el) {
     try {
-      return el.querySelector('#like-button button[aria-pressed]') || null;
+      return el.querySelector('#like-button button[aria-pressed]') || ytmLikeBlock(el);
+    } catch (e) { return null; }
+  }
+  const YTM_ICON_SEL = 'c3-icon.YtmCommentRendererActionIcon[data-selected]';
+  function ytmLikeBlock(el) {
+    try {
+      if (!el.querySelector) return null;
+      const icons = el.querySelectorAll(YTM_ICON_SEL);
+      if (!icons.length) return null;
+      let first = null;
+      for (const ic of icons) {
+        const block = ic.parentElement;
+        if (!block || !block.classList.contains('YtmCommentRendererIcons')) continue;
+        if (block.querySelector('.YtmCommentRendererCount')) return block;
+        if (!first) first = block;
+      }
+      return first;
+    } catch (e) { return null; }
+  }
+  function isYtmLikeBlock(node) {
+    try {
+      if (!node || !node.classList || !node.classList.contains('YtmCommentRendererIcons')) return false;
+      const row = node.closest('ytm-comment-renderer');
+      return !!row && ytmLikeBlock(row) === node;
+    } catch (e) { return false; }
+  }
+  function likedState(ctrl) {
+    try {
+      if (!ctrl) return null;
+      if (ctrl.hasAttribute('aria-pressed')) return ctrl.getAttribute('aria-pressed') === 'true';
+      const ic = ctrl.matches && ctrl.matches(YTM_ICON_SEL) ? ctrl : ctrl.querySelector(YTM_ICON_SEL);
+      if (!ic) return null;
+      if (ic.getAttribute('data-selected') === 'true' || ic.getAttribute('fill-icon') === 'true') return true;
+      const row = ctrl.closest('ytm-comment-renderer');
+      const d = pageData(row);
+      if (d && (d.voteStatus === 'LIKE' || d.isLiked === true)) return true;
+      if (row && row.getAttribute('data-rgc-liked') === '1') return true;
+      return false;
+    } catch (e) { return null; }
+  }
+  function pageData(row) {
+    try {
+      if (!row) return null;
+      const r = row.wrappedJSObject || row;
+      const d = r.data;
+      return d && typeof d === 'object' ? d : null;
     } catch (e) { return null; }
   }
   function avatarKey(src) {
@@ -329,6 +374,13 @@
           const m = /[?&]lc=([^&#"']+)/.exec(a.getAttribute('href') || '');
           if (m) { try { return decodeURIComponent(m[1]); } catch (e2) { return m[1]; } }
         }
+        if (el.matches('ytm-comment-renderer')) {
+          const d = pageData(el);
+          const cid = d && typeof d.commentId === 'string' ? d.commentId : '';
+          if (cid && COMMENT_ID_RE.test(cid)) return cid;
+          const stamped = el.getAttribute('data-rgc-cid') || '';
+          if (stamped && COMMENT_ID_RE.test(stamped)) return stamped;
+        }
         return '';
       } catch (e) { return null; }
     },
@@ -378,6 +430,7 @@
 
     commentLikeScan() {
       const rows = [];
+      try { if (location.hostname === 'm.youtube.com') window.postMessage({ rgcObsAsk: 1, kind: 'ytmids' }, location.origin); } catch (e) {   }
       try {
         const ref = adapter.getRef();
         const seen = new Set();
@@ -388,7 +441,7 @@
           if (!id || !COMMENT_ID_RE.test(id) || seen.has(id)) continue;
           seen.add(id);
           const ctrl = commentLikeControl(el);
-          rows.push({ id, liked: !!(ctrl && ctrl.getAttribute('aria-pressed') === 'true') });
+          rows.push({ id, liked: likedState(ctrl) === true });
         }
       } catch (e) { return []; }
       return rows;
@@ -405,7 +458,10 @@
       try {
         if (!t || !t.closest) return null;
         if (!insideComment(t)) return null;
-        return t.closest('#like-button') || null;
+        const blk = t.closest('#like-button, .YtmCommentRendererIcons');
+        if (!blk) return null;
+        if (blk.id === 'like-button') return blk;
+        return isYtmLikeBlock(blk) ? blk : null;
       } catch (e) { return null; }
     },
 
@@ -503,7 +559,7 @@
         const mine = ownAvatarKey();
         for (const el of document.querySelectorAll(COMMENT_ROW_SEL)) {
           const ctrl = commentLikeControl(el);
-          if (!ctrl || ctrl.getAttribute('aria-pressed') !== 'false' || !onScreen(ctrl)) continue;
+          if (!ctrl || likedState(ctrl) !== false || !onScreen(ctrl)) continue;
           if (isOwnComment(el, mine)) continue;
           const own = commentOwnRef(el);
           if (ref && own && own !== ref) continue;
@@ -571,7 +627,7 @@
             tags: Object.keys(counts).sort().slice(0, 24).map((t) => t + ':' + counts[t]).join(' '),
             rows: document.querySelectorAll('ytd-comment-view-model, ytd-comment-renderer, ytm-comment-renderer').length,
             composer: !!document.querySelector('ytm-commentbox textarea, ytm-comment-simplebox-renderer textarea, ytm-commentbox [contenteditable="true"], ytm-comment-dialog-renderer textarea, ytm-comment-dialog-renderer [contenteditable="true"]'),
-            hearts: document.querySelectorAll('#like-button button[aria-pressed]').length,
+            hearts: document.querySelectorAll('#like-button button[aria-pressed], ytm-comment-renderer c3-icon[data-selected]').length,
             shape,
           } });
         } catch (e) {   }

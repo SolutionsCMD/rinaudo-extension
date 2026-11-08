@@ -1,0 +1,19 @@
+{
+  "cx": 238,
+  "cy": 226,
+  "maxWidth": 120,
+  "fontPx": 56,
+  "rotateDeg": 0,
+  "color": "#ffffff",
+  "pill": {
+    "h": 68,
+    "padX": 18,
+    "fill": "#0a0a0a",
+    "stroke": "#ffffff"
+  },
+  "seal": {
+    "cx": 32,
+    "cy": 96,
+    "r": 11
+  }
+}

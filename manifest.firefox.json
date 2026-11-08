@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Mizkif Global",
-  "version": "1.208",
-  "description": "Earn tickets for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
+  "version": "1.303",
+  "description": "Earn shares for liking, commenting on, and watching Mizkif's posts and videos, and get pinged when he goes live or posts.",
   "browser_specific_settings": {
     "gecko": {
       "id": "rinaudo-capital@jsolutions.dev",
@@ -210,8 +210,13 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["fonts/dm-sans-latin.woff2"],
-      "matches": ["https://kick.com/*", "https://dashboard.kick.com/*"]
+      "resources": [
+        "fonts/dm-sans-latin.woff2"
+      ],
+      "matches": [
+        "https://kick.com/*",
+        "https://dashboard.kick.com/*"
+      ]
     }
   ]
 }

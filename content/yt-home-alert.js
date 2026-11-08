@@ -73,7 +73,7 @@
       const txt = el('div', 'tx');
       txt.appendChild(el('div', 'tt', it.title));
       const sub = el('div', 'sb');
-      sub.appendChild(el('b', 'pay', `+${it.tickets} tickets`));
+      sub.appendChild(el('b', 'pay', `+${it.tickets} share${it.tickets === 1 ? '' : 's'}`));
       if (it.left) sub.appendChild(el('span', '', ` · ${it.left}`));
       txt.appendChild(sub);
       a.appendChild(img); a.appendChild(txt); list.appendChild(a);
@@ -94,21 +94,21 @@
     const P = PALETTE();
     root.appendChild(el('style', '', `
       :host{${BASE}}
-      .b{width:40px;height:40px;border-radius:50%;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;padding:0}
+      .b{width:52px;height:40px;border-radius:20px;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;padding:0}
       .b:hover{background:${P.hover}}
-      .b img{width:30px;height:auto;display:block}
-      .n{position:absolute;top:1px;right:0;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#cc0000;color:#fff;font:500 11px/16px Roboto,Arial,sans-serif;text-align:center;border:2px solid ${dark() ? '#0f0f0f' : '#fff'}}
+      .b img{width:43px;height:auto;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+      .n{position:absolute;top:0;right:-1px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#cc0000;color:#fff;font:500 11px/16px Roboto,Arial,sans-serif;text-align:center;border:2px solid ${dark() ? '#0f0f0f' : '#fff'}}
       .d{position:absolute;top:44px;right:-8px;width:420px;max-width:calc(100vw - 24px);background:${P.bg};color:${P.ink};border-radius:12px;box-shadow:0 4px 32px rgba(0,0,0,.35);padding:0 0 8px;display:none;z-index:2300;opacity:0;transition:opacity .15s}
       .d.show{display:block}.d.in{opacity:1}
       .h{display:flex;align-items:center;justify-content:space-between;padding:12px 8px 8px 16px;border-bottom:1px solid ${P.line};margin-bottom:8px;font-size:16px;font-weight:500}
       .x{width:36px;height:36px;border-radius:50%;border:0;background:transparent;color:${P.ink};font-size:20px;cursor:pointer;line-height:1}
       .x:hover{background:${P.hover}}
       ${listCss(P)}`));
-    const b = el('button', 'b'); b.type = 'button'; b.title = 'Mizkif videos paying tickets';
-    const src = ticketSrc(); if (src) { const i = el('img'); i.src = src; i.alt = ''; b.appendChild(i); } else b.appendChild(el('span', '', '🎟'));
+    const b = el('button', 'b'); b.type = 'button'; b.title = 'Mizkif videos paying shares';
+    const src = ticketSrc(); if (src) { const i = el('img'); i.src = src; i.alt = ''; b.appendChild(i); } else b.appendChild(el('span', '', 'M'));
     const n = el('span', 'n'); b.appendChild(n);
     const d = el('div', 'd'); d.setAttribute('role', 'dialog');
-    const h = el('div', 'h'); h.appendChild(el('span', '', 'Mizkif videos paying tickets'));
+    const h = el('div', 'h'); h.appendChild(el('span', '', 'Mizkif videos paying shares'));
     const x = el('button', 'x', '×'); x.type = 'button'; x.title = 'Close'; h.appendChild(x);
     const list = el('div', 'l'); d.appendChild(h); d.appendChild(list);
     b.addEventListener('click', (e) => { e.stopPropagation(); setDrop(!dropOpen); });
@@ -141,7 +141,7 @@
       .x:hover{background:${P.hover}}
       ${listCss(P)}`));
     const k = el('div', 'k');
-    const h = el('div', 'h'); h.appendChild(el('span', '', 'Mizkif videos paying tickets'));
+    const h = el('div', 'h'); h.appendChild(el('span', '', 'Mizkif videos paying shares'));
     const x = el('button', 'x', '×'); x.type = 'button'; x.title = 'Hide until a new video'; h.appendChild(x);
     const list = el('div', 'l'); k.appendChild(h); k.appendChild(list);
     x.addEventListener('click', (e) => { e.stopPropagation(); cardHiddenKey = keyOf(items); store(CARD_KEY, cardHiddenKey); removeCard(); });

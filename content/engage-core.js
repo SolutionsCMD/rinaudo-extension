@@ -132,7 +132,7 @@ self.EngageCore = (function () {
     }
     if (c.comment) {
       out.push(state.commentS === 'voided'
-        ? { id: 'comment', icon: 'comment', label: 'Comment deleted, ticket returned', amount: '', done: false, voided: true }
+        ? { id: 'comment', icon: 'comment', label: 'Comment deleted, share returned', amount: '', done: false, voided: true }
         : gatedDone({ id: 'comment', icon: 'comment', label: 'Comment something meaningful', amount: rewards.commentReward,
           done: state.commentS === 'done', pending: state.commentS === 'pending' }, 'comment'));
     }
@@ -293,7 +293,7 @@ self.EngageCore = (function () {
     }
     function watchErrText(reason) {
       if (reason === 'not_qualified') return 'No watch time counted yet. Keep this tab visible with the video playing and unmuted.';
-      if (reason === 'no_reward') return 'This video is too old to earn tickets.';
+      if (reason === 'no_reward') return 'This video is too old to earn shares.';
       if (reason === 'no_target' || reason === 'platform_disabled') return 'This video is not collectable right now.';
       return 'Could not collect. Check your connection, then reload the page.';
     }
@@ -723,7 +723,7 @@ self.EngageCore = (function () {
         if (text) hudCall((h) => h.tip({ el: p ? 'eye' : 'hud', text, icon: 'eyeOpen' }));
         return;
       }
-      if (step.voided) { hudCall((h) => h.tip({ el: 'hud', text: 'Comment deleted, ticket returned.', icon: 'comment' })); return; }
+      if (step.voided) { hudCall((h) => h.tip({ el: 'hud', text: 'Comment deleted, share returned.', icon: 'comment' })); return; }
       if (watchGateOn() && WATCH_GATED[id]) { hudCall((h) => h.tip({ el: 'hud', text: copy('watchFirst'), icon: 'eyeOpen' })); return; }
       focus = id;
       const c = planPointer(true);
@@ -1661,7 +1661,7 @@ self.EngageCore = (function () {
       try { v = typeof A.getVideoEl === 'function' ? A.getVideoEl() : null; } catch { v = null; }
       hudCall((h) => h.connectCard({
         videoEl: realVideo(v) ? v : null,
-        onConnect: () => { send({ type: 's2Connect' }); },
+        onConnect: (via) => { send({ type: 's2Connect', via: via === 'kick' ? 'kick' : 'discord' }); },
         onDismiss: () => { connectPromptOff[ref] = true; },
       }));
     }
