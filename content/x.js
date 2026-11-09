@@ -431,11 +431,32 @@
       return Array.from(out);
     } catch { return []; }
   }
+  function viaCard(kind, ref, commentId) {
+    try {
+      const core = self.RGCEngage;
+      return !!(core && typeof core.netCredit === 'function' && core.netCredit(kind, ref, commentId));
+    } catch { return false; }
+  }
+  function creditCommentLikeFromNetwork(postRef, commentId) {
+    const key = 'cl:' + postRef + ':' + commentId;
+    if (firedNet.has(key) || controlsReadable('like')) return;
+    firedNet.add(key);
+    sendMsg({ type: 's2Debug', kind: 'xnet', data: { kind: 'comment_like', ref: postRef, onStatus: onStatusPage(), testids: pageTestids() } });
+    if (viaCard('comment_like', postRef, commentId)) return;
+    sendMsg({ type: 's2Engagement', platform: 'x', action: 'comment_like', ref: postRef, commentId })
+      .then((r) => {
+        if (r && !r.error) { if (r.awarded) toast('Comment like counted'); }
+        else firedNet.delete(key);
+      });
+  }
   function creditFromNetwork(kind, ref) {
+    const pageRef = adapter.refFromPath(location.pathname);
+    if (kind === 'like' && pageRef && pageRef !== ref) return creditCommentLikeFromNetwork(pageRef, ref);
     const key = kind + ':' + ref;
     if (firedNet.has(key) || controlsReadable(kind)) return;
     firedNet.add(key);
     sendMsg({ type: 's2Debug', kind: 'xnet', data: { kind, ref, onStatus: onStatusPage(), testids: pageTestids() } });
+    if (viaCard(kind, ref)) return;
     sendMsg({ type: 's2Engagement', platform: 'x', action: kind, ref })
       .then((r) => {
         if (r && !r.error) {
@@ -455,5 +476,5 @@
       setTimeout(() => { try { creditFromNetwork(kind, ref); } catch {   } }, 1500);
     } catch {   }
   });
-  self.RGCXNet = { creditFromNetwork, controlsReadable, pageTestids };
+  self.RGCXNet = { creditFromNetwork, creditCommentLikeFromNetwork, controlsReadable, pageTestids };
 })();

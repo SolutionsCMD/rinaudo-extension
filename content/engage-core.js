@@ -1098,7 +1098,15 @@ self.EngageCore = (function () {
         return false;
       } catch { return false; }
     }
-    try { self.RGCEngage = { ownsConfirmation }; } catch {   }
+    function netCredit(kind, ref, commentId) {
+      try {
+        if (!state || state.ref !== String(ref || '')) return false;
+        if (kind === 'like' || kind === 'repost') { fireEngagement(kind); return true; }
+        if (kind === 'comment_like' && typeof commentId === 'string' && commentId) { fireCommentLike(commentId); return true; }
+        return false;
+      } catch { return false; }
+    }
+    try { self.RGCEngage = { ownsConfirmation, netCredit }; } catch {   }
     window.addEventListener('message', (e) => {
       try {
         if (e.source !== window || e.origin !== location.origin) return;

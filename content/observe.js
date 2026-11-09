@@ -25,16 +25,24 @@
       return '';
     }
 
+    function X_GQL_RE(name) {
+      return new RegExp('^(?:https?://(?:[\\w-]+\\.)*(?:x|twitter)\\.com)?/(?:i/api/)?graphql/[^/?#]+/' + name + '(?:[?#]|$)');
+    }
+    function xTweetId(body) {
+      var m = /"tweet_?id"\s*:\s*"(\d+)"/i.exec(String(body || ''));
+      return m ? m[1] : null;
+    }
+
     var SIGS = [
       {
         platform: 'x', kind: 'repost',
-        test: function (url) { return /\/i\/api\/graphql\/[^/]+\/CreateRetweet(\b|$)/.test(String(url)); },
-        ref: function (url, body) { var m = /"tweet_id"\s*:\s*"(\d+)"/.exec(String(body || '')); return m ? m[1] : null; },
+        test: function (url) { return X_GQL_RE('CreateRetweet').test(String(url)); },
+        ref: function (url, body) { return xTweetId(body); },
       },
       {
         platform: 'x', kind: 'like',
-        test: function (url) { return /\/i\/api\/graphql\/[^/]+\/FavoriteTweet(\b|$)/.test(String(url)); },
-        ref: function (url, body) { var m = /"tweet_id"\s*:\s*"(\d+)"/.exec(String(body || '')); return m ? m[1] : null; },
+        test: function (url) { return X_GQL_RE('FavoriteTweet').test(String(url)); },
+        ref: function (url, body) { return xTweetId(body); },
       },
       {
         platform: 'tiktok', kind: 'like',
@@ -544,7 +552,7 @@
       var wrappedFetch = function (input, init) {
         var url = '', body = '', reqCopy = null, bodyP = null;
         try {
-          url = typeof input === 'string' ? input : (input && input.url) || '';
+          url = typeof input === 'string' ? input : (input && (input.url || input.href)) || '';
           body = bodyText(init && init.body);
           if (!body && !(init && init.body != null) && typeof Request !== 'undefined'
               && input instanceof Request && input.method !== 'GET' && input.method !== 'HEAD'
