@@ -71,10 +71,11 @@
       On every other site the extension is not loaded at all, so it cannot see the page.
     </p>
 
-    <h2>How the repost check works on X</h2>
+    <h2>How the like and repost check works on X</h2>
     <p>
       A repost earns shares only when X itself confirms the repost happened. A button click on its
-      own is not proof, so on <code>x.com</code> and <code>twitter.com</code> the extension watches
+      own is not proof. Where X shows its buttons in a way the extension cannot read, a like is
+      credited the same way, from X's own confirmation. So on <code>x.com</code> and <code>twitter.com</code> the extension watches
       the requests the X page sends while you use it. Here is the whole of what that means:
     </p>
     <ul>
@@ -83,9 +84,9 @@
         left alone at that point and never looked at again.
       </li>
       <li>
-        Only when the address is X's own "create repost" call does the extension look any further,
-        and the only thing it takes from that request is the <strong>id of the post</strong> you
-        reposted.
+        Only when the address is X's own "create repost" or "like" call does the extension look any
+        further, and the only thing it takes from that request is the <strong>id of the post</strong>
+        you reposted or liked.
       </li>
       <li>
         It notes whether X <strong>accepted</strong> the request. That is a yes or no, not content.
@@ -191,7 +192,6 @@
       device or network for manual review before payouts. They are never sold, shared with third parties,
       used for advertising, or used to track your browsing, and they are never shown to other users.
     </p>
-
     <h2>What we do <em>not</em> do</h2>
     <ul>
       <li>No analytics or behavioral tracking of how you use the web. The only device and network signals

@@ -32,6 +32,11 @@
         ref: function (url, body) { var m = /"tweet_id"\s*:\s*"(\d+)"/.exec(String(body || '')); return m ? m[1] : null; },
       },
       {
+        platform: 'x', kind: 'like',
+        test: function (url) { return /\/i\/api\/graphql\/[^/]+\/FavoriteTweet(\b|$)/.test(String(url)); },
+        ref: function (url, body) { var m = /"tweet_id"\s*:\s*"(\d+)"/.exec(String(body || '')); return m ? m[1] : null; },
+      },
+      {
         platform: 'tiktok', kind: 'like',
         test: function (url) {
           var u = String(url);

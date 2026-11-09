@@ -2008,14 +2008,12 @@ self.RGCGuide = (function () {
         const t = mk('p', 't', o.title || 'Connect to earn shares');
         const d = mk('p', 'd', o.text || 'This post pays shares. Connect the extension with Discord to start earning.');
         const go = mk('button', 'go'); go.type = 'button'; go.appendChild(discordSvg()); go.appendChild(D.createTextNode(o.button || 'Connect with Discord'));
-        const alt = mk('button', 'alt', 'Use Kick instead'); alt.type = 'button';
         const no = mk('button', 'no', 'Not now'); no.type = 'button';
-        el.appendChild(k); el.appendChild(t); el.appendChild(d); el.appendChild(go); el.appendChild(alt); el.appendChild(no);
+        el.appendChild(k); el.appendChild(t); el.appendChild(d); el.appendChild(go); el.appendChild(no);
         stopBubble(el);
         wrap.appendChild(el);
         cc = { el, offs: [], t: null };
         on(go, 'click', () => { try { if (cc && typeof cc.onConnect === 'function') cc.onConnect('discord'); } catch (_) {   } });
-        on(alt, 'click', () => { try { if (cc && typeof cc.onConnect === 'function') cc.onConnect('kick'); } catch (_) {   } });
         on(no, 'click', () => { const f = cc && cc.onDismiss; connectCard(null); try { if (typeof f === 'function') f(); } catch (_) {   } });
         const settle = () => { if (!cc) return; cc.t = cancel(cc.t); cc.t = later(() => { if (cc) { cc.t = null; placeConnectCard(); } }, 160); };
         cc.offs.push(on(W, 'scroll', settle, { passive: true, capture: true }));

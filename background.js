@@ -330,7 +330,18 @@ async function s2Discover(platform, refs) {
   return { ok: !!(r && r.ok) };
 }
 
+async function techDataOk() {
+  try {
+    const b = globalThis.browser;
+    if (!b || !b.permissions || !b.permissions.getAll) return true;
+    const p = await b.permissions.getAll();
+    if (!p || !Array.isArray(p.data_collection)) return true;
+    return p.data_collection.includes('technicalAndInteraction');
+  } catch { return true; }
+}
+
 async function s2Debug(kind, data) {
+  if (!(await techDataOk())) return;
   const token = await getS2Token();
   if (!token) return;
   fetch(S2.API + S2.DEBUG, {
@@ -614,7 +625,6 @@ async function bugSubmit(msg) {
   if (msg.draftId) void bugDropDraft(String(msg.draftId));
   return { ok: true, id: j && j.id };
 }
-
 
 async function s2Poll() {
   const token = await getS2Token();
@@ -1097,6 +1107,7 @@ async function sendSelectorHealth() {
     await chrome.storage.local.set({ selHealthSentAt: Date.now() });
     let version = '';
     try { version = chrome.runtime.getManifest().version || ''; } catch {   }
+    if (!(await techDataOk())) return;
     const r = await fetch(S2.API + S2.TELEMETRY, {
       method: 'POST', headers: await s2Headers(token, true),
       body: JSON.stringify({ version, reports }),

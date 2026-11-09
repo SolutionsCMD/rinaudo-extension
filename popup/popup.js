@@ -82,7 +82,7 @@ function showHostDenied() {
 }
 
 async function startConnect(via) {
-  const btns = [$('s2connect'), $('s2connectKick')].filter(Boolean);
+  const btns = [$('s2connect')].filter(Boolean);
   btns.forEach((b) => { b.disabled = true; });
   const granted = await ensureConnectHosts();
   if (!granted) { btns.forEach((b) => { b.disabled = false; }); showHostDenied(); return; }
@@ -96,7 +96,6 @@ async function startConnect(via) {
   refreshS2();
 }
 $('s2connect').addEventListener('click', () => { startConnect('discord'); });
-$('s2connectKick').addEventListener('click', () => { startConnect('kick'); });
 
 async function refreshVersion() {
   let current = '';

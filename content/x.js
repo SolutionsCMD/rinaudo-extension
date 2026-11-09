@@ -46,6 +46,7 @@
       try { return !!card.querySelector('[data-testid="unretweet"]'); } catch { return null; }
     },
     repostPresent() { try { return !!document.querySelector('[data-testid="retweet"], [data-testid="unretweet"]'); } catch { return false; } },
+    likePresent() { try { return !!document.querySelector('[data-testid="like"], [data-testid="unlike"]'); } catch { return false; } },
     likePointerTarget() {
       try {
         const card = focalCard();
@@ -410,4 +411,49 @@
       });
     } catch {   }
   });
+
+  const firedNet = new Set();
+  const NET_SELECTORS = {
+    like: '[data-testid="like"], [data-testid="unlike"]',
+    repost: '[data-testid="retweet"], [data-testid="unretweet"]',
+  };
+  function controlsReadable(kind) {
+    try { return !!document.querySelector(NET_SELECTORS[kind]); } catch { return false; }
+  }
+  function pageTestids() {
+    try {
+      const out = new Set();
+      for (const el of document.querySelectorAll('main [data-testid], [role="menu"] [data-testid]')) {
+        const v = el.getAttribute('data-testid');
+        if (v && /^[\w-]{1,40}$/.test(v)) out.add(v);
+        if (out.size >= 60) break;
+      }
+      return Array.from(out);
+    } catch { return []; }
+  }
+  function creditFromNetwork(kind, ref) {
+    const key = kind + ':' + ref;
+    if (firedNet.has(key) || controlsReadable(kind)) return;
+    firedNet.add(key);
+    sendMsg({ type: 's2Debug', kind: 'xnet', data: { kind, ref, onStatus: onStatusPage(), testids: pageTestids() } });
+    sendMsg({ type: 's2Engagement', platform: 'x', action: kind, ref })
+      .then((r) => {
+        if (r && !r.error) {
+          if (r.credited && r.awarded) toast(`${rewardText(kind === 'like' ? xr.like : xr.repost)} for ${kind === 'like' ? 'liking' : 'reposting'}`);
+        } else firedNet.delete(key);
+      });
+  }
+  window.addEventListener('message', (e) => {
+    try {
+      if (e.source !== window || e.origin !== location.origin) return;
+      const d = e.data;
+      if (!d || d.rgcObs !== 1 || d.ok !== true || d.platform !== 'x') return;
+      if (d.kind !== 'like' && d.kind !== 'repost') return;
+      const ref = d.ref == null ? '' : String(d.ref);
+      if (!/^\d+$/.test(ref)) return;
+      const kind = d.kind;
+      setTimeout(() => { try { creditFromNetwork(kind, ref); } catch {   } }, 1500);
+    } catch {   }
+  });
+  self.RGCXNet = { creditFromNetwork, controlsReadable, pageTestids };
 })();
